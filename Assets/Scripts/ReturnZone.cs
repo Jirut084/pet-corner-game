@@ -22,6 +22,9 @@ public class ReturnZone : MonoBehaviour, IInteractable
     // เพื่อไม่ให้ ReturnZone ทำหน้าที่เกินขอบเขตของตัวเอง (Single Responsibility)
     public static int TotalWallet { get; private set; } = 0;
 
+    /// <summary>ยิงทุกครั้งที่ TotalWallet เปลี่ยน ส่งยอดรวมล่าสุดไปด้วย ให้ UI subscribe แทนการ poll ทุกเฟรม</summary>
+    public static event System.Action<int> OnWalletChanged;
+
     public void Interact(GameObject interactor)
     {
         PetCarrier carrier = interactor.GetComponent<PetCarrier>();
@@ -36,6 +39,7 @@ public class ReturnZone : MonoBehaviour, IInteractable
         // คำนวณ payout ตามสถานะของสัตว์ ณ ตอนส่งคืน
         int earned = pet.State == Pet.PetState.Satisfied ? fullPayout : penaltyPayout;
         TotalWallet += earned;
+        OnWalletChanged?.Invoke(TotalWallet);
 
         Debug.Log($"Earned: {earned} | Total Wallet: {TotalWallet}");
 
