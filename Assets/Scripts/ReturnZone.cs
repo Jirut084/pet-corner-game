@@ -27,14 +27,20 @@ public class ReturnZone : MonoBehaviour, IInteractable
 
     public void Interact(GameObject interactor)
     {
-        PetCarrier carrier = interactor.GetComponent<PetCarrier>();
+        PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();
         if (carrier == null || !carrier.IsCarrying)
         {
-            Debug.Log("[ReturnZone] ไม่มีสัตว์ในมือ ไม่สามารถส่งคืนได้");
+            Debug.Log("[ReturnZone] ไม่มีอะไรในมือ ไม่สามารถส่งคืนได้");
             return;
         }
 
-        Pet pet = carrier.CurrentPet;
+        // ตอนนี้ผู้เล่นถือได้ทั้งสัตว์และกล่องอุปกรณ์ จึงต้องเช็คว่าของในมือเป็นสัตว์จริงๆ
+        Pet pet = carrier.GetHeld<Pet>();
+        if (pet == null)
+        {
+            Debug.Log($"[ReturnZone] ของที่ถืออยู่ ({carrier.HeldObject.name}) ไม่ใช่สัตว์เลี้ยง ส่งคืนไม่ได้");
+            return;
+        }
 
         // คำนวณ payout ตามสถานะของสัตว์ ณ ตอนส่งคืน
         int earned = pet.State == Pet.PetState.Satisfied ? fullPayout : penaltyPayout;
@@ -44,10 +50,10 @@ public class ReturnZone : MonoBehaviour, IInteractable
         Debug.Log($"Earned: {earned} | Total Wallet: {TotalWallet}");
 
         // ปล่อยสัตว์ออกจากมือผู้เล่นแล้วทำลายทิ้ง เพื่อปิดวงจร 1 รอบของ Core Loop
-        Pet releasedPet = carrier.Release(transform.position);
+        GameObject releasedPet = carrier.Consume();
         if (releasedPet != null)
         {
-            Destroy(releasedPet.gameObject);
+            Destroy(releasedPet);
         }
     }
 

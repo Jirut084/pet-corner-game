@@ -21,18 +21,18 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        // ผู้เล่นต้องมี PetCarrier ถึงจะรับสัตว์ได้
-        PetCarrier carrier = interactor.GetComponent<PetCarrier>();
+        // ผู้เล่นต้องมี PlayerCarrier ถึงจะรับสัตว์ได้
+        PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();
         if (carrier == null)
         {
-            Debug.LogWarning("[IntakePoint] ผู้เล่นไม่มี PetCarrier component");
+            Debug.LogWarning("[IntakePoint] ผู้เล่นไม่มี PlayerCarrier component");
             return;
         }
 
-        // ถ้ามือไม่ว่าง (อุ้มสัตว์ตัวอื่นอยู่) ห้ามรับตัวใหม่
+        // ถ้ามือไม่ว่าง (ถือสัตว์หรือกล่องอุปกรณ์อยู่) ห้ามรับตัวใหม่
         if (carrier.IsCarrying)
         {
-            Debug.Log("[IntakePoint] มือไม่ว่าง กรุณาส่งคืนสัตว์ที่ถืออยู่ก่อน");
+            Debug.Log("[IntakePoint] มือไม่ว่าง กรุณาวางของที่ถืออยู่ก่อน");
             return;
         }
 
@@ -52,7 +52,13 @@ public class IntakePoint : MonoBehaviour, IInteractable
         pet.SetNeed(randomNeed);
 
         // ให้ผู้เล่นอุ้มสัตว์ตัวนี้ทันที ปิด loop ขั้นตอนรับสัตว์
-        carrier.Carry(pet);
+        // ถ้ายกไม่สำเร็จต้องเก็บกวาดสัตว์ที่เพิ่ง spawn ทิ้ง ไม่ปล่อยค้างในฉาก
+        if (!carrier.Carry(petObj))
+        {
+            Debug.LogWarning("[IntakePoint] ยกสัตว์ขึ้นมาไม่สำเร็จ ยกเลิกการรับออร์เดอร์");
+            Destroy(petObj);
+            return;
+        }
 
         Debug.Log($"[IntakePoint] รับสัตว์ตัวใหม่แล้ว ต้องการ: {randomNeed}");
     }

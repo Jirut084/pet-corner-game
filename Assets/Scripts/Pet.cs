@@ -6,7 +6,7 @@ using UnityEngine;
 /// รวมถึง logic การถูก "อุ้ม/วาง" โดยผู้เล่น
 /// </summary>
 [RequireComponent(typeof(Renderer))]
-public class Pet : MonoBehaviour
+public class Pet : MonoBehaviour, ICarryable
 {
     public enum PetState
     {
@@ -39,9 +39,6 @@ public class Pet : MonoBehaviour
     private static readonly Color BathUnsatisfiedColor = Color.blue;
     private static readonly Color BathSatisfiedColor = Color.cyan;
 
-    private Collider petCollider;
-    private Rigidbody petRigidbody;
-
     /// <summary>ความต้องการปัจจุบันของสัตว์ (อ่านอย่างเดียวจากภายนอก)</summary>
     public PetNeed Need => need;
 
@@ -58,9 +55,6 @@ public class Pet : MonoBehaviour
         {
             petRenderer = GetComponent<Renderer>();
         }
-
-        petCollider = GetComponent<Collider>();
-        petRigidbody = GetComponent<Rigidbody>();
     }
 
     /// <summary>
@@ -86,49 +80,16 @@ public class Pet : MonoBehaviour
         UpdateVisual();
     }
 
-    /// <summary>
-    /// ผู้เล่น "อุ้ม" สัตว์: ทำให้เป็นลูกของ holdPoint, ปิด collider/rigidbody
-    /// เพื่อไม่ให้เกิด physics glitch ระหว่างถูกถือ
-    /// </summary>
-    public void Pickup(Transform holdPoint)
+    // งาน parent/ปิด physics ตอนถูกอุ้ม ย้ายไปอยู่ที่ PlayerCarrier ทั้งหมดแล้ว
+    // Pet เหลือหน้าที่แค่จำสถานะของตัวเองผ่าน ICarryable
+
+    public void OnPickedUp(PlayerCarrier carrier)
     {
-        if (holdPoint == null)
-        {
-            Debug.LogWarning("[Pet] Pickup ถูกเรียกโดยไม่มี holdPoint");
-            return;
-        }
-
-        transform.SetParent(holdPoint);
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
-
-        if (petCollider != null) petCollider.enabled = false;
-
-        if (petRigidbody != null)
-        {
-            petRigidbody.isKinematic = true;
-            petRigidbody.linearVelocity = Vector3.zero; // Unity 6 ใช้ linearVelocity แทน velocity เดิม
-        }
-
         IsCarried = true;
     }
 
-    /// <summary>
-    /// ผู้เล่น "วาง" สัตว์ลงตำแหน่งที่กำหนด: ถอดออกจาก parent
-    /// และเปิด collider/rigidbody กลับคืน
-    /// </summary>
-    public void Drop(Vector3 position)
+    public void OnDropped(PlayerCarrier carrier)
     {
-        transform.SetParent(null);
-        transform.position = position;
-
-        if (petCollider != null) petCollider.enabled = true;
-
-        if (petRigidbody != null)
-        {
-            petRigidbody.isKinematic = false;
-        }
-
         IsCarried = false;
     }
 

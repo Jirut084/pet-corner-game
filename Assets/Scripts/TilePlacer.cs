@@ -1,51 +1,41 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// ให้ผู้เล่นวาง/ถอดอุปกรณ์ลงบน TileGrid (สำหรับช่วง Preparation Phase)
-/// กด placeKey เพื่อวางอุปกรณ์ที่เลือกอยู่ลงช่องด้านหน้าผู้เล่น (ถ้าช่องว่าง)
-/// กด removeKey เพื่อถอดอุปกรณ์ในช่องนั้นออก (ถ้ามี)
+/// วางอุปกรณ์ลงบน TileGrid ในช่วง Preparation Phase (อ้างอิงกลไกจาก PlateUp!)
+///
+/// ผู้เล่นต้องถือ EquipmentParcel อยู่ในมือ แล้วกด placeKey ขณะหันหน้าไปยังช่องว่าง
+/// กล่องจะถูกแปลงเป็นสถานีจริงและ "ล็อกถาวร" — ย้าย ถอด หรือยกซ้ำไม่ได้อีก
+/// จึงไม่มีปุ่มถอดอุปกรณ์ในระบบนี้แล้วโดยตั้งใจ (ต่างจากเวอร์ชันก่อนหน้า)
 /// </summary>
 [RequireComponent(typeof(PlayerController))]
+[RequireComponent(typeof(PlayerCarrier))]
 public class TilePlacer : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private TileGrid grid;
 
     [Header("Placement Settings")]
-    [Tooltip("อุปกรณ์ที่จะวาง (prefab ใดก็ได้ ไม่บังคับ component พิเศษ)")]
-    [SerializeField] private GameObject equipmentPrefab;
-    [Tooltip("ระยะห่างจากผู้เล่นที่จะเล็งวาง/ถอด (หน่วยเมตร)")]
+    [Tooltip("ระยะห่างจากผู้เล่นที่จะเล็งช่องวาง (หน่วยเมตร)")]
     [SerializeField] private float placeDistance = 1.5f;
 
     [Header("Input")]
     [SerializeField] private KeyCode placeKey = KeyCode.G;
-    [SerializeField] private KeyCode removeKey = KeyCode.H;
 
     private PlayerController playerController;
-
-    // เก็บ mapping ระหว่างช่องกริดกับ GameObject ที่วางอยู่ เพื่อถอดออกได้ถูกตัว
-    private readonly Dictionary<Vector2Int, GameObject> placedObjects = new Dictionary<Vector2Int, GameObject>();
+    private PlayerCarrier carrier;
 
     private void Awake()
     {
         playerController = GetComponent<PlayerController>();
+        carrier = GetComponent<PlayerCarrier>();
     }
 
     private void Update()
     {
         if (grid == null) return;
+        if (!Input.GetKeyDown(placeKey)) return;
 
-        Vector2Int targetCell = GetTargetCell();
-
-        if (Input.GetKeyDown(placeKey))
-        {
-            TryPlace(targetCell);
-        }
-        else if (Input.GetKeyDown(removeKey))
-        {
-            TryRemove(targetCell);
-        }
+        TryPlace(GetTargetCell());
     }
 
     /// <summary>หาช่องกริดที่อยู่ด้านหน้าผู้เล่นตามทิศที่หันล่าสุด</summary>
@@ -58,43 +48,58 @@ public class TilePlacer : MonoBehaviour
 
     private void TryPlace(Vector2Int cell)
     {
-        if (equipmentPrefab == null)
+        EquipmentParcel parcel = carrier.GetHeld<EquipmentParcel>();
+        if (parcel == null)
         {
-            Debug.LogWarning("[TilePlacer] ยังไม่ได้เลือก equipmentPrefab");
+            Debug.Log("[TilePlacer] ต้องถือกล่องอุปกรณ์อยู่ในมือก่อนถึงจะวางได้");
+            return;
+        }
+
+        if (!grid.IsInBounds(cell))
+        {
+            Debug.Log($"[TilePlacer] ช่อง {cell} อยู่นอกกริด วางไม่ได้");
             return;
         }
 
         if (grid.IsOccupied(cell))
         {
-            Debug.Log($"[TilePlacer] ช่อง {cell} ถูกใช้งานแล้ว วางไม่ได้");
+            Debug.Log($"[TilePlacer] ช่อง {cell} มีอุปกรณ์อยู่แล้ว วางไม่ได้");
             return;
         }
 
-        Vector3 worldPos = grid.CellToWorld(cell);
-        GameObject placed = Instantiate(equipmentPrefab, worldPos, Quaternion.identity);
+        // อ่านข้อมูลจากกล่องเก็บไว้ก่อน เพราะเดี๋ยวกล่องจะถูกทำลาย
+        GameObject stationPrefab = parcel.StationPrefab;
+        string parcelName = parcel.DisplayName;
 
-        grid.SetOccupied(cell, true);
-        placedObjects[cell] = placed;
+        GameObject station = Instantiate(stationPrefab, grid.CellToWorld(cell), Quaternion.identity);
 
-        Debug.Log($"[TilePlacer] วางอุปกรณ์ที่ช่อง {cell}");
-    }
-
-    private void TryRemove(Vector2Int cell)
-    {
-        if (!placedObjects.TryGetValue(cell, out GameObject placed) || placed == null)
+        GridOccupant occupant = station.GetComponent<GridOccupant>();
+        if (occupant == null)
         {
-            Debug.Log($"[TilePlacer] ไม่มีอุปกรณ์ในช่อง {cell}");
+            occupant = station.AddComponent<GridOccupant>();
+        }
+
+        // removable = false คือหัวใจของกติกา "วางได้ครั้งเดียว" — ลงไปแล้วล็อกถาวร
+        if (!occupant.Register(grid, cell, false))
+        {
+            // ไม่ควรเกิดเพราะเช็ค IsOccupied ไปแล้ว แต่ถ้าเกิดจริงต้องเก็บกวาดสถานีที่สร้างค้างไว้
+            // และ "ไม่" ทำลายกล่อง เพื่อให้ผู้เล่นยังถืออยู่และลองวางใหม่ได้ ไม่ใช่เสียของฟรี
+            Debug.LogWarning($"[TilePlacer] ลงทะเบียนสถานีที่ช่อง {cell} ไม่สำเร็จ ยกเลิกการวาง");
+            Destroy(station);
             return;
         }
 
-        Destroy(placed);
-        placedObjects.Remove(cell);
-        grid.SetOccupied(cell, false);
+        // วางสำเร็จแล้วค่อยเอากล่องออกจากมือและทำลายทิ้ง
+        GameObject consumedParcel = carrier.Consume();
+        if (consumedParcel != null)
+        {
+            Destroy(consumedParcel);
+        }
 
-        Debug.Log($"[TilePlacer] ถอดอุปกรณ์ที่ช่อง {cell} แล้ว");
+        Debug.Log($"[TilePlacer] วาง {parcelName} ที่ช่อง {cell} เรียบร้อย (ล็อกถาวร ย้ายไม่ได้อีก)");
     }
 
-    // แสดงช่องเป้าหมายปัจจุบันใน Scene view: เขียว = วางได้, แดง = ถูกใช้งานแล้ว
+    // แสดงช่องเป้าหมายปัจจุบันใน Scene view: เขียว = วางได้, แดง = วางไม่ได้
     private void OnDrawGizmos()
     {
         if (grid == null) return;
