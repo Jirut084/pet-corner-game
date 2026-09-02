@@ -10,6 +10,23 @@ public interface IInteractable
 }
 
 /// <summary>
+/// สำหรับวัตถุที่ต้อง "กดค้าง" แทนการกดครั้งเดียว (เช่นสถานี Groom/Bath)
+/// ถ้า UseHold คืน false, InteractionManager จะกลับไปเรียก Interact() แบบเดิมให้แทน
+/// ทำให้สถานีเดียวสลับโหมดได้ตอน runtime โดยไม่ต้องเปลี่ยน component
+/// </summary>
+public interface IHoldInteractable : IInteractable
+{
+    bool UseHold { get; }
+
+    void OnHoldStart(GameObject interactor);
+    void OnHoldTick(GameObject interactor, float heldSeconds);
+    void OnHoldRelease(GameObject interactor, float heldSeconds);
+
+    /// <summary>เรียกเมื่อการกดค้างถูกขัดจังหวะ เช่น ผู้เล่นเดินออกนอกระยะกลางคัน</summary>
+    void OnHoldCancel(GameObject interactor);
+}
+
+/// <summary>
 /// Handles the player's interaction input (default: E key).
 /// Supports two detection modes so the same prototype logic can be tested
 /// with a center-screen raycast (Scene A, third-person) or an overlap
@@ -45,6 +62,13 @@ public class InteractionManager : MonoBehaviour
     // Last interactable found, exposed for optional UI prompts (e.g. "Press E").
     public IInteractable CurrentTarget { get; private set; }
 
+    // สถานะการกดค้างที่กำลังดำเนินอยู่
+    private IHoldInteractable activeHoldTarget;
+    private float holdStartTime;
+
+    /// <summary>ระยะเวลาที่กดค้างอยู่ตอนนี้ (0 ถ้าไม่ได้กดค้างอะไรอยู่) เปิดให้ UI เอาไปทำ progress bar ได้</summary>
+    public float CurrentHoldSeconds => activeHoldTarget != null ? Time.time - holdStartTime : 0f;
+
     private void Awake()
     {
         playerController = GetComponent<PlayerController>();
@@ -61,10 +85,55 @@ public class InteractionManager : MonoBehaviour
             ? FindTargetViaRaycast()
             : FindTargetViaOverlap();
 
+        if (activeHoldTarget != null)
+        {
+            UpdateActiveHold();
+            return; // ระหว่างกดค้างอยู่ ไม่รับ input อื่น
+        }
+
         if (Input.GetKeyDown(interactKey))
         {
-            CurrentTarget?.Interact(gameObject);
+            BeginInteraction();
         }
+    }
+
+    private void BeginInteraction()
+    {
+        if (CurrentTarget == null) return;
+
+        // ถ้าเป้าหมายรองรับการกดค้างและกำลังตั้งเป็นโหมดค้างอยู่ ให้เข้าสู่โหมดค้าง
+        if (CurrentTarget is IHoldInteractable holdTarget && holdTarget.UseHold)
+        {
+            activeHoldTarget = holdTarget;
+            holdStartTime = Time.time;
+            holdTarget.OnHoldStart(gameObject);
+            return;
+        }
+
+        CurrentTarget.Interact(gameObject);
+    }
+
+    private void UpdateActiveHold()
+    {
+        float held = Time.time - holdStartTime;
+
+        // เดินออกนอกระยะ/เล็งไปทางอื่นกลางคัน = ยกเลิก
+        // เทียบด้วย ReferenceEquals เพราะ CurrentTarget เป็น interface ที่อาจชี้ไปคนละ component
+        if (!ReferenceEquals(CurrentTarget, activeHoldTarget))
+        {
+            activeHoldTarget.OnHoldCancel(gameObject);
+            activeHoldTarget = null;
+            return;
+        }
+
+        if (Input.GetKey(interactKey))
+        {
+            activeHoldTarget.OnHoldTick(gameObject, held);
+            return;
+        }
+
+        activeHoldTarget.OnHoldRelease(gameObject, held);
+        activeHoldTarget = null;
     }
 
     private IInteractable FindTargetViaRaycast()

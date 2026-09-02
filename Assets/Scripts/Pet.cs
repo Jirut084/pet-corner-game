@@ -1,87 +1,203 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// แทนสัตว์เลี้ยง 1 ตัวในโลกเกม (ใน Prototype ใช้ Cube/Capsule แทนโมเดลจริง)
-/// เก็บ State (Unsatisfied/Satisfied), Need (Food/Bath) และจัดการสีตามสถานะ
-/// รวมถึง logic การถูก "อุ้ม/วาง" โดยผู้เล่น
+///
+/// ใบสั่งงานเป็น "checklist ไม่มีลำดับ" — ต้องผ่านทุกสถานีที่ระบุ แต่ทำอันไหนก่อนก็ได้
+/// ผู้เล่นจึงเลือกเส้นทางเองได้ ซึ่งเป็นจุดที่ทำให้เกิดการตัดสินใจในเกม
+///
+/// สีของ Cube บอกขั้นตอนที่ยังเหลืออันแรก เพื่อให้เทสได้โดยยังไม่มี UI
 /// </summary>
-[RequireComponent(typeof(Renderer))]
+[RequireComponent(typeof(MeshRenderer))]
 public class Pet : MonoBehaviour, ICarryable
 {
-    public enum PetState
-    {
-        Unsatisfied,
-        Satisfied
-    }
-
-    public enum PetNeed
-    {
-        Food,
-        Bath
-    }
-
-    [Header("Pet Data")]
-    [Tooltip("ความต้องการของสัตว์ตัวนี้ ถูกกำหนดตอน Spawn จาก IntakePoint")]
-    [SerializeField] private PetNeed need;
-
-    [Tooltip("สถานะปัจจุบันของสัตว์ เริ่มต้นเป็น Unsatisfied เสมอ")]
-    [SerializeField] private PetState state = PetState.Unsatisfied;
+    [Header("Data")]
+    [Tooltip("ชนิดของสัตว์ตัวนี้ ปกติถูกกำหนดตอน Spawn จาก IntakePoint")]
+    [SerializeField] private PetSpecies species;
 
     [Header("Visual")]
-    [Tooltip("Renderer ของสัตว์ ใช้เปลี่ยนสีตาม Need/State")]
+    [Tooltip("Renderer ของสัตว์ ใช้เปลี่ยนสีตามขั้นตอนที่ยังเหลือ")]
     [SerializeField] private Renderer petRenderer;
 
-    // สีสำหรับแต่ละ Need x State
-    // Food: เหลือง (ยังไม่พอใจ) -> เหลืองสว่าง (พอใจแล้ว)
-    // Bath: ฟ้า (ยังไม่พอใจ) -> Cyan/ฟ้าสว่าง (พอใจแล้ว)
-    private static readonly Color FoodUnsatisfiedColor = Color.yellow;
-    private static readonly Color FoodSatisfiedColor = new Color(1f, 1f, 0.4f); // เหลืองสว่าง
-    private static readonly Color BathUnsatisfiedColor = Color.blue;
-    private static readonly Color BathSatisfiedColor = Color.cyan;
+    private static readonly Color FeedColor = Color.yellow;
+    private static readonly Color BathColor = new Color(0.3f, 0.6f, 1f);
+    private static readonly Color GroomColor = Color.magenta;
+    private static readonly Color PlayColor = Color.green;
+    private static readonly Color RestColor = new Color(1f, 0.6f, 0.2f);
+    private static readonly Color DoneColor = Color.white;
 
-    /// <summary>ความต้องการปัจจุบันของสัตว์ (อ่านอย่างเดียวจากภายนอก)</summary>
-    public PetNeed Need => need;
+    // ขั้นตอนที่ทำสำเร็จแล้ว และสถานีที่จ่ายทิปไปแล้ว (จำกัดสถานีละครั้งต่อสัตว์ 1 ตัว)
+    private readonly HashSet<CareStep> completedSteps = new HashSet<CareStep>();
+    private readonly HashSet<CareStep> tippedSteps = new HashSet<CareStep>();
 
-    /// <summary>สถานะปัจจุบันของสัตว์ (อ่านอย่างเดียวจากภายนอก)</summary>
-    public PetState State => state;
+    public PetSpecies Species => species;
+
+    /// <summary>ชื่อไว้แสดงใน log — ปลอดภัยแม้ยังไม่ได้ Initialize (species เป็น null)</summary>
+    public string DisplayName => species != null ? species.speciesName : name;
+
+    public bool IsComplete => species == null || completedSteps.Count >= species.StepCount;
+    public int StepsCompleted => completedSteps.Count;
+    public int TotalSteps => species != null ? species.StepCount : 0;
 
     /// <summary>สัตว์กำลังถูกอุ้มอยู่หรือไม่</summary>
     public bool IsCarried { get; private set; }
 
+    /// <summary>ทิปที่สะสมได้ระหว่างทาง จ่ายรวมทีเดียวตอนส่งคืน</summary>
+    public int CollectedTip { get; private set; }
+
+    public event Action<Pet> OnStepCompleted;
+    public event Action<Pet> OnAllStepsCompleted;
+    public event Action<Pet> OnPatienceExpired;
+    public event Action<Pet, float> OnPatienceChanged;
+
+    // ---------- มิเตอร์ความอดทน ----------
+    // เริ่มนับตั้งแต่ผู้เล่นกดรับออเดอร์ที่ Intake (ไม่ใช่ตอน spawn) ตามที่ตกลงไว้
+
+    private bool patienceRunning;
+    private float patienceRemaining;
+
+    public float PatienceRemaining => patienceRemaining;
+    public bool IsPatienceRunning => patienceRunning;
+
+    public float PatienceNormalized =>
+        (species != null && species.patienceSeconds > 0f)
+            ? Mathf.Clamp01(patienceRemaining / species.patienceSeconds)
+            : 0f;
+
     private void Awake()
     {
-        // ดึง component ที่จำเป็นถ้ายังไม่ได้ผูกใน Inspector
         if (petRenderer == null)
         {
             petRenderer = GetComponent<Renderer>();
         }
     }
 
-    /// <summary>
-    /// เรียกจาก IntakePoint ทันทีหลัง Spawn เพื่อสุ่ม/กำหนด Need ให้สัตว์ตัวนี้
-    /// อัปเดตสีตาม Need ที่กำหนดทันที (สถานะเริ่มต้นเป็น Unsatisfied เสมอ)
-    /// </summary>
-    public void SetNeed(PetNeed newNeed)
+    /// <summary>เรียกจาก IntakePoint ทันทีหลัง Spawn เพื่อกำหนดชนิดและรีเซ็ตความคืบหน้า</summary>
+    public void Initialize(PetSpecies newSpecies)
     {
-        need = newNeed;
-        state = PetState.Unsatisfied;
+        species = newSpecies;
+        completedSteps.Clear();
+        tippedSteps.Clear();
+        CollectedTip = 0;
+        patienceRunning = false;
+
+        if (species == null)
+        {
+            Debug.LogError("[Pet] Initialize ถูกเรียกโดยไม่มี PetSpecies");
+            return;
+        }
+
+        if (species.StepCount == 0)
+        {
+            Debug.LogWarning($"[Pet] {species.speciesName} ไม่มีขั้นตอนใน requiredSteps เลย จะนับว่าเสร็จทันที");
+        }
+
         UpdateVisual();
     }
 
-    /// <summary>
-    /// เรียกจาก NeedZone เมื่อสัตว์ได้รับการตอบสนอง Need ตรงกับโซนแล้ว
-    /// เปลี่ยน State เป็น Satisfied และอัปเดตสีเป็นสีสว่าง
-    /// </summary>
-    public void SetSatisfied()
+    /// <summary>ยังต้องผ่านสถานีชนิดนี้อยู่หรือไม่ (อยู่ใน checklist และยังไม่ได้ทำ)</summary>
+    public bool NeedsStep(CareStep step)
     {
-        if (state == PetState.Satisfied) return; // กันการเรียกซ้ำ/เปลี่ยนสีซ้ำโดยไม่จำเป็น
-
-        state = PetState.Satisfied;
-        UpdateVisual();
+        if (species == null) return false;
+        return species.Requires(step) && !completedSteps.Contains(step);
     }
 
-    // งาน parent/ปิด physics ตอนถูกอุ้ม ย้ายไปอยู่ที่ PlayerCarrier ทั้งหมดแล้ว
-    // Pet เหลือหน้าที่แค่จำสถานะของตัวเองผ่าน ICarryable
+    /// <summary>ขั้นตอนที่ยังเหลือทั้งหมด</summary>
+    public List<CareStep> RemainingSteps()
+    {
+        List<CareStep> remaining = new List<CareStep>();
+        if (species == null || species.requiredSteps == null) return remaining;
+
+        foreach (CareStep step in species.requiredSteps)
+        {
+            if (!completedSteps.Contains(step)) remaining.Add(step);
+        }
+
+        return remaining;
+    }
+
+    /// <summary>
+    /// ทำขั้นตอนที่ระบุให้สำเร็จ — สำเร็จถ้าอยู่ใน checklist และยังไม่เคยทำ (ไม่สนลำดับ)
+    /// </summary>
+    public bool TryComplete(CareStep step)
+    {
+        if (!NeedsStep(step)) return false;
+
+        completedSteps.Add(step);
+        UpdateVisual();
+
+        OnStepCompleted?.Invoke(this);
+
+        if (IsComplete)
+        {
+            OnAllStepsCompleted?.Invoke(this);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// พยายามรับทิปจากสถานีที่สัตว์ไม่ได้ต้องการ
+    /// ได้เฉพาะเมื่อทำครบทุกขั้นตอนแล้ว และสถานีชนิดนั้นยังไม่เคยให้ทิปกับสัตว์ตัวนี้
+    /// </summary>
+    public bool TryCollectTip(CareStep step, int amount)
+    {
+        if (!IsComplete) return false;
+        if (!tippedSteps.Add(step)) return false; // Add คืน false ถ้ามีอยู่แล้ว
+
+        CollectedTip += amount;
+        return true;
+    }
+
+    // ---------- มิเตอร์ ----------
+
+    public void StartPatience()
+    {
+        if (species == null)
+        {
+            Debug.LogWarning("[Pet] StartPatience ถูกเรียกก่อน Initialize");
+            return;
+        }
+
+        patienceRemaining = species.patienceSeconds;
+        patienceRunning = true;
+    }
+
+    public void StopPatience()
+    {
+        patienceRunning = false;
+    }
+
+    private void Update()
+    {
+        if (!patienceRunning) return;
+
+        // บัฟ "มิเตอร์ลดช้าลง" คูณตรงนี้จุดเดียว
+        float drainRate = PlayerProgress.Instance != null
+            ? PlayerProgress.Instance.PatienceDrainMultiplier
+            : 1f;
+
+        patienceRemaining -= Time.deltaTime * drainRate;
+        OnPatienceChanged?.Invoke(this, PatienceNormalized);
+
+        if (patienceRemaining > 0f) return;
+
+        patienceRemaining = 0f;
+        patienceRunning = false; // ตั้งก่อนยิง event กัน subscriber เรียกกลับมาซ้ำ
+        OnPatienceExpired?.Invoke(this);
+    }
+
+    /// <summary>ข้อความสรุปความคืบหน้าไว้ debug/แสดงบน ticket UI ชั่วคราว</summary>
+    public string GetProgressText()
+    {
+        if (species == null) return "(ไม่มีข้อมูลสัตว์)";
+
+        if (IsComplete) return $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] พร้อมส่งคืน";
+
+        return $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] ยังต้อง: {string.Join(", ", RemainingSteps())}";
+    }
 
     public void OnPickedUp(PlayerCarrier carrier)
     {
@@ -93,24 +209,24 @@ public class Pet : MonoBehaviour, ICarryable
         IsCarried = false;
     }
 
-    /// <summary>อัปเดตสี Renderer ตาม Need + State ปัจจุบัน</summary>
+    /// <summary>เปลี่ยนสีตามขั้นตอนที่เหลืออันแรก เพื่อให้ผู้เล่นรู้คร่าวๆ ว่ายังต้องไปไหน</summary>
     private void UpdateVisual()
     {
         if (petRenderer == null) return;
 
-        Color targetColor;
+        Color targetColor = DoneColor;
+        List<CareStep> remaining = RemainingSteps();
 
-        switch (need)
+        if (remaining.Count > 0)
         {
-            case PetNeed.Food:
-                targetColor = state == PetState.Satisfied ? FoodSatisfiedColor : FoodUnsatisfiedColor;
-                break;
-            case PetNeed.Bath:
-                targetColor = state == PetState.Satisfied ? BathSatisfiedColor : BathUnsatisfiedColor;
-                break;
-            default:
-                targetColor = Color.white;
-                break;
+            switch (remaining[0])
+            {
+                case CareStep.Feed: targetColor = FeedColor; break;
+                case CareStep.Bath: targetColor = BathColor; break;
+                case CareStep.Groom: targetColor = GroomColor; break;
+                case CareStep.Play: targetColor = PlayColor; break;
+                case CareStep.Rest: targetColor = RestColor; break;
+            }
         }
 
         // ใช้ MaterialPropertyBlock เพื่อเลี่ยงการสร้าง material instance ใหม่ทุกครั้ง (ดีต่อ performance)

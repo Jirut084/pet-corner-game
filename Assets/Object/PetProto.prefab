@@ -126,8 +126,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d19a75a1b7e8bd94ea90ecd88bf1d684, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Pet
-  need: 0
-  state: 0
+  species: {fileID: 11400000, guid: bc269c1e220d1b2408b71d44534c7f61, type: 2}
   petRenderer: {fileID: 0}
 --- !u!54 &1921669736224982097
 Rigidbody:

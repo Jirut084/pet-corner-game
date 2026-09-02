@@ -107,6 +107,41 @@ public class TileGrid : MonoBehaviour
         return true;
     }
 
+    /// <summary>หาช่องว่างช่องแรกในกริดทั้งใบ คืน false ถ้าเต็ม</summary>
+    public bool TryFindFreeCell(out Vector2Int cell)
+    {
+        return TryFindFreeCell(Vector2Int.zero, new Vector2Int(width - 1, height - 1), out cell);
+    }
+
+    /// <summary>
+    /// หาช่องว่างช่องแรกภายในพื้นที่ที่กำหนด ใช้ตอนวางสถานีอัตโนมัติ
+    /// เพื่อไม่ให้สถานีไปโผล่มุมห้องไกลจากเคาน์เตอร์ คืน false ถ้าพื้นที่นั้นเต็ม
+    /// </summary>
+    public bool TryFindFreeCell(Vector2Int areaMin, Vector2Int areaMax, out Vector2Int cell)
+    {
+        EnsureOccupantArray();
+
+        int minX = Mathf.Max(0, Mathf.Min(areaMin.x, areaMax.x));
+        int maxX = Mathf.Min(width - 1, Mathf.Max(areaMin.x, areaMax.x));
+        int minZ = Mathf.Max(0, Mathf.Min(areaMin.y, areaMax.y));
+        int maxZ = Mathf.Min(height - 1, Mathf.Max(areaMin.y, areaMax.y));
+
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                Vector2Int candidate = new Vector2Int(x, z);
+                if (IsOccupied(candidate)) continue;
+
+                cell = candidate;
+                return true;
+            }
+        }
+
+        cell = default;
+        return false;
+    }
+
     /// <summary>ล้างช่องให้ว่าง — ไม่ Destroy ตัว GameObject ผู้เรียกต้องจัดการเอง</summary>
     public void ClearCell(Vector2Int cell)
     {

@@ -11,11 +11,9 @@ public class ReturnZone : MonoBehaviour, IInteractable
     [SerializeField] private float detectionRadius = 2f;
 
     [Header("Payout Settings")]
-    [Tooltip("เงินที่ได้เมื่อสัตว์ถูกตอบสนอง Need แล้ว (Satisfied)")]
-    [SerializeField] private int fullPayout = 100;
-
-    [Tooltip("เงินที่ได้เมื่อสัตว์ยังไม่ถูกตอบสนอง Need (Unsatisfied) - หักครึ่งเป็น penalty")]
-    [SerializeField] private int penaltyPayout = 50;
+    [Tooltip("ตัวคูณค่าบริการเมื่อส่งคืนทั้งที่ยังทำขั้นตอนไม่ครบ (0.5 = ได้ครึ่งเดียว)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float incompleteMultiplier = 0.5f;
 
     // เก็บเงินรวมสะสมข้ามหลายรอบของ loop แบบง่ายที่สุด (static ตามที่ระบุไว้)
     // หมายเหตุ: ถ้าโปรเจกต์ขยายใหญ่ขึ้นในอนาคต แนะนำย้ายไปเป็น EconomyManager แยกต่างหาก
@@ -30,7 +28,7 @@ public class ReturnZone : MonoBehaviour, IInteractable
         PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();
         if (carrier == null || !carrier.IsCarrying)
         {
-            Debug.Log("[ReturnZone] ไม่มีอะไรในมือ ไม่สามารถส่งคืนได้");
+            GameLog.Push("ไม่มีอะไรในมือ ส่งคืนไม่ได้", LogTone.Warn);
             return;
         }
 
@@ -38,16 +36,55 @@ public class ReturnZone : MonoBehaviour, IInteractable
         Pet pet = carrier.GetHeld<Pet>();
         if (pet == null)
         {
-            Debug.Log($"[ReturnZone] ของที่ถืออยู่ ({carrier.HeldObject.name}) ไม่ใช่สัตว์เลี้ยง ส่งคืนไม่ได้");
+            GameLog.Push($"{carrier.HeldObject.name} ไม่ใช่สัตว์เลี้ยง ส่งคืนไม่ได้", LogTone.Warn);
             return;
         }
 
-        // คำนวณ payout ตามสถานะของสัตว์ ณ ตอนส่งคืน
-        int earned = pet.State == Pet.PetState.Satisfied ? fullPayout : penaltyPayout;
+        // ค่าบริการ = ค่าฐานของชนิดสัตว์ + ค่าต่อขั้นตอนที่ทำสำเร็จจริง
+        // ส่งคืนทั้งที่ทำไม่ครบก็ยังรับได้ แต่โดนหักตาม incompleteMultiplier (ไม่ block การส่งคืน)
+        PetSpecies species = pet.Species;
+        if (species == null)
+        {
+            Debug.LogWarning($"[ReturnZone] {pet.DisplayName} ยังไม่ได้ Initialize ชนิดสัตว์ คิดค่าบริการไม่ได้");
+            return;
+        }
+
+        int earned = species.baseFee + (species.feePerStep * pet.StepsCompleted);
+
+        if (!pet.IsComplete)
+        {
+            earned = Mathf.RoundToInt(earned * incompleteMultiplier);
+        }
+
+        // บัฟ "ค่าบริการ +x%" คูณหลังหัก penalty แล้ว
+        if (PlayerProgress.Instance != null)
+        {
+            earned = Mathf.RoundToInt(earned * PlayerProgress.Instance.FeeMultiplier);
+        }
+
+        // ทิปที่สะสมไว้ระหว่างทางไม่โดนหัก penalty และไม่โดนคูณบัฟ เป็นค่าคงที่ตรงๆ
+        earned += pet.CollectedTip;
+
         TotalWallet += earned;
         OnWalletChanged?.Invoke(TotalWallet);
 
-        Debug.Log($"Earned: {earned} | Total Wallet: {TotalWallet}");
+        pet.StopPatience();
+
+        // บอกเจ้าของว่าสัตว์กลับมาแล้ว จะได้ลุกจากจุดรอแล้วเดินออกจากร้าน
+        CustomerManager.Instance?.NotifyOrderDelivered(pet);
+
+        string status = pet.IsComplete ? "ครบทุกขั้นตอน" : $"ไม่ครบ ({pet.StepsCompleted}/{pet.TotalSteps})";
+        string tipText = pet.CollectedTip > 0 ? $" + ทิป {pet.CollectedTip}" : string.Empty;
+        GameLog.Push($"ส่งคืน {species.speciesName} ({status}) → ได้ {earned}{tipText} | เงินรวม {TotalWallet}",
+            pet.IsComplete ? LogTone.Good : LogTone.Warn);
+
+        // ส่งคืนทั้งที่ทำขั้นตอนไม่ครบ = ร้องเรียน 1 ครั้ง (ไม่ block การส่งคืน)
+        if (!pet.IsComplete)
+        {
+            GameManager.Instance?.AddComplaint($"{species.speciesName} ดูแลไม่ครบขั้นตอน");
+        }
+
+        GameManager.Instance?.CompleteOrder(pet);
 
         // ปล่อยสัตว์ออกจากมือผู้เล่นแล้วทำลายทิ้ง เพื่อปิดวงจร 1 รอบของ Core Loop
         GameObject releasedPet = carrier.Consume();

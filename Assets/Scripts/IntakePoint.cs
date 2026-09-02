@@ -1,8 +1,11 @@
 using UnityEngine;
 
 /// <summary>
-/// จุดรับออร์เดอร์สัตว์เลี้ยง (Intake Station)
-/// ผู้เล่นกด Interact ที่จุดนี้เพื่อสุ่มสัตว์ตัวใหม่และ "อุ้ม" ขึ้นมาทันที
+/// เคาน์เตอร์รับออเดอร์ (Intake Station)
+/// ผู้เล่นกด Interact ตอนมีลูกค้ายืนรออยู่ที่เคาน์เตอร์ เพื่อรับสัตว์ของลูกค้าคนนั้น
+/// สัตว์จะปรากฏขึ้นและถูกอุ้มทันที ส่วนลูกค้าจะเดินไปนั่งรอที่จุดรอ
+///
+/// ชนิดสัตว์มาจากลูกค้า ไม่ได้สุ่มที่นี่แล้ว (CustomerManager เป็นคนสุ่มตอน spawn ลูกค้า)
 /// </summary>
 public class IntakePoint : MonoBehaviour, IInteractable
 {
@@ -21,7 +24,39 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        // ผู้เล่นต้องมี PlayerCarrier ถึงจะรับสัตว์ได้
+        GameManager game = GameManager.Instance;
+        if (game != null && !game.CanTakeNewOrder)
+        {
+            if (game.Phase != GamePhase.Service)
+            {
+                GameLog.Push("ยังไม่ได้เปิดร้าน รับออเดอร์ไม่ได้", LogTone.Warn);
+            }
+            else if (game.ActiveOrderCount >= game.ConcurrentOrderLimit)
+            {
+                GameLog.Push($"ดูแลพร้อมกันได้แค่ {game.ConcurrentOrderLimit} ตัว ส่งคืนสักตัวก่อน", LogTone.Warn);
+            }
+            else
+            {
+                GameLog.Push("รับออเดอร์ครบโควตาของวันนี้แล้ว", LogTone.Warn);
+            }
+
+            return;
+        }
+
+        CustomerManager customers = CustomerManager.Instance;
+        if (customers == null)
+        {
+            Debug.LogError("[IntakePoint] ไม่มี CustomerManager ในฉาก รับออเดอร์ไม่ได้");
+            return;
+        }
+
+        Customer customer = customers.CustomerAtCounter();
+        if (customer == null)
+        {
+            GameLog.Push("ยังไม่มีลูกค้าที่เคาน์เตอร์", LogTone.Warn);
+            return;
+        }
+
         PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();
         if (carrier == null)
         {
@@ -29,14 +64,12 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        // ถ้ามือไม่ว่าง (ถือสัตว์หรือกล่องอุปกรณ์อยู่) ห้ามรับตัวใหม่
         if (carrier.IsCarrying)
         {
-            Debug.Log("[IntakePoint] มือไม่ว่าง กรุณาวางของที่ถืออยู่ก่อน");
+            GameLog.Push("มือไม่ว่าง วางของที่ถืออยู่ก่อน (โต๊ะพักรับได้)", LogTone.Warn);
             return;
         }
 
-        // Spawn สัตว์ตัวใหม่
         GameObject petObj = Instantiate(petPrefab, spawnPoint.position, spawnPoint.rotation);
         Pet pet = petObj.GetComponent<Pet>();
 
@@ -47,19 +80,29 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        // สุ่ม Need 50/50 ระหว่าง Food กับ Bath
-        Pet.PetNeed randomNeed = Random.value < 0.5f ? Pet.PetNeed.Food : Pet.PetNeed.Bath;
-        pet.SetNeed(randomNeed);
+        pet.Initialize(customer.RequestedSpecies);
 
-        // ให้ผู้เล่นอุ้มสัตว์ตัวนี้ทันที ปิด loop ขั้นตอนรับสัตว์
-        // ถ้ายกไม่สำเร็จต้องเก็บกวาดสัตว์ที่เพิ่ง spawn ทิ้ง ไม่ปล่อยค้างในฉาก
-        if (!carrier.Carry(petObj))
+        // จองจุดรอให้ลูกค้าก่อน ถ้าไม่มีที่นั่งว่างต้องยกเลิกทั้งออเดอร์
+        // ไม่งั้นลูกค้าจะยืนค้างที่เคาน์เตอร์บังคนถัดไปตลอดวัน
+        if (!customers.AssignSeat(customer, pet))
         {
-            Debug.LogWarning("[IntakePoint] ยกสัตว์ขึ้นมาไม่สำเร็จ ยกเลิกการรับออร์เดอร์");
+            GameLog.Push("ไม่มีจุดรอว่าง รับออเดอร์ไม่ได้", LogTone.Warn);
             Destroy(petObj);
             return;
         }
 
-        Debug.Log($"[IntakePoint] รับสัตว์ตัวใหม่แล้ว ต้องการ: {randomNeed}");
+        if (!carrier.Carry(petObj))
+        {
+            Debug.LogWarning("[IntakePoint] ยกสัตว์ขึ้นมาไม่สำเร็จ ยกเลิกการรับออเดอร์");
+            Destroy(petObj);
+            return;
+        }
+
+        // มิเตอร์เริ่มนับตรงนี้ — ตอนรับออเดอร์ ไม่ใช่ตอนลูกค้าเดินเข้าร้าน
+        pet.StartPatience();
+        game?.NotifyOrderIssued(pet);
+
+        GameLog.Push($"รับออเดอร์ {pet.DisplayName} — ต้องทำ: {string.Join(", ", pet.RemainingSteps())} " +
+                     $"(อดทน {customer.RequestedSpecies.patienceSeconds:F0} วิ)", LogTone.Good);
     }
 }

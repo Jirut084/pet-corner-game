@@ -68,7 +68,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 83619c2c026f6c647b1b953dec8667c4, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -122,8 +122,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 5001181628261419827}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 75a53368518ca8a45a535ce69f7b0c84, type: 3}
+  m_Script: {fileID: 11500000, guid: 8ab23263efdf341418e4edc700baea34, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NeedZone
-  zoneType: 1
-  detectionRadius: 2
+  step: 1
+  mode: 1
+  minHoldSeconds: 1
+  maxHoldSeconds: 1.5
+  gizmoRadius: 1

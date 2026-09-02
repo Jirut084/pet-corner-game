@@ -1,90 +1,235 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// ตั้งค่าเริ่มต้นของด่านตอนเริ่มฉาก:
-/// 1) วางสถานีหลักที่ขาดไม่ได้ (จุดรับ / จุดคืน / จุดสนอง need) ลงพิกัดกริดที่กำหนดไว้ตายตัว
-/// 2) ส่งกล่องอุปกรณ์แบบสุ่มมาที่จุดรับของ ให้ผู้เล่นเดินไปยกมาวางเองในช่วง Preparation Phase
+/// จัดของลงร้าน:
+/// 1) วางเคาน์เตอร์หลัก (จุดรับ/จุดคืน) ลงพิกัดตายตัวตอนเปิดฉาก — ต้องวางก่อนเสมอเพราะจองช่องไว้
+/// 2) ฟัง PlayerProgress.OnStationUnlocked แล้ววางสถานี "ทันทีที่ปลดล็อก"
+///    ครอบคลุมทั้งตอนเลือกสัตว์เริ่มต้นจากเมนู และตอนเลือกรางวัลท้ายวัน
+/// 3) มี sweep ตอนเข้าช่วง Setup เป็นตาข่ายกันพลาด เผื่อมีอะไรหลุดจาก event
 ///
-/// สถานีที่วางจากที่นี่จะถูกล็อกถาวรทั้งหมด (removable = false) ผู้เล่นย้ายหรือถอดไม่ได้
+/// สถานีอัตโนมัติจะไปโผล่ในโซน autoPlaceArea เท่านั้น (กรอบเขียวใน Scene view)
+/// ไม่ใช่มุมกริดที่อยู่ไกลจากเคาน์เตอร์จนเล่นไม่ได้
 /// </summary>
 public class LevelInitializer : MonoBehaviour
 {
-    /// <summary>สถานี 1 ชิ้นที่ต้องมีตั้งแต่เริ่มเกม พร้อมพิกัดช่องที่จะวาง</summary>
+    /// <summary>เคาน์เตอร์ที่ต้องอยู่พิกัดตายตัว (จุดรับ/จุดคืน)</summary>
     [System.Serializable]
-    public class DefaultStation
+    public class FixedCounter
     {
-        [Tooltip("ชื่อไว้ดูใน Inspector เฉยๆ ไม่มีผลกับ logic")]
+        [Tooltip("ชื่อไว้ดูใน Inspector เฉยๆ")]
         public string label;
 
-        [Tooltip("Prefab ของสถานี (IntakePoint / ReturnZone / NeedZone ฯลฯ)")]
         public GameObject prefab;
 
-        [Tooltip("พิกัดช่องบนกริดที่จะวาง — x = แกน X, y = แกน Z")]
+        [Tooltip("พิกัดช่องบนกริด — x = แกน X, y = แกน Z")]
         public Vector2Int cell;
+
+        [Tooltip("ปกติปิดไว้ เพราะถ้าผู้เล่นยกจุดรับ/จุดคืนไปทิ้งจะเล่น loop ต่อไม่ได้")]
+        public bool movable = false;
     }
 
     [Header("References")]
     [Tooltip("กริดของด่านนี้ ปล่อยว่างได้ จะค้นหา TileGrid ในฉากให้อัตโนมัติ")]
     [SerializeField] private TileGrid grid;
 
-    [Header("1) สถานีเริ่มต้น (วางตายตัวตอนเริ่มเกม)")]
-    [SerializeField] private DefaultStation[] defaultStations;
+    [Header("1) เคาน์เตอร์หลัก (พิกัดตายตัว)")]
+    [SerializeField] private FixedCounter[] fixedCounters;
 
-    [Header("2) กล่องอุปกรณ์แบบสุ่ม")]
+    [Header("พื้นที่วางสถานีอัตโนมัติ")]
+    [Tooltip("มุมล่างซ้ายของโซนที่สถานีจะไปโผล่ (พิกัดช่อง) ดูกรอบสีเขียวใน Scene view")]
+    [SerializeField] private Vector2Int autoPlaceAreaMin = new Vector2Int(2, 4);
+
+    [Tooltip("มุมบนขวาของโซนที่สถานีจะไปโผล่ (พิกัดช่อง)")]
+    [SerializeField] private Vector2Int autoPlaceAreaMax = new Vector2Int(12, 9);
+
+    [Header("2) กล่องอุปกรณ์แบบสุ่ม (ทางเลือก)")]
     [Tooltip("Prefab กล่องเปล่า ต้องมี component EquipmentParcel + Collider ติดอยู่")]
     [SerializeField] private GameObject parcelPrefab;
-
-    [Tooltip("คลังอุปกรณ์ที่สุ่มได้ — กล่องจะสุ่มหยิบ 1 ชิ้นจากลิสต์นี้")]
-    [SerializeField] private GameObject[] equipmentPool;
 
     [Tooltip("จุดที่กล่องอุปกรณ์จะถูกส่งมาวาง")]
     [SerializeField] private Transform deliveryPoint;
 
-    [Tooltip("ส่งกล่องแรกให้ทันทีตอนเริ่มฉากหรือไม่")]
-    [SerializeField] private bool spawnParcelOnStart = true;
+    [Tooltip("ส่งกล่องอุปกรณ์สุ่มให้ตอนเริ่มแต่ละวันหรือไม่")]
+    [SerializeField] private bool spawnParcelEachDay = false;
 
+    // prefab ที่วางลงร้านไปแล้ว กันวางซ้ำทุกครั้งที่เข้า Setup รอบใหม่
+    private readonly HashSet<GameObject> placedPrefabs = new HashSet<GameObject>();
+
+    // subscribe ใน Start ไม่ใช่ OnEnable เพราะ OnEnable อาจรันก่อน Awake ของ manager ตัวอื่น
+    // ทำให้ Instance ยังเป็น null แล้ว subscribe ไม่ติดเลยทั้งเกม
     private void Start()
     {
+        if (grid == null) grid = FindFirstObjectByType<TileGrid>();
         if (grid == null)
         {
-            grid = FindFirstObjectByType<TileGrid>();
-        }
-
-        if (grid == null)
-        {
-            Debug.LogError("[LevelInitializer] หา TileGrid ในฉากไม่เจอ วางสถานีเริ่มต้นไม่ได้");
+            Debug.LogError("[LevelInitializer] หา TileGrid ในฉากไม่เจอ วางสถานีไม่ได้");
             return;
         }
 
-        SpawnDefaultStations();
+        // วางเคาน์เตอร์ก่อนเสมอ เพราะมันจองช่องตายตัวไว้
+        // ถ้าปล่อยให้สถานีอัตโนมัติวางก่อน อาจไปกินช่องของเคาน์เตอร์จนวางไม่ลง
+        SpawnFixedCounters();
 
-        if (spawnParcelOnStart)
+        if (PlayerProgress.Instance != null)
+        {
+            PlayerProgress.Instance.OnStationUnlocked += HandleStationUnlocked;
+
+            // เผื่อมีการปลดล็อกไปแล้วก่อนที่เราจะ subscribe ทัน (เช่น skipMainMenu)
+            SpawnUnlockedStations();
+        }
+        else
+        {
+            Debug.LogWarning("[LevelInitializer] ไม่มี PlayerProgress ในฉาก สถานีจะไม่ถูกวางอัตโนมัติ");
+        }
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnPhaseChanged += HandlePhaseChanged;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (PlayerProgress.Instance != null)
+        {
+            PlayerProgress.Instance.OnStationUnlocked -= HandleStationUnlocked;
+        }
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnPhaseChanged -= HandlePhaseChanged;
+        }
+    }
+
+    /// <summary>
+    /// ปลดล็อกสถานีใหม่ = วางลงร้านทันทีในจังหวะเดียวกับที่ผู้เล่นกดเลือก
+    /// ครอบคลุมทั้งการเลือกสัตว์เริ่มต้นจากเมนู และการเลือกรางวัลท้ายวัน
+    /// </summary>
+    private void HandleStationUnlocked(GameObject prefab)
+    {
+        PlaceStationCopies(prefab);
+    }
+
+    private void HandlePhaseChanged(GamePhase phase)
+    {
+        if (phase != GamePhase.Setup) return;
+
+        // ตาข่ายกันพลาด: ถ้ามีอะไรหลุดจาก event ไป ให้ตามวางตอนเข้าช่วงจัดร้าน
+        SpawnUnlockedStations();
+
+        if (spawnParcelEachDay)
         {
             SpawnRandomParcel();
         }
     }
 
-    private void SpawnDefaultStations()
+    private void SpawnFixedCounters()
     {
-        if (defaultStations == null) return;
+        if (fixedCounters == null) return;
 
-        foreach (DefaultStation entry in defaultStations)
+        foreach (FixedCounter counter in fixedCounters)
         {
-            if (entry == null || entry.prefab == null)
+            if (counter == null || counter.prefab == null)
             {
-                Debug.LogWarning("[LevelInitializer] มีช่อง Default Station ที่ยังไม่ได้ใส่ prefab ข้ามไป");
+                Debug.LogWarning("[LevelInitializer] มีช่อง Fixed Counter ที่ยังไม่ได้ใส่ prefab ข้ามไป");
                 continue;
             }
 
-            SpawnStationAt(entry.prefab, entry.cell, entry.label);
+            SpawnStationAt(counter.prefab, counter.cell, counter.label, counter.movable);
         }
     }
 
+    /// <summary>วางสถานีที่ปลดล็อกแล้วแต่ยังไม่มีตัวจริงในร้าน ลงช่องว่างอัตโนมัติ</summary>
+    private void SpawnUnlockedStations()
+    {
+        PlayerProgress progress = PlayerProgress.Instance;
+        if (progress == null)
+        {
+            Debug.LogWarning("[LevelInitializer] ไม่มี PlayerProgress ในฉาก วางสถานีเริ่มต้นไม่ได้");
+            return;
+        }
+
+        // วนสำเนาลิสต์ เพราะ PlaceStationCopies อาจทำให้ลิสต์ต้นทางถูกแก้ระหว่างวน
+        List<GameObject> snapshot = new List<GameObject>(progress.UnlockedStations);
+        foreach (GameObject prefab in snapshot)
+        {
+            PlaceStationCopies(prefab);
+        }
+    }
+
+    /// <summary>วางสถานีชนิดนี้ตามจำนวนที่กำหนดใน StationCatalog (ข้ามถ้าวางไปแล้ว)</summary>
+    private void PlaceStationCopies(GameObject prefab)
+    {
+        if (prefab == null || placedPrefabs.Contains(prefab)) return;
+        if (grid == null) return;
+
+        placedPrefabs.Add(prefab); // ใส่ก่อนวาง กันการเรียกซ้ำซ้อนจาก event + sweep พร้อมกัน
+
+        int copies = CopiesFor(prefab);
+        for (int i = 0; i < copies; i++)
+        {
+            AutoPlaceStation(prefab, prefab.name);
+        }
+    }
+
+    /// <summary>จำนวนชิ้นที่ได้ตอนปลดล็อกสถานีนี้ครั้งแรก อ่านจาก StationCatalog</summary>
+    private int CopiesFor(GameObject prefab)
+    {
+        StationCatalog catalog = StationCatalog.Instance;
+        if (catalog == null) return 1;
+
+        if (prefab == catalog.HoldingTablePrefab) return catalog.HoldingTableCopies;
+
+        CareStation station = prefab.GetComponent<CareStation>();
+        if (station == null) return 1;
+
+        // โต๊ะพักที่ไม่ได้ผูกไว้ในช่อง HoldingTablePrefab ก็ต้องไม่ไปอ่านจำนวนจาก step ของมัน
+        // เพราะค่า step ของโต๊ะพักไม่มีความหมาย (มักติดมาจากตอน duplicate prefab อื่น)
+        if (station.Mode == CareStation.ServiceMode.Holding) return catalog.HoldingTableCopies;
+
+        return catalog.GetCopiesOnUnlock(station.Step);
+    }
+
+    /// <summary>วางสถานีลงช่องว่างช่องแรกที่หาเจอ — สถานีที่วางแบบนี้ผู้เล่นย้ายได้เสมอ</summary>
+    public GameObject AutoPlaceStation(GameObject prefab, string label = null)
+    {
+        if (grid == null || prefab == null) return null;
+
+        // หาในโซนที่กำหนดก่อน ถ้าเต็มค่อยขยายไปทั้งกริด ดีกว่าวางไม่ได้เลย
+        if (!grid.TryFindFreeCell(autoPlaceAreaMin, autoPlaceAreaMax, out Vector2Int cell) &&
+            !grid.TryFindFreeCell(out cell))
+        {
+            Debug.LogWarning($"[LevelInitializer] กริดเต็ม วาง {prefab.name} ไม่ได้");
+            return null;
+        }
+
+        return SpawnStationAt(prefab, cell, label, true);
+    }
+
+    // วาดกรอบโซนวางสถานีอัตโนมัติใน Scene view เพื่อให้ปรับตำแหน่งได้เห็นภาพ
+    private void OnDrawGizmosSelected()
+    {
+        TileGrid target = grid != null ? grid : FindFirstObjectByType<TileGrid>();
+        if (target == null) return;
+
+        Vector3 a = target.CellToWorld(autoPlaceAreaMin);
+        Vector3 b = target.CellToWorld(autoPlaceAreaMax);
+        Vector3 center = (a + b) * 0.5f;
+        Vector3 size = new Vector3(
+            Mathf.Abs(b.x - a.x) + target.CellSize,
+            0.1f,
+            Mathf.Abs(b.z - a.z) + target.CellSize);
+
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireCube(center + Vector3.up * 0.05f, size);
+    }
+
     /// <summary>
-    /// วางสถานีลงช่องที่กำหนดแล้วล็อกถาวร คืน GameObject ที่สร้าง (null ถ้าวางไม่สำเร็จ)
-    /// เปิดเป็น public ไว้ให้ระบบอื่นเรียกใช้ต่อได้ เช่น ตอนเริ่มวันใหม่ใน Day Cycle
+    /// วางสถานีลงช่องที่กำหนด คืน GameObject ที่สร้าง (null ถ้าวางไม่สำเร็จ)
+    /// movable = false จะล็อกไม่ให้ผู้เล่นยกย้าย เหมาะกับจุดรับ/จุดคืนที่ core loop ต้องใช้
     /// </summary>
-    public GameObject SpawnStationAt(GameObject prefab, Vector2Int cell, string label = null)
+    public GameObject SpawnStationAt(GameObject prefab, Vector2Int cell, string label = null, bool movable = false)
     {
         if (grid == null || prefab == null) return null;
 
@@ -111,48 +256,35 @@ public class LevelInitializer : MonoBehaviour
             occupant = station.AddComponent<GridOccupant>();
         }
 
-        // สถานีหลักล็อกถาวรเสมอ ผู้เล่นถอดทิ้งจนเล่น loop ต่อไม่ได้ไม่ได้
-        if (!occupant.Register(grid, cell, false))
+        if (!occupant.Register(grid, cell, movable))
         {
             Debug.LogWarning($"[LevelInitializer] {stationName}: ลงทะเบียนช่อง {cell} ไม่สำเร็จ ยกเลิก");
             Destroy(station);
             return null;
         }
 
-        Debug.Log($"[LevelInitializer] วาง {stationName} ที่ช่อง {cell} แล้ว");
+        Debug.Log($"[LevelInitializer] วาง {stationName} ที่ช่อง {cell}");
         return station;
     }
 
-    /// <summary>
-    /// สุ่มอุปกรณ์ 1 ชิ้นจากคลัง แล้วส่งมาเป็นกล่องที่จุดรับของ
-    /// คืน EquipmentParcel ที่สร้าง (null ถ้าตั้งค่าไม่ครบ)
-    /// </summary>
+    /// <summary>สุ่มอุปกรณ์ 1 ชิ้นจากคลังที่ปลดล็อกแล้ว แล้วส่งมาเป็นกล่องที่จุดรับของ</summary>
     public EquipmentParcel SpawnRandomParcel()
     {
-        if (parcelPrefab == null)
+        if (parcelPrefab == null || deliveryPoint == null)
         {
-            Debug.LogWarning("[LevelInitializer] ยังไม่ได้ตั้งค่า parcelPrefab");
+            Debug.LogWarning("[LevelInitializer] ยังไม่ได้ตั้งค่า parcelPrefab หรือ deliveryPoint");
             return null;
         }
 
-        if (equipmentPool == null || equipmentPool.Length == 0)
+        PlayerProgress progress = PlayerProgress.Instance;
+        if (progress == null || progress.UnlockedStations.Count == 0)
         {
-            Debug.LogWarning("[LevelInitializer] equipmentPool ว่างเปล่า ไม่มีอุปกรณ์ให้สุ่ม");
+            Debug.LogWarning("[LevelInitializer] ยังไม่มีสถานีที่ปลดล็อกให้สุ่มใส่กล่อง");
             return null;
         }
 
-        if (deliveryPoint == null)
-        {
-            Debug.LogWarning("[LevelInitializer] ยังไม่ได้ตั้งค่า deliveryPoint");
-            return null;
-        }
-
-        GameObject picked = equipmentPool[Random.Range(0, equipmentPool.Length)];
-        if (picked == null)
-        {
-            Debug.LogWarning("[LevelInitializer] สุ่มได้ช่องว่างใน equipmentPool ตรวจสอบลิสต์ใน Inspector");
-            return null;
-        }
+        GameObject picked = progress.UnlockedStations[Random.Range(0, progress.UnlockedStations.Count)];
+        if (picked == null) return null;
 
         GameObject parcelObj = Instantiate(parcelPrefab, deliveryPoint.position, deliveryPoint.rotation);
 

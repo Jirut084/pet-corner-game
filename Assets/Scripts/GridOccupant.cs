@@ -88,6 +88,23 @@ public class GridOccupant : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// ถอนการลงทะเบียนออกจากกริด ทำให้ช่องเดิมว่างลง
+    /// ใช้ตอนผู้เล่นยกสถานีขึ้นมาเพื่อย้ายไปวางที่อื่น (ดู TilePlacer)
+    /// </summary>
+    public void Unregister()
+    {
+        if (!IsRegistered) return;
+
+        // ล้างเฉพาะกรณีที่ช่องนั้นยังเป็นของเราอยู่จริง กันไปล้างช่องของคนอื่นที่มาจองต่อ
+        if (grid != null && grid.GetOccupant(Cell) == gameObject)
+        {
+            grid.ClearCell(Cell);
+        }
+
+        IsRegistered = false;
+    }
+
     private void OnDestroy()
     {
         if (!IsRegistered || grid == null) return;

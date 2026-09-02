@@ -77,7 +77,14 @@ public class PlayerController : MonoBehaviour
 
         if (moveDirection.sqrMagnitude > 0.0001f)
         {
-            controller.Move(moveDirection * moveSpeed * Time.deltaTime);
+            // บัฟ "เดินเร็วขึ้น" จาก PlayerProgress คูณตรงนี้จุดเดียว
+            float speed = moveSpeed;
+            if (PlayerProgress.Instance != null)
+            {
+                speed *= PlayerProgress.Instance.MoveSpeedMultiplier;
+            }
+
+            controller.Move(moveDirection * speed * Time.deltaTime);
             LastMoveDirection = moveDirection;
             FaceDirection(moveDirection);
         }
