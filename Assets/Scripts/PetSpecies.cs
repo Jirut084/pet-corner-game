@@ -29,6 +29,9 @@ public class PetSpecies : ScriptableObject
     [Header("Identity")]
     public string speciesName = "Cat";
 
+    [Tooltip("Prefab หน้าตาของสัตว์ชนิดนี้ (ต้องมี component Pet) — ปล่อยว่างจะใช้ petPrefab สำรองของ IntakePoint")]
+    public GameObject petPrefab;
+
     [Header("Order")]
     [Tooltip("รายการขั้นตอนที่ต้องทำให้ครบ — เป็น checklist ไม่มีลำดับ ทำอันไหนก่อนก็ได้")]
     public CareStep[] requiredSteps = new CareStep[] { CareStep.Feed };

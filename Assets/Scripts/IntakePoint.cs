@@ -10,7 +10,7 @@ using UnityEngine;
 public class IntakePoint : MonoBehaviour, IInteractable
 {
     [Header("Spawn Settings")]
-    [Tooltip("Prefab ของสัตว์เลี้ยง (ต้องมี component Pet ติดอยู่)")]
+    [Tooltip("Prefab สัตว์สำรอง — ใช้เฉพาะเมื่อ PetSpecies ของลูกค้ายังไม่ได้ใส่ petPrefab ของตัวเอง")]
     [SerializeField] private GameObject petPrefab;
 
     [Tooltip("ตำแหน่งที่สัตว์ตัวใหม่จะปรากฏ ก่อนถูกอุ้มไปกับผู้เล่น")]
@@ -18,9 +18,9 @@ public class IntakePoint : MonoBehaviour, IInteractable
 
     public void Interact(GameObject interactor)
     {
-        if (petPrefab == null || spawnPoint == null)
+        if (spawnPoint == null)
         {
-            Debug.LogWarning("[IntakePoint] ยังไม่ได้ตั้งค่า petPrefab หรือ spawnPoint");
+            Debug.LogWarning("[IntakePoint] ยังไม่ได้ตั้งค่า spawnPoint");
             return;
         }
 
@@ -70,7 +70,17 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        GameObject petObj = Instantiate(petPrefab, spawnPoint.position, spawnPoint.rotation);
+        // ใช้หน้าตาของชนิดที่ลูกค้าสั่งมาก่อน ถ้ายังไม่ได้ใส่ค่อยใช้ prefab สำรอง
+        PetSpecies requested = customer.RequestedSpecies;
+        GameObject prefabToSpawn = requested != null && requested.petPrefab != null ? requested.petPrefab : petPrefab;
+
+        if (prefabToSpawn == null)
+        {
+            Debug.LogWarning($"[IntakePoint] ไม่มี prefab ให้ spawn — ใส่ petPrefab ใน {requested?.name} หรือช่องสำรองของ IntakePoint");
+            return;
+        }
+
+        GameObject petObj = Instantiate(prefabToSpawn, spawnPoint.position, spawnPoint.rotation);
         Pet pet = petObj.GetComponent<Pet>();
 
         if (pet == null)

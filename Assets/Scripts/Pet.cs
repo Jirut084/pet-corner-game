@@ -8,9 +8,10 @@ using UnityEngine;
 /// ใบสั่งงานเป็น "checklist ไม่มีลำดับ" — ต้องผ่านทุกสถานีที่ระบุ แต่ทำอันไหนก่อนก็ได้
 /// ผู้เล่นจึงเลือกเส้นทางเองได้ ซึ่งเป็นจุดที่ทำให้เกิดการตัดสินใจในเกม
 ///
-/// สีของ Cube บอกขั้นตอนที่ยังเหลืออันแรก เพื่อให้เทสได้โดยยังไม่มี UI
+/// ย้อมสีตัวสัตว์ตามขั้นตอนที่ยังเหลืออันแรก เพื่อให้เทสได้โดยยังไม่มี UI
+/// รองรับทั้ง cube ต้นแบบ และโมเดลจริงที่ mesh อยู่ในลูกหลายชิ้น
+/// (ไม่บังคับ MeshRenderer ที่ root แล้ว เพื่อให้สลับเป็นโมเดลได้)
 /// </summary>
-[RequireComponent(typeof(MeshRenderer))]
 public class Pet : MonoBehaviour, ICarryable
 {
     [Header("Data")]
@@ -18,8 +19,12 @@ public class Pet : MonoBehaviour, ICarryable
     [SerializeField] private PetSpecies species;
 
     [Header("Visual")]
-    [Tooltip("Renderer ของสัตว์ ใช้เปลี่ยนสีตามขั้นตอนที่ยังเหลือ")]
-    [SerializeField] private Renderer petRenderer;
+    [Tooltip("ย้อมสีตัวสัตว์ตามขั้นตอนถัดไป — ปิดได้เมื่อมีไอคอนบอกขั้นตอนแล้ว " +
+             "(สีจะคูณกับ texture ของโมเดล ทำให้สีจริงของอาร์ตเพี้ยน)")]
+    [SerializeField] private bool tintByNextStep = true;
+
+    [Tooltip("Renderer ที่จะย้อมสี ปล่อยว่างจะเก็บทุกชิ้นข้างใต้ให้อัตโนมัติ")]
+    [SerializeField] private Renderer[] petRenderers;
 
     private static readonly Color FeedColor = Color.yellow;
     private static readonly Color BathColor = new Color(0.3f, 0.6f, 1f);
@@ -68,9 +73,10 @@ public class Pet : MonoBehaviour, ICarryable
 
     private void Awake()
     {
-        if (petRenderer == null)
+        // โมเดลจริงมักมี mesh อยู่ที่ลูกและมีหลายชิ้น จึงเก็บทุก Renderer ข้างใต้มาย้อมพร้อมกัน
+        if (petRenderers == null || petRenderers.Length == 0)
         {
-            petRenderer = GetComponent<Renderer>();
+            petRenderers = GetComponentsInChildren<Renderer>();
         }
     }
 
@@ -212,7 +218,7 @@ public class Pet : MonoBehaviour, ICarryable
     /// <summary>เปลี่ยนสีตามขั้นตอนที่เหลืออันแรก เพื่อให้ผู้เล่นรู้คร่าวๆ ว่ายังต้องไปไหน</summary>
     private void UpdateVisual()
     {
-        if (petRenderer == null) return;
+        if (!tintByNextStep || petRenderers == null || petRenderers.Length == 0) return;
 
         Color targetColor = DoneColor;
         List<CareStep> remaining = RemainingSteps();
@@ -230,9 +236,15 @@ public class Pet : MonoBehaviour, ICarryable
         }
 
         // ใช้ MaterialPropertyBlock เพื่อเลี่ยงการสร้าง material instance ใหม่ทุกครั้ง (ดีต่อ performance)
+        // URP Lit คูณ _BaseColor กับ texture — ขาว = สีจริงของอาร์ต, สีอื่น = ย้อมทับ
         var block = new MaterialPropertyBlock();
-        petRenderer.GetPropertyBlock(block);
-        block.SetColor("_BaseColor", targetColor); // URP Lit/Unlit ใช้ property ชื่อ _BaseColor
-        petRenderer.SetPropertyBlock(block);
+        foreach (Renderer target in petRenderers)
+        {
+            if (target == null) continue;
+
+            target.GetPropertyBlock(block);
+            block.SetColor("_BaseColor", targetColor);
+            target.SetPropertyBlock(block);
+        }
     }
 }
