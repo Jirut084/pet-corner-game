@@ -31,7 +31,7 @@ public class GridOccupant : MonoBehaviour
         // ถ้า TilePlacer ลงทะเบียนให้ตั้งแต่ตอน Instantiate แล้ว ตรงนี้จะข้ามไปเอง
         if (IsRegistered) return;
 
-        TileGrid targetGrid = grid != null ? grid : FindFirstObjectByType<TileGrid>();
+        TileGrid targetGrid = grid != null ? grid : FindAnyObjectByType<TileGrid>();
         if (targetGrid == null)
         {
             Debug.LogWarning($"[GridOccupant] {name} หา TileGrid ในฉากไม่เจอ จะไม่ถูกนับว่ากินช่องบนกริด");

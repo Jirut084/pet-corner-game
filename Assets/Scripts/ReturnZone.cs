@@ -23,6 +23,26 @@ public class ReturnZone : MonoBehaviour, IInteractable
     /// <summary>ยิงทุกครั้งที่ TotalWallet เปลี่ยน ส่งยอดรวมล่าสุดไปด้วย ให้ UI subscribe แทนการ poll ทุกเฟรม</summary>
     public static event System.Action<int> OnWalletChanged;
 
+    /// <summary>หักเงินจากกระเป๋า (ร้านค้าท้ายวันใช้) — คืน false และไม่หักเลยถ้าเงินไม่พอ</summary>
+    public static bool TrySpend(int amount)
+    {
+        if (amount < 0 || TotalWallet < amount) return false;
+
+        TotalWallet -= amount;
+        OnWalletChanged?.Invoke(TotalWallet);
+        return true;
+    }
+
+    /// <summary>
+    /// ล้างเงินเป็น 0 — GameManager เรียกตอนเริ่ม run ใหม่
+    /// จำเป็นเพราะเป็นตัวแปร static จึงค้างข้าม run (และข้ามรอบกด Play ถ้าปิด Domain Reload)
+    /// </summary>
+    public static void ResetWallet()
+    {
+        TotalWallet = 0;
+        OnWalletChanged?.Invoke(TotalWallet);
+    }
+
     public void Interact(GameObject interactor)
     {
         PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();

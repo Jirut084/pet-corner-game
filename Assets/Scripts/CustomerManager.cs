@@ -9,6 +9,8 @@ using UnityEngine;
 ///   - ไม่ spawn เกินโควตาออเดอร์ของวัน (นับรวมคนที่กำลังเดินมาและออเดอร์ที่ค้างอยู่)
 ///   - ไม่ spawn เกินจำนวนที่ดูแลพร้อมกันได้ของวันนั้น (GameManager.ConcurrentOrderLimit)
 ///   - ระยะห่างระหว่างคนสั้นลงเรื่อยๆ ตามวัน
+///
+/// จุดยืนหน้าเคาน์เตอร์อ่านจาก IntakePoint.CustomerStandPosition — ย้ายเคาน์เตอร์แล้วลูกค้าเดินตามไปเอง
 /// </summary>
 public class CustomerManager : MonoBehaviour
 {
@@ -21,7 +23,8 @@ public class CustomerManager : MonoBehaviour
     [Tooltip("ประตูร้าน — ลูกค้าเกิดที่นี่และเดินออกทางนี้")]
     [SerializeField] private Transform doorPoint;
 
-    [Tooltip("จุดยืนหน้าเคาน์เตอร์รับออเดอร์ (ควรอยู่ติดกับ IntakePoint)")]
+    [Tooltip("(สำรอง) จุดยืนหน้าเคาน์เตอร์ — ใช้เฉพาะเมื่อในฉากไม่มี IntakePoint " +
+             "ปกติจุดยืนมาจากช่อง Customer Stand Point ของ IntakePoint")]
     [SerializeField] private Transform counterPoint;
 
     [Tooltip("จุดนั่งรอ — ควรมีอย่างน้อยเท่ากับจำนวนออเดอร์พร้อมกันสูงสุด")]
@@ -46,6 +49,9 @@ public class CustomerManager : MonoBehaviour
     private readonly List<Customer> customers = new List<Customer>();
     private readonly Dictionary<int, Customer> seatOwners = new Dictionary<int, Customer>();
     private float spawnTimer;
+
+    // หาเมื่อต้องใช้ครั้งแรก — IntakePoint อาจถูก LevelInitializer สร้างหลัง Start ของเรา
+    private IntakePoint intake;
 
     private void Awake()
     {
@@ -107,7 +113,8 @@ public class CustomerManager : MonoBehaviour
 
     private bool ShouldSpawnMore(GameManager game)
     {
-        if (customerPrefab == null || counterPoint == null || doorPoint == null) return false;
+        if (customerPrefab == null || doorPoint == null) return false;
+        if (!TryGetCounterPosition(out _)) return false;
 
         // คนที่เข้ามาแล้วแต่ยังไม่ได้ส่งออเดอร์ ก็ถือว่ากินโควตาไปแล้ว
         int incoming = CountIncoming();
@@ -141,8 +148,80 @@ public class CustomerManager : MonoBehaviour
         return Mathf.Max(spawnGapMin, spawnGapFirstDay - (day - 1) * spawnGapStepPerDay);
     }
 
+    /// <summary>
+    /// ตำแหน่งยืนหน้าเคาน์เตอร์ — อ่านจาก IntakePoint ก่อนเสมอ ย้ายเคาน์เตอร์แล้วลูกค้าตามไปเอง
+    /// ใช้ counterPoint เป็นทางสำรองเฉพาะตอนในฉากไม่มี IntakePoint
+    /// </summary>
+    private bool TryGetCounterPosition(out Vector3 position)
+    {
+        if (intake == null)
+        {
+            intake = FindAnyObjectByType<IntakePoint>();
+        }
+
+        if (intake != null)
+        {
+            position = intake.CustomerStandPosition;
+            return true;
+        }
+
+        if (counterPoint != null)
+        {
+            position = counterPoint.position;
+            return true;
+        }
+
+        position = default;
+        return false;
+    }
+
+    /// <summary>จุดที่ลูกค้าหันหน้าไปหาตอนยืนรอที่เคาน์เตอร์ (ตำแหน่ง IntakePoint) — false ถ้าไม่มี IntakePoint</summary>
+    public bool TryGetCounterLookPoint(out Vector3 point)
+    {
+        if (intake == null)
+        {
+            intake = FindAnyObjectByType<IntakePoint>();
+        }
+
+        point = intake != null ? intake.transform.position : default;
+        return intake != null;
+    }
+
+    /// <summary>มุมของ object จุดรอ — ลูกค้าจะนั่งหันตามแกนสีฟ้า (Z) ของมัน หมุนจุดรอใน Scene view เพื่อตั้งทิศ</summary>
+    public Quaternion GetSeatRotation(int seatIndex)
+    {
+        if (waitSeats == null || seatIndex < 0 || seatIndex >= waitSeats.Length || waitSeats[seatIndex] == null)
+        {
+            return Quaternion.identity;
+        }
+
+        return waitSeats[seatIndex].rotation;
+    }
+
+    // เลือก CustomerManager แล้วจะเห็นลูกศรสีฟ้าจากจุดรอ = ทิศที่ลูกค้าจะหันตอนนั่งรอ
+    private void OnDrawGizmosSelected()
+    {
+        if (waitSeats == null) return;
+
+        Gizmos.color = Color.cyan;
+        foreach (Transform seat in waitSeats)
+        {
+            if (seat == null) continue;
+
+            Vector3 forward = seat.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f) continue;
+
+            Vector3 tip = seat.position + forward.normalized * 0.9f;
+            Gizmos.DrawLine(seat.position, tip);
+            Gizmos.DrawWireSphere(tip, 0.08f);
+        }
+    }
+
     private void SpawnCustomer()
     {
+        if (!TryGetCounterPosition(out Vector3 counterPosition)) return;
+
         PetSpecies species = PickSpecies();
         if (species == null)
         {
@@ -161,7 +240,7 @@ public class CustomerManager : MonoBehaviour
         }
 
         obj.name = $"Customer ({species.speciesName})";
-        customer.Initialize(this, species, counterPoint.position);
+        customer.Initialize(this, species, counterPosition);
         customers.Add(customer);
     }
 
@@ -261,9 +340,10 @@ public class CustomerManager : MonoBehaviour
             Gizmos.DrawWireSphere(doorPoint.position, 0.4f);
         }
 
+        // จุดยืนหน้าเคาน์เตอร์ตัวจริง IntakePoint วาดเองแล้ว (สีเหลือง) ตรงนี้วาดแค่จุดสำรองเป็นสีเทา
         if (counterPoint != null)
         {
-            Gizmos.color = Color.yellow;
+            Gizmos.color = Color.gray;
             Gizmos.DrawWireSphere(counterPoint.position, 0.4f);
         }
 

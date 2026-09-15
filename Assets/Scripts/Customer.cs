@@ -9,6 +9,10 @@ using UnityEngine;
 ///
 /// มิเตอร์ความอดทนอยู่ที่ Pet (แหล่งข้อมูลเดียว) ลูกค้าแค่อ่านมาโชว์เป็นเกจ
 /// ตามที่ตกลงไว้: มิเตอร์เริ่มนับตอนผู้เล่นรับออเดอร์ ไม่ใช่ตอนลูกค้าเดินเข้าร้าน
+///
+/// การหันหน้า: ระหว่างเดินหันตามทิศที่เดิน / ถึงเคาน์เตอร์หันหา IntakePoint /
+/// นั่งรอหันตามแกนสีฟ้า (Z) ของ object จุดรอ — หมุนจุดรอใน Scene view เพื่อตั้งทิศ
+/// โมเดล + อนิเมชันอยู่ที่ลูกของ prefab ส่วน CharacterAnimationDriver ส่งค่า Speed / IsSitting ให้เอง
 /// </summary>
 public class Customer : MonoBehaviour
 {
@@ -27,8 +31,14 @@ public class Customer : MonoBehaviour
     [Tooltip("ถือว่าถึงที่หมายเมื่อเข้าใกล้กว่าระยะนี้")]
     [SerializeField] private float arriveThreshold = 0.15f;
 
+    [Tooltip("ความเร็วหันตัว — ยิ่งมากยิ่งหันไว (ใช้ทั้งตอนเดินและตอนหันหาเคาน์เตอร์/ทิศของจุดรอ)")]
+    [SerializeField] private float turnSpeed = 10f;
+
+    [Tooltip("นั่งรอแล้วหันตามแกนสีฟ้า (Z) ของ object จุดรอ — ปิดไว้จะหันค้างตามทิศที่เดินมาถึง")]
+    [SerializeField] private bool faceSeatDirection = true;
+
     [Header("Gauge")]
-    [Tooltip("ความสูงของเกจเหนือหัวลูกค้า")]
+    [Tooltip("ความสูงของเกจเหนือหัวลูกค้า (วัดจาก pivot ของ root) — ปรับให้ลอยเหนือหัวโมเดลพอดี")]
     [SerializeField] private float gaugeHeight = 2.2f;
 
     public CustomerState State { get; private set; } = CustomerState.WalkingToCounter;
@@ -53,6 +63,9 @@ public class Customer : MonoBehaviour
     private Vector3 targetPosition;
     private CustomerManager manager;
 
+    // มุมที่จะค่อยๆ หันไปตอนยืน/นั่งอยู่กับที่ (null = ไม่ต้องหัน)
+    private Quaternion? idleFacing;
+
     /// <summary>เรียกจาก CustomerManager ทันทีหลัง spawn</summary>
     public void Initialize(CustomerManager owner, PetSpecies species, Vector3 counterPosition)
     {
@@ -73,6 +86,7 @@ public class Customer : MonoBehaviour
                 if (MoveTowardTarget())
                 {
                     State = CustomerState.AtCounter;
+                    idleFacing = FacingTowardCounter();
                     GameLog.Push($"ลูกค้า {RequestedSpecies.speciesName} รออยู่ที่เคาน์เตอร์ — กด E เพื่อรับออเดอร์", LogTone.Warn);
                 }
                 break;
@@ -81,7 +95,13 @@ public class Customer : MonoBehaviour
                 if (MoveTowardTarget())
                 {
                     State = CustomerState.Waiting;
+                    idleFacing = faceSeatDirection ? FacingOfSeat() : null;
                 }
+                break;
+
+            case CustomerState.AtCounter:
+            case CustomerState.Waiting:
+                TurnTowardIdleFacing();
                 break;
 
             case CustomerState.Leaving:
@@ -105,6 +125,7 @@ public class Customer : MonoBehaviour
         pet.OnPatienceExpired += HandlePatienceExpired;
 
         SetTarget(seatPosition);
+        idleFacing = null;
         State = CustomerState.WalkingToSeat;
     }
 
@@ -139,6 +160,7 @@ public class Customer : MonoBehaviour
         }
 
         SeatIndex = -1;
+        idleFacing = null;
         State = CustomerState.Leaving;
     }
 
@@ -178,7 +200,39 @@ public class Customer : MonoBehaviour
         }
 
         transform.position = Vector3.MoveTowards(transform.position, flatTarget, moveSpeed * Time.deltaTime);
-        transform.rotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
+
+        // หันแบบนุ่มแทนการหันทันที โมเดลจะได้ไม่สะบัดตอนเปลี่ยนทิศ
+        Quaternion walkFacing = Quaternion.LookRotation(delta.normalized, Vector3.up);
+        transform.rotation = Quaternion.Slerp(transform.rotation, walkFacing, turnSpeed * Time.deltaTime);
         return false;
+    }
+
+    private void TurnTowardIdleFacing()
+    {
+        if (!idleFacing.HasValue) return;
+
+        transform.rotation = Quaternion.Slerp(transform.rotation, idleFacing.Value, turnSpeed * Time.deltaTime);
+    }
+
+    /// <summary>มุมที่หันหาเคาน์เตอร์รับออเดอร์ (null ถ้าไม่มี IntakePoint)</summary>
+    private Quaternion? FacingTowardCounter()
+    {
+        if (manager == null || !manager.TryGetCounterLookPoint(out Vector3 lookPoint)) return null;
+
+        Vector3 direction = lookPoint - transform.position;
+        direction.y = 0f;
+
+        return direction.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(direction, Vector3.up) : (Quaternion?)null;
+    }
+
+    /// <summary>มุมตามแกนสีฟ้า (Z) ของ object จุดรอ — ใช้แค่การหมุนแนวราบ</summary>
+    private Quaternion? FacingOfSeat()
+    {
+        if (manager == null || SeatIndex < 0) return null;
+
+        Vector3 forward = manager.GetSeatRotation(SeatIndex) * Vector3.forward;
+        forward.y = 0f;
+
+        return forward.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(forward, Vector3.up) : (Quaternion?)null;
     }
 }

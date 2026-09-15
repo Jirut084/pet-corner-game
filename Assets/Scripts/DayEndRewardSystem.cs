@@ -42,7 +42,8 @@ public class RewardOption
 }
 
 /// <summary>
-/// ระบบเลือกรางวัลท้ายวัน — สุ่มตัวเลือกมาให้ผู้เล่นเลือก 1 อัน แล้วเข้าสู่ช่วงจัดร้านของวันถัดไป
+/// ระบบเลือกรางวัลท้ายวัน — สุ่มตัวเลือกมาให้ผู้เล่นเลือก 1 อัน (ฟรี)
+/// เลือกเสร็จ (หรือไม่มีรางวัลในคลัง) → ส่งต่อให้ร้านค้าท้ายวัน DayEndShop → ร้านค้าพาเข้าวันถัดไป
 ///
 /// ตัวระบบไม่ยุ่งกับ UI เลย: มันแค่ประกาศ "นี่คือตัวเลือกของรอบนี้" ผ่าน OnRewardsOffered
 /// แล้วรอให้ UI (หรือปุ่ม debug) เรียก Choose(index) กลับมา
@@ -55,6 +56,10 @@ public class DayEndRewardSystem : MonoBehaviour
 
     [Tooltip("จำนวนตัวเลือกที่ยื่นให้ผู้เล่นเลือกในแต่ละวัน")]
     [SerializeField] private int optionsToOffer = 3;
+
+    [Header("Flow")]
+    [Tooltip("เลือกรางวัลฟรีเสร็จแล้วเปิดร้านค้าท้ายวัน (DayEndShop) ต่อหรือไม่ — ถ้าในฉากไม่มีจะสร้างให้อัตโนมัติ")]
+    [SerializeField] private bool openShopAfterReward = true;
 
     [Header("Debug")]
     [Tooltip("กดปุ่ม 1/2/3 เลือกรางวัลได้เลยโดยไม่ต้องมี UI (สะดวกตอนเทส)")]
@@ -97,6 +102,9 @@ public class DayEndRewardSystem : MonoBehaviour
         if (!allowKeyboardChoice) return;
         if (currentOffer.Count == 0) return;
 
+        // รับปุ่มเฉพาะช่วงจบวัน — กันกดเลือกรางวัลที่ค้างอยู่หลังจบ run แล้วเกมเล่นต่อเกินวันสุดท้าย
+        if (GameManager.Instance == null || GameManager.Instance.Phase != GamePhase.DayEnd) return;
+
         for (int i = 0; i < currentOffer.Count && i < 9; i++)
         {
             if (Input.GetKeyDown(KeyCode.Alpha1 + i))
@@ -109,10 +117,33 @@ public class DayEndRewardSystem : MonoBehaviour
 
     private void HandleDayEnded(int day)
     {
-        // ถ้าวันนี้เป็นวันสุดท้าย GameManager จะจบ run ต่อทันที ไม่ต้องยื่นรางวัล
+        // วันสุดท้าย GameManager จบ run ก่อนยิง OnDayEnded แล้ว — เห็น RunOver = ไม่ต้องยื่นรางวัล
         if (GameManager.Instance != null && GameManager.Instance.Phase == GamePhase.RunOver) return;
 
         RollOffer();
+    }
+
+    /// <summary>
+    /// จบขั้นเลือกรางวัลฟรี → เปิดร้านค้าท้ายวัน (DayEndShop) ต่อ ไม่งั้นเข้าวันถัดไปเลย
+    /// ร้านค้าจะเป็นคนเรียก BeginNextDay เองตอนผู้เล่นกดไปต่อ
+    /// </summary>
+    private void FinishRewardStage()
+    {
+        if (openShopAfterReward)
+        {
+            DayEndShop shop = DayEndShop.Instance;
+            if (shop == null)
+            {
+                // ยังไม่ได้ใส่ร้านค้าลงฉาก — สร้างให้ด้วยค่าเริ่มต้นจะได้เล่นได้ทันที
+                // อยากปรับราคา/สินค้า ให้ Add Component "DayEndShop" ลงฉากเองแล้วแก้ใน Inspector
+                shop = gameObject.AddComponent<DayEndShop>();
+                Debug.Log("[DayEndRewardSystem] ไม่พบ DayEndShop ในฉาก สร้างให้อัตโนมัติด้วยค่าเริ่มต้น");
+            }
+
+            if (shop.Open()) return;
+        }
+
+        GameManager.Instance?.BeginNextDay();
     }
 
     /// <summary>สุ่มตัวเลือกรางวัลใหม่ ข้ามอันที่ปลดล็อกไปแล้ว</summary>
@@ -136,8 +167,8 @@ public class DayEndRewardSystem : MonoBehaviour
 
         if (currentOffer.Count == 0)
         {
-            Debug.LogWarning("[DayEndRewardSystem] ไม่มีรางวัลเหลือให้เลือก ข้ามไปวันถัดไปเลย");
-            GameManager.Instance?.BeginNextDay();
+            Debug.Log("[DayEndRewardSystem] ไม่มีรางวัลฟรีเหลือให้เลือก ไปต่อที่ร้านค้าท้ายวัน");
+            FinishRewardStage();
             return;
         }
 
@@ -153,6 +184,12 @@ public class DayEndRewardSystem : MonoBehaviour
     /// <summary>ผู้เล่นเลือกรางวัลตาม index ของตัวเลือกที่ยื่นให้</summary>
     public void Choose(int index)
     {
+        if (GameManager.Instance != null && GameManager.Instance.Phase != GamePhase.DayEnd)
+        {
+            Debug.LogWarning($"[DayEndRewardSystem] เลือกรางวัลได้เฉพาะตอนจบวัน (ตอนนี้ {GameManager.Instance.Phase})");
+            return;
+        }
+
         if (index < 0 || index >= currentOffer.Count)
         {
             Debug.LogWarning($"[DayEndRewardSystem] index {index} ไม่อยู่ในช่วงตัวเลือก");
@@ -165,8 +202,8 @@ public class DayEndRewardSystem : MonoBehaviour
         currentOffer.Clear();
         OnRewardChosen?.Invoke(chosen);
 
-        // เลือกเสร็จแล้วเข้าสู่ช่วงจัดร้านของวันถัดไป ปิดวงจร
-        GameManager.Instance?.BeginNextDay();
+        // เลือกเสร็จแล้วไปร้านค้าท้ายวันต่อ (ร้านค้าจะพาเข้าวันถัดไปเอง)
+        FinishRewardStage();
     }
 
     private void Apply(RewardOption option)

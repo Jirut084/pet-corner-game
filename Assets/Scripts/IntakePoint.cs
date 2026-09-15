@@ -6,6 +6,7 @@ using UnityEngine;
 /// สัตว์จะปรากฏขึ้นและถูกอุ้มทันที ส่วนลูกค้าจะเดินไปนั่งรอที่จุดรอ
 ///
 /// ชนิดสัตว์มาจากลูกค้า ไม่ได้สุ่มที่นี่แล้ว (CustomerManager เป็นคนสุ่มตอน spawn ลูกค้า)
+/// จุดยืนของลูกค้าผูกกับเคาน์เตอร์นี้ (CustomerStandPosition) ย้ายเคาน์เตอร์แล้วลูกค้าเดินตามไปเอง
 /// </summary>
 public class IntakePoint : MonoBehaviour, IInteractable
 {
@@ -15,6 +16,20 @@ public class IntakePoint : MonoBehaviour, IInteractable
 
     [Tooltip("ตำแหน่งที่สัตว์ตัวใหม่จะปรากฏ ก่อนถูกอุ้มไปกับผู้เล่น")]
     [SerializeField] private Transform spawnPoint;
+
+    [Header("Customer Counter")]
+    [Tooltip("จุดที่ลูกค้ายืนรอหน้าเคาน์เตอร์ — ควรเป็นลูกของ IntakePoint จะได้ย้ายตามกันเสมอ " +
+             "ปล่อยว่างจะใช้ตำแหน่ง IntakePoint + Customer Stand Offset แทน")]
+    [SerializeField] private Transform customerStandPoint;
+
+    [Tooltip("ระยะจากเคาน์เตอร์ไปจุดยืนของลูกค้า หมุนตามทิศของ IntakePoint (ใช้เมื่อไม่ได้ใส่ Customer Stand Point)")]
+    [SerializeField] private Vector3 customerStandOffset = new Vector3(0f, 0f, 1.5f);
+
+    /// <summary>ตำแหน่งยืนหน้าเคาน์เตอร์ของลูกค้า — CustomerManager อ่านค่านี้ทุกครั้งที่ส่งลูกค้าเข้าร้าน</summary>
+    public Vector3 CustomerStandPosition =>
+        customerStandPoint != null
+            ? customerStandPoint.position
+            : transform.position + transform.rotation * customerStandOffset;
 
     public void Interact(GameObject interactor)
     {
@@ -114,5 +129,15 @@ public class IntakePoint : MonoBehaviour, IInteractable
 
         GameLog.Push($"รับออเดอร์ {pet.DisplayName} — ต้องทำ: {string.Join(", ", pet.RemainingSteps())} " +
                      $"(อดทน {customer.RequestedSpecies.patienceSeconds:F0} วิ)", LogTone.Good);
+    }
+
+    // เส้นสีเหลืองจากเคาน์เตอร์ไปจุดยืนลูกค้า ใช้เช็คตำแหน่งตอนย้าย IntakePoint ใน Scene view
+    private void OnDrawGizmos()
+    {
+        Vector3 stand = CustomerStandPosition;
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawLine(transform.position, stand);
+        Gizmos.DrawWireSphere(stand, 0.4f);
     }
 }

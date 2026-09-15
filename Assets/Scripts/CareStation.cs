@@ -47,10 +47,10 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
     [Header("Tip")]
     [Tooltip("เงินทิปที่ได้เมื่อพาสัตว์ที่ดูแลครบแล้วมาเข้าสถานีที่ไม่ได้ต้องการ (สถานีละครั้งต่อสัตว์ 1 ตัว)")]
-    [SerializeField] private int tipAmount = 10;
+    [SerializeField] private int tipAmount = 4;
 
     [Header("Visual")]
-    [Tooltip("จุดที่สัตว์จะไปวางอยู่บนสถานี ปล่อยว่างจะใช้ตำแหน่งสถานี + สูงขึ้น 1 หน่วย")]
+    [Tooltip("จุดที่เท้าสัตว์จะแตะเมื่อวางบนสถานี (เช่นพื้นในกรง) — ปล่อยว่างจะวางบนผิวบนสุดของโมเดลสถานีให้เอง")]
     [SerializeField] private Transform petAnchor;
 
     [Header("Debug")]
@@ -79,7 +79,46 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     private float EffectiveMinHold => minHoldSeconds / InteractSpeed;
     private float EffectiveMaxHold => maxHoldSeconds / InteractSpeed;
 
-    private Vector3 PetRestPosition => petAnchor != null ? petAnchor.position : transform.position + Vector3.up;
+    // จุดที่เท้าสัตว์จะแตะเมื่อวางบนสถานี — ไม่ได้ใส่ petAnchor ใช้ผิวบนสุดของโมเดลสถานี
+    // (เดิมใช้ตำแหน่งสถานี + 1 หน่วยตายตัว สถานีเตี้ยอย่างชามอาหารสัตว์เลยลอยสูงเหนือชามเกือบ 1 หน่วย)
+    private Vector3 PetRestPosition => petAnchor != null ? petAnchor.position : VisualTopCenter();
+
+    /// <summary>กลางผิวด้านบนของโมเดลสถานี — ไม่นับสัตว์ที่วางอยู่และประกายของเอฟเฟกต์</summary>
+    private Vector3 VisualTopCenter()
+    {
+        Bounds bounds = default;
+        bool found = false;
+
+        foreach (Renderer part in GetComponentsInChildren<Renderer>())
+        {
+            if (!part.enabled || part is ParticleSystemRenderer) continue;
+            if (OccupyingPet != null && part.transform.IsChildOf(OccupyingPet.transform)) continue;
+
+            if (!found)
+            {
+                bounds = part.bounds;
+                found = true;
+            }
+            else
+            {
+                bounds.Encapsulate(part.bounds);
+            }
+        }
+
+        return found
+            ? new Vector3(bounds.center.x, bounds.max.y, bounds.center.z)
+            : transform.position + Vector3.up;
+    }
+
+    private void Awake()
+    {
+        // เอฟเฟกต์หมุนตัวสัตว์ + แสง/ประกายสีตามสถานี ใส่ให้อัตโนมัติ ไม่ต้องแก้ prefab ทุกตัว
+        // อยากปรับค่า ให้ Add Component "CareStationEffects" ลง prefab เองแล้วตั้งใน Inspector
+        if (GetComponent<CareStationEffects>() == null)
+        {
+            gameObject.AddComponent<CareStationEffects>();
+        }
+    }
 
     private void Update()
     {
@@ -348,10 +387,16 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     {
         OccupyingPet = pet;
         pet.transform.SetParent(transform);
-        pet.transform.position = PetRestPosition;
 
-        // สัตว์ที่เพิ่งถูกอุ้มมาจะติดมุมของผู้เล่นมาด้วย จัดให้ตรงแนวสถานีเสมอ
+        // สัตว์ที่เพิ่งถูกอุ้มมาจะติดมุมของผู้เล่นมาด้วย จัดให้ตรงแนวสถานีเสมอ (หมุนก่อนวัดขอบเขตตัวสัตว์)
         pet.transform.rotation = transform.rotation;
+
+        // วางให้ขอบล่างของโมเดลสัตว์ (เท้า) แตะจุดพัก ไม่ใช่ pivot ของ prefab
+        // pivot สัตว์อยู่กลางตัว ถ้าวาง pivot ตรงผิวสถานี ครึ่งล่างของตัวจะจมลงไปในสถานี
+        Vector3 rest = PetRestPosition;
+        pet.transform.position = rest;
+        float pivotAboveFeet = pet.transform.position.y - pet.VisualBounds.min.y;
+        pet.transform.position = rest + Vector3.up * pivotAboveFeet;
 
         // เปิดหน้าต่างซูมให้เห็นสัตว์ขณะอยู่ในสถานี (โต๊ะพักถูกกรองออกที่ตัว overlay)
         StationCloseupOverlay.Show(this, pet);

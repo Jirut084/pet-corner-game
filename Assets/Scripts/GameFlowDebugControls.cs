@@ -4,9 +4,10 @@ using UnityEngine;
 /// เมนูเริ่มเกม + HUD ชั่วคราว วาดด้วย OnGUI (ยังไม่ใช้ Canvas)
 /// ใช้ได้จริงตั้งแต่ตอนนี้ และแทนที่ด้วย UI จริงทีหลังได้โดยไม่ต้องแก้ระบบข้างล่าง
 ///
-///   หน้าเมนู  — คลิกการ์ดสัตว์ (หรือกด 1..9) เพื่อเริ่ม run
-///   ช่วงจัดร้าน — กด Enter เปิดร้าน
-///   ท้ายวัน   — คลิกการ์ดรางวัล (หรือกด 1..9)
+///   หน้าเมนู      — คลิกการ์ดสัตว์ (หรือกด 1..9) เพื่อเริ่ม run
+///   ช่วงจัดร้าน    — กด Enter เปิดร้าน
+///   ท้ายวัน       — คลิกการ์ดรางวัล (หรือกด 1..9)
+///   ร้านค้าท้ายวัน — คลิกการ์ดซื้อบัฟ (หรือกด 1..9), ปุ่ม "ไปวันถัดไป" (หรือ Enter)
 /// </summary>
 public class GameFlowDebugControls : MonoBehaviour
 {
@@ -21,11 +22,42 @@ public class GameFlowDebugControls : MonoBehaviour
     [SerializeField] private int cardWidth = 240;
     [SerializeField] private int cardHeight = 132;
 
+    /// <summary>สัตว์ทั้งหมดที่ให้เลือกในหน้าเมนู — ร้านค้าท้ายวันใช้เป็นรายการสัตว์ที่ขายได้ ถ้าไม่ได้ตั้งรายการของตัวเอง</summary>
+    public PetSpecies[] SelectableStarters => selectableStarters;
+
     private DayEndRewardSystem rewardSystem;
+
+    // เฟรมที่เพิ่งเข้าช่วงจัดร้าน — Enter ที่ใช้ปิดร้านค้าท้ายวันยังนับเป็น GetKeyDown อยู่ในเฟรมนั้น
+    // ถ้าไม่ข้าม ร้านจะเปิดรับลูกค้าทันทีโดยผู้เล่นยังไม่ได้จัดร้าน
+    private int setupEnteredFrame = -1;
 
     private void Awake()
     {
-        rewardSystem = FindFirstObjectByType<DayEndRewardSystem>();
+        rewardSystem = FindAnyObjectByType<DayEndRewardSystem>();
+    }
+
+    private void Start()
+    {
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnPhaseChanged += HandlePhaseChanged;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnPhaseChanged -= HandlePhaseChanged;
+        }
+    }
+
+    private void HandlePhaseChanged(GamePhase phase)
+    {
+        if (phase == GamePhase.Setup)
+        {
+            setupEnteredFrame = Time.frameCount;
+        }
     }
 
     private void Update()
@@ -39,7 +71,7 @@ public class GameFlowDebugControls : MonoBehaviour
             return;
         }
 
-        if (game.Phase == GamePhase.Setup && Input.GetKeyDown(openShopKey))
+        if (game.Phase == GamePhase.Setup && Time.frameCount != setupEnteredFrame && Input.GetKeyDown(openShopKey))
         {
             game.BeginServicePhase();
         }
@@ -77,11 +109,11 @@ public class GameFlowDebugControls : MonoBehaviour
         if (game == null) return;
 
         // แถบสถานะ/เกจ/บันทึกเหตุการณ์ ย้ายไปอยู่ที่ GameHudOverlay แล้ว
-        // ที่นี่เหลือแค่หน้าจอที่ต้องกดเลือก คือเมนูเริ่มเกมกับหน้าเลือกรางวัล
+        // ที่นี่เหลือแค่หน้าจอที่ต้องกดเลือก คือเมนูเริ่มเกม หน้าเลือกรางวัล และร้านค้าท้ายวัน
         switch (game.Phase)
         {
             case GamePhase.MainMenu: DrawMainMenu(game); break;
-            case GamePhase.DayEnd: DrawRewards(game); break;
+            case GamePhase.DayEnd: DrawDayEnd(game); break;
             case GamePhase.RunOver: DrawStatusBar("จบ run แล้ว — ดูผลใน Console"); break;
         }
     }
@@ -117,7 +149,8 @@ public class GameFlowDebugControls : MonoBehaviour
         }
     }
 
-    private void DrawRewards(GameManager game)
+    /// <summary>ท้ายวันมี 2 ขั้น: เลือกรางวัลฟรี (ถ้ามีในคลัง) → ร้านค้าท้ายวัน</summary>
+    private void DrawDayEnd(GameManager game)
     {
         if (rewardSystem == null)
         {
@@ -126,12 +159,24 @@ public class GameFlowDebugControls : MonoBehaviour
         }
 
         var offer = rewardSystem.CurrentOffer;
-        if (offer == null || offer.Count == 0)
+        if (offer != null && offer.Count > 0)
         {
-            DrawStatusBar("จบวันแล้ว — กำลังรอรางวัล");
+            DrawRewards(game, offer);
             return;
         }
 
+        DayEndShop shop = DayEndShop.Instance;
+        if (shop != null && shop.IsOpen)
+        {
+            DrawShop(game, shop);
+            return;
+        }
+
+        DrawStatusBar("จบวันแล้ว — กำลังรอรางวัล");
+    }
+
+    private void DrawRewards(GameManager game, System.Collections.Generic.IReadOnlyList<RewardOption> offer)
+    {
         GUI.Box(new Rect(0, 0, Screen.width, Screen.height), GUIContent.none);
         GUI.Label(new Rect(40, 40, 600, 30), $"จบวันที่ {game.Day} — เลือกรางวัล 1 อย่าง");
 
@@ -144,6 +189,53 @@ public class GameFlowDebugControls : MonoBehaviour
                 return;
             }
         }
+    }
+
+    private void DrawShop(GameManager game, DayEndShop shop)
+    {
+        GUI.Box(new Rect(0, 0, Screen.width, Screen.height), GUIContent.none);
+
+        GUI.Label(new Rect(40, 40, 900, 26), $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน: ใช้เงินจากลูกค้าซื้อบัฟ / สถานีเพิ่ม / ลูกค้าชนิดใหม่ (ชิ้นละครั้งต่อวัน)");
+        GUI.Label(new Rect(40, 64, 900, 24), $"เงินที่มี: {shop.Money}");
+
+        var offers = shop.CurrentOffers;
+        int columns = Mathf.Max(1, (Screen.width - 80) / (cardWidth + 14));
+        const float top = 100f;
+
+        for (int i = 0; i < offers.Count; i++)
+        {
+            DayEndShop.Offer item = offers[i];
+            Rect rect = new Rect(
+                40 + (i % columns) * (cardWidth + 14),
+                top + (i / columns) * (cardHeight + 14),
+                cardWidth,
+                cardHeight);
+
+            // ปุ่มจางลงเมื่อซื้อไปแล้วหรือเงินไม่พอ แต่ยังอ่านราคาได้
+            GUI.enabled = shop.CanBuy(item);
+            if (GUI.Button(rect, DescribeOffer(shop, item, i)))
+            {
+                shop.TryBuy(i);
+            }
+            GUI.enabled = true;
+        }
+
+        int rows = Mathf.CeilToInt(offers.Count / (float)columns);
+        Rect continueRect = new Rect(40, top + rows * (cardHeight + 14) + 6, 260, 40);
+
+        if (GUI.Button(continueRect, $"ไปวันถัดไป  [{shop.ContinueKey}]"))
+        {
+            shop.Close();
+        }
+    }
+
+    private static string DescribeOffer(DayEndShop shop, DayEndShop.Offer offer, int index)
+    {
+        string status = offer.sold ? "✓ ซื้อแล้ว"
+            : shop.Money >= offer.price ? $"ราคา {offer.price}"
+            : $"ราคา {offer.price}  (เงินไม่พอ)";
+
+        return $"[{index + 1}] {shop.GetTitle(offer)}\n\n{shop.GetDetail(offer)}\n\n{status}";
     }
 
     private string DescribeReward(RewardOption option)

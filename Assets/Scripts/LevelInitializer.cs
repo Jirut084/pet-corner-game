@@ -60,15 +60,17 @@ public class LevelInitializer : MonoBehaviour
     // ทำให้ Instance ยังเป็น null แล้ว subscribe ไม่ติดเลยทั้งเกม
     private void Start()
     {
-        if (grid == null) grid = FindFirstObjectByType<TileGrid>();
+        if (grid == null) grid = FindAnyObjectByType<TileGrid>();
         if (grid == null)
         {
             Debug.LogError("[LevelInitializer] หา TileGrid ในฉากไม่เจอ วางสถานีไม่ได้");
             return;
         }
 
-        // วางเคาน์เตอร์ก่อนเสมอ เพราะมันจองช่องตายตัวไว้
-        // ถ้าปล่อยให้สถานีอัตโนมัติวางก่อน อาจไปกินช่องของเคาน์เตอร์จนวางไม่ลง
+        // ลงทะเบียนของที่วางไว้ในฉากตั้งแต่ใน Editor ก่อน (เช่น IntakePoint/ReturnZone ที่ย้ายมาอยู่ในฉาก)
+        // แล้วค่อยวางเคาน์เตอร์จากรายการ — ทั้งสองอย่างต้องมาก่อนสถานีอัตโนมัติ
+        // ไม่งั้นสถานีอัตโนมัติอาจไปกินช่องของเคาน์เตอร์จนวางไม่ลง
+        RegisterSceneOccupants();
         SpawnFixedCounters();
 
         if (PlayerProgress.Instance != null)
@@ -136,8 +138,38 @@ public class LevelInitializer : MonoBehaviour
                 continue;
             }
 
+            // มีเคาน์เตอร์ชนิดเดียวกันวางไว้ในฉากแล้ว (ย้ายได้ใน Scene view) ใช้ตัวในฉาก ไม่สร้างซ้ำ
+            if (SceneHasCounterLike(counter.prefab))
+            {
+                Debug.Log($"[LevelInitializer] {counter.label}: มีวางไว้ในฉากแล้ว ใช้ตัวในฉากแทน");
+                continue;
+            }
+
             SpawnStationAt(counter.prefab, counter.cell, counter.label, counter.movable);
         }
+    }
+
+    /// <summary>
+    /// ลงทะเบียนอุปกรณ์ที่วางไว้ในฉากตั้งแต่ใน Editor เข้ากริด (ช่องคำนวณจากตำแหน่งจริง)
+    /// เรียกเองแทนการรอ GridOccupant.Start เพราะลำดับ Start ของแต่ละ object ไม่แน่นอน —
+    /// ถ้า Start ของเคาน์เตอร์มาทีหลัง ช่องของมันอาจโดนสถานีอัตโนมัติจองไปก่อน
+    /// </summary>
+    private void RegisterSceneOccupants()
+    {
+        foreach (GridOccupant occupant in FindObjectsByType<GridOccupant>())
+        {
+            if (occupant == null || occupant.IsRegistered) continue;
+
+            occupant.Register(grid, grid.WorldToCell(occupant.transform.position));
+        }
+    }
+
+    /// <summary>ในฉากมีเคาน์เตอร์ชนิดเดียวกับ prefab นี้อยู่แล้วหรือยัง (เทียบจาก component หลักของมัน)</summary>
+    private static bool SceneHasCounterLike(GameObject prefab)
+    {
+        if (prefab.GetComponent<IntakePoint>() != null) return FindAnyObjectByType<IntakePoint>() != null;
+        if (prefab.GetComponent<ReturnZone>() != null) return FindAnyObjectByType<ReturnZone>() != null;
+        return false;
     }
 
     /// <summary>วางสถานีที่ปลดล็อกแล้วแต่ยังไม่มีตัวจริงในร้าน ลงช่องว่างอัตโนมัติ</summary>
@@ -210,7 +242,7 @@ public class LevelInitializer : MonoBehaviour
     // วาดกรอบโซนวางสถานีอัตโนมัติใน Scene view เพื่อให้ปรับตำแหน่งได้เห็นภาพ
     private void OnDrawGizmosSelected()
     {
-        TileGrid target = grid != null ? grid : FindFirstObjectByType<TileGrid>();
+        TileGrid target = grid != null ? grid : FindAnyObjectByType<TileGrid>();
         if (target == null) return;
 
         Vector3 a = target.CellToWorld(autoPlaceAreaMin);

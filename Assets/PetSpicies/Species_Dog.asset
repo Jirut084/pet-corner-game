@@ -16,5 +16,5 @@ MonoBehaviour:
   petPrefab: {fileID: 8284398693088725970, guid: 27eaa9ea55eb93847afab2419ed62ec6, type: 3}
   requiredSteps: 0000000003000000
   patienceSeconds: 25
-  baseFee: 40
-  feePerStep: 15
+  baseFee: 10
+  feePerStep: 6

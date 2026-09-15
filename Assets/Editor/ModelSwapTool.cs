@@ -15,6 +15,7 @@ using UnityEngine;
 ///   2) ลบ MeshFilter + MeshRenderer ที่ root และลูก "Visual" ตัวเก่า (รันซ้ำได้)
 ///   3) ใส่โมเดลเป็นลูกชื่อ "Visual" จัดกึ่งกลางช่อง ฐานแตะระดับที่หาได้ในข้อ 1
 ///   4) ปรับ BoxCollider / CapsuleCollider ที่ root ให้ครอบโมเดลใหม่
+///      สถานีจะได้ BoxCollider สูงอย่างน้อย minStationColliderHeight (ยืดขึ้นด้านบน ฐานอยู่ที่พื้นเท่าเดิม)
 ///   5) ไม่แตะ Transform ของ root เพราะ TilePlacer / LevelInitializer เขียนทับค่านั้นตลอด
 ///
 /// ขนาดคำนวณจาก vertex bounds ของ mesh × matrix ของ transform เอง ไม่ใช้ Renderer.bounds
@@ -47,6 +48,11 @@ public class ModelSwapTool : EditorWindow
     [Tooltip("ระดับฐานของโมเดลในพิกัดของ root ใช้เมื่อไม่มี mesh ต้นแบบเหลือให้วัด (เช่นตอนรันซ้ำ) " +
              "-0.5 = ฐานของ cube 1 หน่วยที่ pivot อยู่กลางตัว ซึ่งเป็นแบบของ prefab ทุกตัวในโปรเจกต์นี้")]
     [SerializeField] private float floorLocalY = -0.5f;
+
+    [Tooltip("ความสูงขั้นต่ำของ BoxCollider สถานี นับจากฐานโมเดลขึ้นไป (0 = ไม่บังคับ)\n" +
+             "โมเดลเตี้ยกว่า Step Offset ของ CharacterController (0.3) ผู้เล่นจะก้าวขึ้นไปยืนหรือเดินข้ามได้ " +
+             "collider ที่สูงกว่าตัวโมเดลยังช่วยให้กด E เจอสถานีง่ายขึ้นด้วย")]
+    [SerializeField] private float minStationColliderHeight = 1.2f;
 
     [SerializeField] private List<StationSwap> stationSwaps = new List<StationSwap>();
 
@@ -85,6 +91,8 @@ public class ModelSwapTool : EditorWindow
             new GUIContent("วางฐานโมเดลให้แตะพื้น"));
         EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(floorLocalY)),
             new GUIContent("ระดับฐาน (พิกัด root)"));
+        EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(minStationColliderHeight)),
+            new GUIContent("Collider สถานีสูงอย่างน้อย"));
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("1) สถานี / เคาน์เตอร์ — แก้ prefab เดิม", EditorStyles.boldLabel);
@@ -111,6 +119,15 @@ public class ModelSwapTool : EditorWindow
         if (GUILayout.Button("สลับโมเดลทั้งหมด", GUILayout.Height(32)))
         {
             SwapAll();
+            GUIUtility.ExitGUI();
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("3) แก้ prefab ที่สลับโมเดลไปแล้ว", EditorStyles.boldLabel);
+
+        if (GUILayout.Button("ยืด Collider สถานีทุกตัวให้สูงอย่างน้อยค่าด้านบน"))
+        {
+            RaiseExistingStationColliders();
             GUIUtility.ExitGUI();
         }
 
@@ -217,7 +234,7 @@ public class ModelSwapTool : EditorWindow
         {
             if (swap == null || swap.targetPrefab == null || swap.model == null) continue;
 
-            if (SwapVisual(AssetDatabase.GetAssetPath(swap.targetPrefab), swap.model))
+            if (SwapVisual(AssetDatabase.GetAssetPath(swap.targetPrefab), swap.model, minStationColliderHeight))
             {
                 succeeded++;
             }
@@ -260,7 +277,8 @@ public class ModelSwapTool : EditorWindow
                 continue;
             }
 
-            if (!SwapVisual(newPath, swap.model)) continue;
+            // สัตว์ไม่ต้องมี collider สูง — ผู้เล่นไม่ได้เดินชนสัตว์ และ collider ถูกปิดตอนอุ้มอยู่แล้ว
+            if (!SwapVisual(newPath, swap.model, 0f)) continue;
 
             swap.species.petPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(newPath);
             EditorUtility.SetDirty(swap.species);
@@ -273,7 +291,7 @@ public class ModelSwapTool : EditorWindow
     }
 
     /// <summary>สลับหน้าตาของ prefab ไฟล์เดียว คืน true ถ้าบันทึกสำเร็จ</summary>
-    private bool SwapVisual(string prefabPath, GameObject model)
+    private bool SwapVisual(string prefabPath, GameObject model, float minColliderHeight)
     {
         GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
 
@@ -330,7 +348,7 @@ public class ModelSwapTool : EditorWindow
                 // 4) ปรับ collider ที่ root ให้ครอบโมเดลใหม่ (InteractionManager ใช้ collider หาสถานี)
                 if (fitCollider)
                 {
-                    FitRootCollider(root, modelBounds);
+                    FitRootCollider(root, modelBounds, minColliderHeight);
                 }
 
                 Debug.Log($"[ModelSwap] {prefabPath}: ขนาดโมเดล {FormatSize(modelBounds.size, rootTransform.lossyScale)}");
@@ -353,13 +371,23 @@ public class ModelSwapTool : EditorWindow
         }
     }
 
-    private static void FitRootCollider(GameObject root, Bounds localBounds)
+    private static void FitRootCollider(GameObject root, Bounds localBounds, float minBoxHeight)
     {
         BoxCollider box = root.GetComponent<BoxCollider>();
         if (box != null)
         {
-            box.center = localBounds.center;
-            box.size = localBounds.size;
+            Vector3 center = localBounds.center;
+            Vector3 size = localBounds.size;
+
+            // โมเดลเตี้ยเกิน — ยืดขึ้นด้านบนอย่างเดียว ฐาน collider ยังแตะพื้นที่ฐานโมเดลเท่าเดิม
+            if (size.y < minBoxHeight)
+            {
+                center.y = localBounds.min.y + minBoxHeight * 0.5f;
+                size.y = minBoxHeight;
+            }
+
+            box.center = center;
+            box.size = size;
         }
 
         CapsuleCollider capsule = root.GetComponent<CapsuleCollider>();
@@ -370,6 +398,78 @@ public class ModelSwapTool : EditorWindow
             capsule.height = localBounds.size.y;
             capsule.radius = Mathf.Max(localBounds.size.x, localBounds.size.z) * 0.5f;
         }
+    }
+
+    // ---------- แก้ prefab ที่สลับไปแล้ว ----------
+
+    /// <summary>
+    /// ยืด BoxCollider ของ prefab สถานีที่มีอยู่แล้ว (ทุก prefab ใน Assets/Prefabs ที่มี CareStation / IntakePoint / ReturnZone)
+    /// ให้สูงอย่างน้อย minStationColliderHeight — ฐาน collider อยู่ที่เดิม ไม่แตะโมเดลหรือตำแหน่งใดๆ
+    /// ใช้แทนการสลับโมเดลซ้ำ เมื่อสลับโมเดลไปก่อนที่เครื่องมือนี้จะมีค่าความสูงขั้นต่ำ
+    /// </summary>
+    private void RaiseExistingStationColliders()
+    {
+        if (minStationColliderHeight <= 0f)
+        {
+            EditorUtility.DisplayDialog("ยืดความสูง Collider", "ตั้งค่า 'Collider สถานีสูงอย่างน้อย' ให้มากกว่า 0 ก่อน", "ตกลง");
+            return;
+        }
+
+        bool confirmed = EditorUtility.DisplayDialog(
+            "ยืดความสูง Collider",
+            $"จะแก้ BoxCollider ของ prefab สถานีทุกตัวใน Assets/Prefabs ที่เตี้ยกว่า {minStationColliderHeight:0.##} หน่วย\n" +
+            "Undo ไม่ได้ (ย้อนกลับด้วย git ได้) ดำเนินการต่อ?",
+            "ยืดเลย", "ยกเลิก");
+
+        if (!confirmed) return;
+
+        List<string> changed = new List<string>();
+
+        foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Prefabs" }))
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset == null || !IsStationPrefab(asset)) continue;
+
+            BoxCollider assetBox = asset.GetComponent<BoxCollider>();
+            if (assetBox == null || assetBox.size.y >= minStationColliderHeight) continue;
+
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+
+            try
+            {
+                BoxCollider box = root.GetComponent<BoxCollider>();
+                float bottom = box.center.y - box.size.y * 0.5f;
+                float oldHeight = box.size.y;
+
+                box.center = new Vector3(box.center.x, bottom + minStationColliderHeight * 0.5f, box.center.z);
+                box.size = new Vector3(box.size.x, minStationColliderHeight, box.size.z);
+
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                changed.Add($"{Path.GetFileNameWithoutExtension(path)}: {oldHeight:0.00} → {minStationColliderHeight:0.00}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ModelSwap] ยืด collider {path} ไม่สำเร็จ: {e.Message}");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        AssetDatabase.SaveAssets();
+
+        string report = changed.Count > 0 ? string.Join("\n", changed) : "ทุกสถานีสูงพอแล้ว ไม่มีอะไรต้องแก้";
+        Debug.Log($"[ModelSwap] ยืด collider สถานี:\n{report}");
+        EditorUtility.DisplayDialog("ยืดความสูง Collider เสร็จแล้ว", report, "ตกลง");
+    }
+
+    private static bool IsStationPrefab(GameObject prefab)
+    {
+        return prefab.GetComponent<CareStation>() != null ||
+               prefab.GetComponent<IntakePoint>() != null ||
+               prefab.GetComponent<ReturnZone>() != null;
     }
 
     /// <summary>
@@ -389,6 +489,33 @@ public class ModelSwapTool : EditorWindow
             if (mesh == null) continue;
 
             Matrix4x4 meshToSpace = worldToSpace * renderer.transform.localToWorldMatrix;
+
+            // วัดจาก vertex จริงของ mesh ก่อน — แม่นกว่าแปลงมุม 8 มุมของกล่องขอบเขต
+            // ถ้า node ใน fbx หมุนเอียง (ไม่ใช่ 90° พอดี) กล่องที่แปลงจากมุมจะใหญ่เกินจริงทุกด้านรวมถึงด้านล่าง
+            // ฐานที่วัดได้จึงต่ำกว่าผิวล่างจริง → วางแล้วโมเดลลอยเหนือพื้น (อาการของกรง cage)
+            // SkinnedMeshRenderer ข้ามไปใช้มุมกล่อง เพราะ vertex ของมันอิงกระดูก ไม่ได้อิง transform ของ renderer
+            // mesh ที่อ่าน vertex ไม่ได้จะได้ array ว่าง ก็ถอยไปใช้มุมกล่องเช่นกัน
+            Vector3[] vertices = renderer is SkinnedMeshRenderer ? null : mesh.vertices;
+            if (vertices != null && vertices.Length > 0)
+            {
+                foreach (Vector3 vertex in vertices)
+                {
+                    Vector3 point = meshToSpace.MultiplyPoint3x4(vertex);
+
+                    if (!found)
+                    {
+                        bounds = new Bounds(point, Vector3.zero);
+                        found = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(point);
+                    }
+                }
+
+                continue;
+            }
+
             Bounds meshBounds = mesh.bounds;
 
             // แปลงมุมทั้ง 8 ของกล่อง เพราะ node ในไฟล์ fbx มักหมุน (Blender หมุน -90 รอบแกน X)

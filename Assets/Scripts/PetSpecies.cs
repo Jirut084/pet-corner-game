@@ -42,11 +42,12 @@ public class PetSpecies : ScriptableObject
     public float patienceSeconds = 60f;
 
     [Header("Economy")]
-    [Tooltip("ค่าบริการฐานของชนิดนี้ ค่าจริงจะบวกเพิ่มตามจำนวนขั้นตอนที่ทำสำเร็จ")]
-    public int baseFee = 40;
+    [Tooltip("ค่าบริการฐานของชนิดนี้ ค่าจริงจะบวกเพิ่มตามจำนวนขั้นตอนที่ทำสำเร็จ " +
+             "(จูนคู่กับราคาในร้านค้าท้ายวัน: ออเดอร์ละ ~20–30 = จบวันซื้อได้ 1–2 ชิ้น ไม่ใช่ทุกชิ้น)")]
+    public int baseFee = 10;
 
     [Tooltip("ค่าบริการที่ได้เพิ่มต่อ 1 ขั้นตอนที่ทำสำเร็จ")]
-    public int feePerStep = 15;
+    public int feePerStep = 6;
 
     /// <summary>จำนวนขั้นตอนทั้งหมดของสัตว์ชนิดนี้</summary>
     public int StepCount => requiredSteps != null ? requiredSteps.Length : 0;

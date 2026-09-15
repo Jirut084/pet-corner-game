@@ -23,14 +23,28 @@ public class StationCloseupOverlay : MonoBehaviour
     [Tooltip("ระยะจากขอบบนจอ เว้นที่ให้แถบสถานะของ HUD")]
     [SerializeField] private float topMargin = 44f;
 
+    /// <summary>กล้องซูมมองสัตว์จากทิศไหน — ทั้งสองแบบเป็นมุมคงที่ ไม่หมุนตามตัวสัตว์</summary>
+    public enum ViewAngleMode
+    {
+        MainCamera, // มองจากฝั่งเดียวกับกล้องหลักของเกม ภาพในหน้าต่างจึงหันทางเดียวกับที่ผู้เล่นเห็นในฉาก
+        FixedYaw    // มองไปทางมุม viewYaw ในโลก (0 = มองไปทาง +Z)
+    }
+
     [Header("Camera")]
     [SerializeField] private float fieldOfView = 30f;
 
-    [Tooltip("ระยะกล้องจากหน้าสัตว์ คิดเป็นกี่เท่าของขนาดสัตว์ — น้อย = ซูมใกล้หน้ามากขึ้น")]
-    [SerializeField] private float faceDistanceScale = 1.2f;
+    [Tooltip("MainCamera = มองจากฝั่งเดียวกับกล้องเกม / FixedYaw = มองตามมุม View Yaw")]
+    [SerializeField] private ViewAngleMode angleMode = ViewAngleMode.MainCamera;
 
-    [Tooltip("ยกกล้องสูงกว่าระดับหน้าเล็กน้อย คิดเป็นกี่เท่าของขนาดสัตว์ (0 = ระดับสายตาพอดี)")]
-    [SerializeField] private float faceHeightScale = 0.15f;
+    [Tooltip("ทิศที่กล้องมอง (องศารอบแกนตั้ง) ใช้เมื่อ Angle Mode = FixedYaw — 0 = มองไปทาง +Z, 180 = มองไปทาง -Z")]
+    [SerializeField] private float viewYaw = 0f;
+
+    [Tooltip("มุมก้มมองลงมาที่สัตว์ (องศา) 0 = ระดับสายตา")]
+    [Range(0f, 89f)]
+    [SerializeField] private float viewPitch = 25f;
+
+    [Tooltip("ระยะกล้องจากกลางตัวสัตว์ คิดเป็นกี่เท่าของขนาดสัตว์ — น้อย = ซูมใกล้ขึ้น")]
+    [SerializeField] private float distanceScale = 2.2f;
 
     [SerializeField] private Color backgroundColor = new Color(0.13f, 0.16f, 0.15f);
 
@@ -44,6 +58,11 @@ public class StationCloseupOverlay : MonoBehaviour
         public Pet pet;
         public Camera camera;
         public RenderTexture texture;
+
+        // จุดโฟกัสและขนาดวัดครั้งเดียวตอนวางสัตว์ลงสถานี
+        // ถ้าวัดใหม่ทุกเฟรม กล่องขอบเขตจะเปลี่ยนตามมุมที่สัตว์หมุนอยู่ ภาพจะสั่นและซูมเข้าออกเอง
+        public Vector3 focusPoint;
+        public float frameSize;
     }
 
     private readonly List<View> views = new List<View>();
@@ -119,7 +138,19 @@ public class StationCloseupOverlay : MonoBehaviour
         texture.Create();
         closeup.targetTexture = texture; // มี targetTexture แล้ว กล้องนี้จะไม่วาดทับจอหลัก
 
-        View view = new View { station = station, pet = pet, camera = closeup, texture = texture };
+        // วัดตอนนี้ — CareStation เพิ่งวางสัตว์ลงตำแหน่งพักพอดี ยังไม่เริ่มหมุน/เด้ง
+        Bounds bounds = pet.VisualBounds;
+
+        View view = new View
+        {
+            station = station,
+            pet = pet,
+            camera = closeup,
+            texture = texture,
+            focusPoint = bounds.center,
+            frameSize = Mathf.Max(0.2f, Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)))
+        };
+
         views.Add(view);
         AimCamera(view);
     }
@@ -154,20 +185,39 @@ public class StationCloseupOverlay : MonoBehaviour
     }
 
     /// <summary>
-    /// เล็งกล้องไปที่หน้าสัตว์ — วางกล้องไว้ด้านหน้าตามทิศที่สัตว์หันหน้า แล้วมองกลับมาที่ใบหน้า
-    /// (เดิมมองจากทิศเดียวกับกล้องหลัก ซึ่งอยู่ด้านหลังสัตว์ ภาพเลยเห็นแต่หลัง)
+    /// เล็งกล้องจากมุมคงที่ไปที่กลางตัวสัตว์ — ไม่หมุนตามทิศที่สัตว์หันอีกแล้ว
+    /// สัตว์หมุนอยู่บนสถานี (CareStationEffects) ผู้เล่นจึงเห็นครบทุกด้านเองโดยภาพไม่หมุนตาม
     /// </summary>
     private void AimCamera(View view)
     {
-        Bounds bounds = view.pet.VisualBounds;
-        float size = Mathf.Max(0.2f, Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)));
-
-        Vector3 facePoint = view.pet.FaceWorldPoint;
-        Vector3 faceDirection = view.pet.FaceWorldDirection;
+        Quaternion viewRotation = Quaternion.Euler(viewPitch, CurrentViewYaw(), 0f);
+        Vector3 viewForward = viewRotation * Vector3.forward;
 
         Transform cameraTransform = view.camera.transform;
-        cameraTransform.position = facePoint + faceDirection * size * faceDistanceScale + Vector3.up * size * faceHeightScale;
-        cameraTransform.LookAt(facePoint);
+        cameraTransform.SetPositionAndRotation(
+            view.focusPoint - viewForward * view.frameSize * distanceScale,
+            viewRotation);
+    }
+
+    /// <summary>มุมรอบแกนตั้งที่กล้องซูมมอง — MainCamera ใช้ทิศของกล้องเกม (ถ้าหากล้องไม่เจอใช้ viewYaw แทน)</summary>
+    private float CurrentViewYaw()
+    {
+        if (angleMode == ViewAngleMode.MainCamera)
+        {
+            Camera main = Camera.main;
+            if (main != null)
+            {
+                Vector3 forward = main.transform.forward;
+                forward.y = 0f;
+
+                if (forward.sqrMagnitude > 0.0001f)
+                {
+                    return Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+                }
+            }
+        }
+
+        return viewYaw;
     }
 
     private static void ReleaseView(View view)

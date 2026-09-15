@@ -53,8 +53,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.964, y: 0.29325968, z: 0.96399987}
-  m_Center: {x: 0, y: -0.3533702, z: 0}
+  m_Size: {x: 0.964, y: 1.200000, z: 0.96399987}
+  m_Center: {x: 0, y: 0.100000, z: 0}
 --- !u!114 &7803673700391804729
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -72,7 +72,7 @@ MonoBehaviour:
   minHoldSeconds: 1.5
   maxHoldSeconds: 2
   processSeconds: 3.5
-  tipAmount: 10
+  tipAmount: 4
   petAnchor: {fileID: 0}
   gizmoRadius: 1
 --- !u!1001 &6225881895138063281

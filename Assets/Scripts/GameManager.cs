@@ -8,7 +8,7 @@ public enum GamePhase
     MainMenu, // หน้าเมนู เลือกสัตว์เริ่มต้น
     Setup,    // จัดร้าน ย้าย/วางสถานีได้อิสระ เวลาไม่เดิน
     Service,  // เปิดร้าน รับออเดอร์ จัดสถานีไม่ได้
-    DayEnd,   // จบวัน เลือกรางวัล
+    DayEnd,   // จบวัน เลือกรางวัล + ร้านค้าท้ายวัน
     RunOver   // จบ run (ชนะหรือแพ้)
 }
 
@@ -91,6 +91,9 @@ public class GameManager : MonoBehaviour
     public event Action<int> OnDayEnded;
     public event Action<bool> OnRunEnded;                 // true = ชนะ
 
+    /// <summary>ยิงตอนเริ่ม run ใหม่ก่อนเข้าวันที่ 1 — ระบบที่เก็บค่าข้ามวัน (เช่นระดับสินค้าในร้านค้า) ใช้รีเซ็ตตัวเอง</summary>
+    public event Action OnRunStarted;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -134,11 +137,30 @@ public class GameManager : MonoBehaviour
         Complaints = 0;
         OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
 
-        BeginNextDay();
+        // เงินเป็นตัวแปร static จึงค้างข้าม run ต้องล้างเองทุกครั้งที่เริ่มใหม่
+        ReturnZone.ResetWallet();
+        OnRunStarted?.Invoke();
+
+        AdvanceToNextDay();
+    }
+
+    /// <summary>
+    /// จบช่วงท้ายวันแล้วเข้าช่วงจัดร้านของวันถัดไป — ระบบรางวัล/ร้านค้าท้ายวันเป็นคนเรียก
+    /// เรียกได้เฉพาะตอนอยู่ใน DayEnd กันระบบใดเรียกหลังจบ run ไปแล้วจนเกมเล่นต่อเกินวันสุดท้าย
+    /// </summary>
+    public void BeginNextDay()
+    {
+        if (Phase != GamePhase.DayEnd)
+        {
+            Debug.LogWarning($"[GameManager] BeginNextDay เรียกได้เฉพาะตอนจบวัน (ตอนนี้ {Phase}) — ข้าม");
+            return;
+        }
+
+        AdvanceToNextDay();
     }
 
     /// <summary>เข้าสู่ช่วงจัดร้านของวันถัดไป (เวลายังไม่เดิน ลูกค้ายังไม่มา)</summary>
-    public void BeginNextDay()
+    private void AdvanceToNextDay()
     {
         Day++;
         OrdersCompleted = 0;
@@ -196,12 +218,19 @@ public class GameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// ออเดอร์หลุด (มิเตอร์หมด) — ปลดออกจากคิวที่ดูแลอยู่แล้วนับร้องเรียน
+    /// ออเดอร์หลุด (มิเตอร์หมด) — ปลดออกจากคิวที่ดูแลอยู่ คืนโควตา แล้วนับร้องเรียน
     /// ต้องปลดออกจาก activeOrders ด้วย ไม่งั้นช่องที่ดูแลพร้อมกันได้จะโดนกินถาวร
     /// </summary>
     public void FailOrder(Pet pet, string reason)
     {
-        activeOrders.Remove(pet);
+        // คืนโควตาที่ปล่อยไปแล้วด้วย — ออเดอร์นี้จะไม่มีวันถูกนับเป็น OrdersCompleted
+        // ถ้าไม่คืน ลูกค้าคนใหม่ที่มาแทนจะรับออเดอร์ไม่ได้ (โควตาเต็ม) แต่วันก็ไม่มีวันครบ = ค้างถาวร
+        // เช็คผลของ Remove กันลดซ้ำถ้าถูกเรียกกับสัตว์ตัวเดิมมากกว่า 1 ครั้ง
+        if (activeOrders.Remove(pet) && OrdersIssued > 0)
+        {
+            OrdersIssued--;
+        }
+
         AddComplaint(reason);
     }
 
@@ -221,16 +250,21 @@ public class GameManager : MonoBehaviour
 
     private void EndDay()
     {
-        SetPhase(GamePhase.DayEnd);
-        OnDayEnded?.Invoke(Day);
-
-        GameLog.Push($"จบวันที่ {Day} — เลือกรางวัลได้", LogTone.Good);
-
-        // ครบจำนวนวันแล้ว = ชนะ (เช็คหลังยิง OnDayEnded เพื่อให้ UI สรุปผลวันได้ก่อน)
+        // วันสุดท้าย: จบ run ก่อน แล้วค่อยยิง OnDayEnded
+        // ระบบที่ฟัง OnDayEnded (รางวัล/ร้านค้า) จะเห็น Phase == RunOver แล้วไม่เปิดหน้าของตัวเอง
+        // (เดิมยิง event ก่อน ระบบรางวัลที่ไม่มีของให้เลือกเลยเรียก BeginNextDay ไปก่อนเช็ควัน
+        //  Day เลยเลื่อนเป็นวันถัดไปแล้วเกมตัดสินว่าชนะตั้งแต่จบวันที่ 2)
         if (Day >= totalDays)
         {
             EndRun(true);
+            OnDayEnded?.Invoke(Day);
+            return;
         }
+
+        SetPhase(GamePhase.DayEnd);
+        GameLog.Push($"จบวันที่ {Day} — เลือกรางวัลได้", LogTone.Good);
+
+        OnDayEnded?.Invoke(Day);
     }
 
     private void EndRun(bool won)
