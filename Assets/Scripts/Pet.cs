@@ -272,6 +272,12 @@ public class Pet : MonoBehaviour, ICarryable
         return true;
     }
 
+    /// <summary>สถานีชนิดนี้เคยจ่ายทิปให้สัตว์ตัวนี้ไปแล้วหรือยัง — สถานีใช้กันรับสัตว์ซ้ำแบบไม่ได้อะไร</summary>
+    public bool HasTippedAt(CareStep step)
+    {
+        return tippedSteps.Contains(step);
+    }
+
     // ---------- มิเตอร์ ----------
 
     public void StartPatience()

@@ -5,7 +5,7 @@ using UnityEngine;
 ///
 /// มี 4 โหมดการทำงาน:
 ///   Instant  — กดครั้งเดียว สำเร็จทันที (ผู้เล่นอุ้มสัตว์ไว้ตลอด)
-///   Hold     — กดค้างให้อยู่ในช่วงเวลาที่กำหนด ค้างนานเกินถือว่าพลาด
+///   Hold     — กดค้างแล้วปล่อยในช่วงเวลาที่กำหนด ค้างนานเกินถือว่าพลาด (HUD วาดหลอดให้เห็นช่วงที่ต้องปล่อย)
 ///   DropOff  — วางสัตว์ทิ้งไว้แล้วเดินไปทำอย่างอื่น สถานีทำงานเองจนเสร็จ แล้วกลับมาอุ้มไป
 ///   Holding  — โต๊ะพัก ไม่ทำอะไร แค่เป็นที่วางสัตว์ให้มือว่าง
 ///
@@ -26,6 +26,14 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         Idle,     // ว่าง
         Working,  // มีสัตว์อยู่ กำลังทำงาน
         Ready     // ทำเสร็จแล้ว รอผู้เล่นมาอุ้มไป
+    }
+
+    /// <summary>สถานีทำอะไรกับสัตว์ตัวนี้ได้บ้าง</summary>
+    private enum ServeResult
+    {
+        None,     // ใช้ไม่ได้ (มีข้อความบอกเหตุผล)
+        DoStep,   // ทำขั้นตอนของสถานีนี้ให้
+        GiveTip   // สัตว์ดูแลครบแล้ว — บริการเสริมรับทิป
     }
 
     [Header("Station")]
@@ -57,6 +65,10 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     [SerializeField] private float gizmoRadius = 1f;
 
     private bool currentHoldFailed;
+
+    // กดค้างรอบนี้มีสัตว์ให้ดูแล/ให้ทิปจริงไหม — ถ้าไม่มี ไม่ต้องแจ้งปล่อยเร็ว/ค้างนานเกินให้รก HUD
+    private bool holdHasTarget;
+
     private float progress; // 0–1 สำหรับโหมด DropOff
 
     public CareStep Step => step;
@@ -72,12 +84,22 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     /// <summary>โหมด Hold เท่านั้นที่ใช้เส้นทางกดค้างของ InteractionManager</summary>
     public bool UseHold => mode == ServiceMode.Hold;
 
-    // บัฟ "ใช้สถานีเร็วขึ้น" ย่นทั้งช่วงเวลาตามสัดส่วน หน้าต่างเวลาจึงยังกว้างเท่าเดิมเชิงสัดส่วน
+    /// <summary>เวลาที่เริ่มปล่อยปุ่มได้ (วินาทีนับจากเริ่มกดค้าง) — HUD ใช้วาดโซนสีเขียว</summary>
+    public float HoldWindowStart => EffectiveMinHold;
+
+    /// <summary>เวลาสุดท้ายที่ยังปล่อยได้ เลยจากนี้ถือว่าพลาด</summary>
+    public float HoldWindowEnd => EffectiveMaxHold;
+
+    /// <summary>กดค้างรอบนี้เลยช่วงไปแล้ว ต้องปล่อยแล้วเริ่มใหม่</summary>
+    public bool HoldFailed => currentHoldFailed;
+
     private float InteractSpeed =>
         PlayerProgress.Instance != null ? Mathf.Max(0.1f, PlayerProgress.Instance.InteractSpeedMultiplier) : 1f;
 
+    // บัฟ "สถานีทำงานเร็วขึ้น" ย่นเฉพาะเวลาขั้นต่ำที่ต้องกดค้าง ความกว้างของช่วงที่ต้องปล่อยคงเดิม
+    // (เดิมหารทั้งสองค่า ช่วงปล่อยจึงแคบลงตามบัฟ — ซื้อบัฟแล้วกดยากขึ้นแทนที่จะง่ายขึ้น)
     private float EffectiveMinHold => minHoldSeconds / InteractSpeed;
-    private float EffectiveMaxHold => maxHoldSeconds / InteractSpeed;
+    private float EffectiveMaxHold => EffectiveMinHold + Mathf.Max(0f, maxHoldSeconds - minHoldSeconds);
 
     // จุดที่เท้าสัตว์จะแตะเมื่อวางบนสถานี — ไม่ได้ใส่ petAnchor ใช้ผิวบนสุดของโมเดลสถานี
     // (เดิมใช้ตำแหน่งสถานี + 1 หน่วยตายตัว สถานีเตี้ยอย่างชามอาหารสัตว์เลยลอยสูงเหนือชามเกือบ 1 หน่วย)
@@ -170,10 +192,8 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
     private void HandleInstant(PlayerCarrier carrier)
     {
-        Pet pet = GetServablePet(carrier);
-        if (pet == null) return;
-
-        ApplyStep(pet);
+        ServeResult result = EvaluateCarriedPet(carrier, out Pet pet, out string reason);
+        Serve(result, pet, reason);
     }
 
     /// <summary>โหมดวางทิ้งไว้: กดตอนมือว่าง = อุ้มสัตว์บนสถานีขึ้นมา / กดตอนถือสัตว์ = วางลง</summary>
@@ -184,13 +204,13 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         {
             if (carrier.IsCarrying)
             {
-                Debug.Log($"[CareStation:{Label}] มือไม่ว่าง วางของที่ถืออยู่ก่อน");
+                GameLog.Push($"มือไม่ว่าง — วางของที่ถืออยู่ก่อนถึงจะอุ้ม {OccupyingPet.DisplayName} จาก{Label}ได้", LogTone.Warn);
                 return;
             }
 
             if (mode == ServiceMode.DropOff && State == StationState.Working)
             {
-                Debug.Log($"[CareStation:{Label}] กำลังทำงานอยู่ ({progress:P0}) รออีกนิด");
+                GameLog.Push($"{Label}กำลังดูแล {OccupyingPet.DisplayName} อยู่ ({progress:P0}) รออีกนิด", LogTone.Warn);
                 return;
             }
 
@@ -211,23 +231,22 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         // สถานีว่าง → พยายามวางสัตว์ที่ถืออยู่ลง
         if (!carrier.IsCarrying)
         {
-            Debug.Log($"[CareStation:{Label}] ว่างอยู่ เอาสัตว์มาวางได้");
+            GameLog.Push($"{Label}ว่างอยู่ — อุ้มสัตว์มาวางได้");
             return;
         }
 
         Pet held = carrier.GetHeld<Pet>();
         if (held == null)
         {
-            Debug.Log($"[CareStation:{Label}] ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง");
+            GameLog.Push("ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง วางที่สถานีไม่ได้", LogTone.Warn);
             return;
         }
 
-        // โต๊ะพักรับได้เสมอ ส่วนสถานีบริการต้องตรงกับที่สัตว์ต้องการ หรือเป็นบริการเสริมเอาทิป
-        if (mode == ServiceMode.DropOff && !held.NeedsStep(step) && !CanTip(held))
+        // โต๊ะพักรับได้เสมอ ส่วนสถานีบริการต้องตรงกับที่สัตว์ต้องการ หรือเป็นบริการเสริมที่ยังไม่เคยได้ทิป
+        // (เดิมรับสัตว์ที่ได้ทิปจากสถานีนี้ไปแล้วด้วย ผู้เล่นเสียเวลารอสถานีทำงานฟรีโดยไม่ได้อะไร)
+        if (mode == ServiceMode.DropOff && EvaluatePet(held, out string reason) == ServeResult.None)
         {
-            Debug.Log(held.IsComplete
-                ? $"[CareStation:{Label}] {held.DisplayName} รับบริการเสริมที่นี่ไปแล้ว"
-                : $"[CareStation:{Label}] {held.DisplayName} ไม่ได้ต้องการบริการนี้ (ยังต้อง: {string.Join(", ", held.RemainingSteps())})");
+            GameLog.Push(reason, LogTone.Warn);
             return;
         }
 
@@ -271,52 +290,67 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     {
         currentHoldFailed = false;
 
+        // แค่เช็คว่ากดค้างแล้วจะมีผลไหม — ยังไม่ทำขั้นตอนหรือจ่ายทิปจนกว่าจะปล่อยปุ่มในช่วงที่ถูกต้อง
+        // (เดิมจ่ายทิปตั้งแต่ตอนแตะปุ่ม เอาสัตว์ที่ดูแลครบแล้วมาแตะ E ที่อ่างก็ได้ทิปฟรี)
         PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();
-        if (carrier == null) return;
+        holdHasTarget = EvaluateCarriedPet(carrier, out _, out string reason) != ServeResult.None;
 
-        // เช็คตั้งแต่ต้นว่าใช้สถานีนี้ได้ไหม จะได้ไม่ค้างฟรีจนครบเวลาแล้วค่อยรู้ว่าผิดสถานี
-        if (GetServablePet(carrier) == null) return;
-
-        Debug.Log($"[CareStation:{Label}] เริ่มกดค้าง... (ปล่อยระหว่าง {EffectiveMinHold:F2}–{EffectiveMaxHold:F2} วิ)");
+        if (!holdHasTarget)
+        {
+            GameLog.Push(reason, LogTone.Warn);
+        }
     }
 
     public void OnHoldTick(GameObject interactor, float heldSeconds)
     {
-        if (currentHoldFailed) return;
+        if (!holdHasTarget || currentHoldFailed) return;
         if (heldSeconds <= EffectiveMaxHold) return;
 
         currentHoldFailed = true;
         OnHoldOvertime();
-        Debug.Log($"[CareStation:{Label}] ค้างนานเกิน {EffectiveMaxHold:F2} วิ — พลาด ปล่อยแล้วเริ่มใหม่");
+        GameLog.Push($"{Label}: ค้างนานเกิน — ปล่อยปุ่มแล้วลองใหม่ (ปล่อยตอนเข็มอยู่ในช่วงสีเขียว)", LogTone.Warn);
     }
 
     public void OnHoldRelease(GameObject interactor, float heldSeconds)
     {
-        if (currentHoldFailed)
-        {
-            currentHoldFailed = false;
-            return;
-        }
+        bool hadTarget = holdHasTarget;
+        bool failed = currentHoldFailed;
+
+        holdHasTarget = false;
+        currentHoldFailed = false;
+
+        if (!hadTarget || failed) return;
 
         if (heldSeconds < EffectiveMinHold)
         {
-            Debug.Log($"[CareStation:{Label}] ปล่อยเร็วไป ({heldSeconds:F2} วิ) ต้องค้างอย่างน้อย {EffectiveMinHold:F2} วิ");
+            GameLog.Push($"{Label}: ปล่อยเร็วไป — กดปุ่มค้างไว้จนเข็มเข้าช่วงสีเขียวแล้วค่อยปล่อย", LogTone.Warn);
             return;
         }
 
+        // ประเมินใหม่ตอนปล่อย เผื่อของในมือเปลี่ยนไประหว่างกดค้าง
         PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();
-        if (carrier == null) return;
-
-        Pet pet = GetServablePet(carrier);
-        if (pet == null) return;
-
-        ApplyStep(pet);
+        ServeResult result = EvaluateCarriedPet(carrier, out Pet pet, out string reason);
+        Serve(result, pet, reason);
     }
 
     public void OnHoldCancel(GameObject interactor)
     {
+        if (holdHasTarget && !currentHoldFailed)
+        {
+            GameLog.Push($"{Label}: เดินออกห่างระหว่างกดค้าง — ยกเลิก ลองใหม่ได้เลย", LogTone.Warn);
+        }
+
+        holdHasTarget = false;
         currentHoldFailed = false;
-        Debug.Log($"[CareStation:{Label}] ออกนอกระยะกลางคัน ยกเลิกการกดค้าง");
+    }
+
+    /// <summary>
+    /// กดค้างที่สถานีนี้ตอนนี้แล้วจะมีผลไหม (สัตว์ในมือต้องการขั้นตอนนี้ หรือยังรับทิปจากสถานีนี้ได้)
+    /// ไม่มีผลข้างเคียง — HUD เรียกทุกเฟรมเพื่อตัดสินใจโชว์ป้าย "กดค้าง" และหลอดเวลา
+    /// </summary>
+    public bool CanServeByHold(PlayerCarrier carrier)
+    {
+        return UseHold && EvaluateCarriedPet(carrier, out _, out _) != ServeResult.None;
     }
 
     // ---------- ส่วนกลาง ----------
@@ -326,49 +360,70 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     /// <summary>ชื่อสถานีภาษาไทย ใช้แสดงบนหน้าต่างซูม</summary>
     public string DisplayLabel => Label;
 
-    private bool CanTip(Pet pet)
+    /// <summary>ประเมินสัตว์ในมือผู้เล่น (ใช้กับโหมด Instant/Hold ที่ผู้เล่นอุ้มไว้ตลอด) — ไม่มีผลข้างเคียง</summary>
+    private ServeResult EvaluateCarriedPet(PlayerCarrier carrier, out Pet pet, out string reason)
     {
-        return pet.IsComplete && tipAmount > 0;
-    }
+        pet = null;
 
-    /// <summary>
-    /// หาสัตว์ในมือผู้เล่นที่สถานีนี้ให้บริการได้ (ใช้เฉพาะโหมด Instant/Hold ที่ผู้เล่นอุ้มไว้ตลอด)
-    /// ถ้าสัตว์ดูแลครบแล้วจะจ่ายทิปให้ตรงนี้เลยแล้วคืน null
-    /// </summary>
-    private Pet GetServablePet(PlayerCarrier carrier)
-    {
-        if (!carrier.IsCarrying)
+        if (carrier == null || !carrier.IsCarrying)
         {
-            Debug.Log($"[CareStation:{Label}] ต้องอุ้มสัตว์มาด้วยถึงจะใช้สถานีได้");
-            return null;
+            reason = $"ต้องอุ้มสัตว์มาที่{Label}ถึงจะใช้ได้";
+            return ServeResult.None;
         }
 
-        Pet pet = carrier.GetHeld<Pet>();
+        pet = carrier.GetHeld<Pet>();
         if (pet == null)
         {
-            Debug.Log($"[CareStation:{Label}] ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง");
-            return null;
+            reason = "ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง";
+            return ServeResult.None;
         }
 
-        if (pet.NeedsStep(step)) return pet;
+        return EvaluatePet(pet, out reason);
+    }
 
-        // ดูแลครบแล้วแต่ยังพามาเข้าสถานีเพิ่ม = ลูกค้าประทับใจ ให้ทิป (สถานีละครั้ง)
+    /// <summary>สถานีนี้ทำอะไรให้สัตว์ตัวนี้ได้ — ไม่มีผลข้างเคียง ใช้ร่วมกันทุกโหมด</summary>
+    private ServeResult EvaluatePet(Pet pet, out string reason)
+    {
+        reason = null;
+
+        if (pet.NeedsStep(step)) return ServeResult.DoStep;
+
+        // ดูแลครบแล้วแต่ยังพามาเข้าสถานีเพิ่ม = ลูกค้าประทับใจ ให้ทิป (สถานีละครั้งต่อสัตว์ 1 ตัว)
         if (pet.IsComplete)
         {
-            if (pet.TryCollectTip(step, tipAmount))
-            {
-                Debug.Log($"[CareStation:{Label}] บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})");
-            }
-            else
-            {
-                Debug.Log($"[CareStation:{Label}] {pet.DisplayName} รับบริการเสริมที่นี่ไปแล้ว พาไปส่งคืนได้เลย");
-            }
+            if (tipAmount > 0 && !pet.HasTippedAt(step)) return ServeResult.GiveTip;
 
-            return null;
+            reason = tipAmount > 0
+                ? $"{pet.DisplayName} รับบริการเสริมที่{Label}ไปแล้ว — พาไปส่งคืนได้เลย"
+                : $"{pet.DisplayName} ดูแลครบแล้ว — พาไปส่งคืนได้เลย";
+            return ServeResult.None;
         }
 
-        Debug.Log($"[CareStation:{Label}] {pet.DisplayName} ไม่ได้ต้องการบริการนี้ (ยังต้อง: {string.Join(", ", pet.RemainingSteps())})");
-        return null;
+        string remaining = string.Join(", ", pet.RemainingSteps().ConvertAll(CareStepStyle.LabelOf));
+        reason = $"{pet.DisplayName} ไม่ได้ต้องการ{Label} (ยังต้อง: {remaining})";
+        return ServeResult.None;
+    }
+
+    /// <summary>ทำตามผลประเมิน — ทำขั้นตอน / จ่ายทิป / แจ้งเหตุผลที่ใช้ไม่ได้</summary>
+    private void Serve(ServeResult result, Pet pet, string reason)
+    {
+        switch (result)
+        {
+            case ServeResult.DoStep:
+                ApplyStep(pet);
+                break;
+
+            case ServeResult.GiveTip:
+                if (pet.TryCollectTip(step, tipAmount))
+                {
+                    GameLog.Push($"บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})", LogTone.Good);
+                }
+                break;
+
+            default:
+                GameLog.Push(reason, LogTone.Warn);
+                break;
+        }
     }
 
     private void ApplyStep(Pet pet)

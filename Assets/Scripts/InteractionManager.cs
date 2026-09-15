@@ -69,6 +69,12 @@ public class InteractionManager : MonoBehaviour
     /// <summary>ระยะเวลาที่กดค้างอยู่ตอนนี้ (0 ถ้าไม่ได้กดค้างอะไรอยู่) เปิดให้ UI เอาไปทำ progress bar ได้</summary>
     public float CurrentHoldSeconds => activeHoldTarget != null ? Time.time - holdStartTime : 0f;
 
+    /// <summary>สิ่งที่กำลังกดค้างอยู่ (null ถ้าไม่ได้กดค้าง) — HUD ใช้วาดหลอดกดค้างให้ถูกสถานี</summary>
+    public IHoldInteractable ActiveHoldTarget => activeHoldTarget;
+
+    /// <summary>ปุ่มโต้ตอบ ใช้แสดงบนป้ายบอกวิธีกด</summary>
+    public KeyCode InteractKey => interactKey;
+
     private void Awake()
     {
         playerController = GetComponent<PlayerController>();

@@ -3,11 +3,12 @@ using UnityEngine;
 
 /// <summary>
 /// HUD หลักของเกม วาดด้วย OnGUI (ยังไม่ใช้ Canvas)
-/// แสดง 4 อย่าง:
+/// แสดง 5 อย่าง:
 ///   1) แถบสถานะ — เงิน / วัน / ออเดอร์ / ร้องเรียน
 ///   2) เกจความอดทนลอยเหนือหัวลูกค้าที่กำลังรออยู่
 ///   3) ป้ายเหนือหัวสัตว์ บอกว่ายังต้องไปสถานีไหน (แทนการย้อมสีตัวสัตว์แบบเดิม)
-///   4) บันทึกเหตุการณ์ล่าสุดจาก GameLog มุมล่างซ้าย
+///   4) ป้าย "กดค้าง" + หลอดเวลาใต้ตัวผู้เล่น สำหรับสถานีโหมดกดค้าง (เช่นอ่างอาบน้ำ)
+///   5) บันทึกเหตุการณ์ล่าสุดจาก GameLog มุมล่างซ้าย
 ///
 /// หน้าต่างซูมดูสัตว์ในสถานีแยกไปอยู่ที่ StationCloseupOverlay
 /// แยกจาก GameFlowDebugControls ที่ดูแลเฉพาะหน้าเมนูกับหน้าเลือกรางวัล
@@ -27,6 +28,16 @@ public class GameHudOverlay : MonoBehaviour
     [SerializeField] private float chipPadding = 8f;
     [SerializeField] private float chipSpacing = 3f;
 
+    [Header("Hold Bar")]
+    [Tooltip("ตำแหน่งหลอดกดค้างเทียบกับจุดกลางตัวผู้เล่น — ค่าเริ่มต้นอยู่แถวเท้า ไม่ทับป้ายเหนือหัวสัตว์ที่อุ้มอยู่")]
+    [SerializeField] private Vector3 holdBarWorldOffset = new Vector3(0f, -1.1f, 0f);
+
+    [SerializeField] private float holdBarWidth = 130f;
+    [SerializeField] private float holdBarHeight = 12f;
+
+    [Tooltip("หลอดยาวเลยท้ายช่วงสีเขียวไปอีกกี่เท่า ให้เห็นว่าเข็มกำลังจะเลยช่วง")]
+    [SerializeField] private float holdBarOvershoot = 1.35f;
+
     [Header("Event Log")]
     [Tooltip("ข้อความจะจางหายหลังผ่านไปกี่วินาที (0 = ไม่จาง)")]
     [SerializeField] private float logFadeSeconds = 9f;
@@ -34,11 +45,20 @@ public class GameHudOverlay : MonoBehaviour
     private static readonly Color DoneChipColor = new Color(0.45f, 0.47f, 0.46f, 0.9f);
     private static readonly Color ReadyChipColor = new Color(0.45f, 0.85f, 0.55f);
 
+    private static readonly Color HoldZoneColor = new Color(0.35f, 0.85f, 0.45f, 0.55f);
+    private static readonly Color HoldChargingColor = new Color(0.98f, 0.82f, 0.35f);
+    private static readonly Color HoldReadyColor = new Color(0.45f, 0.95f, 0.55f);
+    private static readonly Color HoldFailColor = new Color(0.95f, 0.4f, 0.4f);
+
     private Texture2D pixel;
     private GUIStyle chipStyle;
 
     // ใช้ซ้ำทุกเฟรม ไม่สร้างลิสต์ใหม่ทุกครั้งที่วาด (OnGUI ถูกเรียกหลายรอบต่อเฟรม)
     private readonly List<(string text, Color color)> chipBuffer = new List<(string, Color)>();
+
+    // ผู้เล่น — หาเมื่อต้องใช้ครั้งแรก
+    private InteractionManager playerInteraction;
+    private PlayerCarrier playerCarrier;
 
     private void Awake()
     {
@@ -68,6 +88,12 @@ public class GameHudOverlay : MonoBehaviour
         DrawStatusBar(game);
         DrawCustomerGauges();
         DrawPetNeedTags();
+
+        if (game.Phase == GamePhase.Service)
+        {
+            DrawHoldPrompt();
+        }
+
         DrawEventLog();
     }
 
@@ -155,6 +181,80 @@ public class GameHudOverlay : MonoBehaviour
 
             DrawChipRow(screen.x, Screen.height - screen.y - chipHeight, chipBuffer);
         }
+    }
+
+    /// <summary>
+    /// ป้ายกับหลอดสำหรับสถานีโหมดกดค้าง — โชว์เฉพาะตอนหันไปหาสถานีนั้นและกดแล้วจะมีผลจริง
+    ///   ยังไม่กด:   ป้าย "กด E ค้าง: อาบน้ำ"
+    ///   กดค้างอยู่: หลอดมีโซนสีเขียว = ช่วงที่ต้องปล่อย, เข็มขาววิ่งตามเวลา
+    ///               สีเหลือง = ยังไม่ถึง / เขียว = ปล่อยได้ / แดง = เลยช่วงแล้ว
+    /// </summary>
+    private void DrawHoldPrompt()
+    {
+        if (worldCamera == null) return;
+
+        if (playerInteraction == null)
+        {
+            playerInteraction = FindAnyObjectByType<InteractionManager>();
+            if (playerInteraction == null) return;
+
+            playerCarrier = playerInteraction.GetComponent<PlayerCarrier>();
+        }
+
+        CareStation station = playerInteraction.CurrentTarget as CareStation;
+        if (station == null || !station.UseHold || !station.CanServeByHold(playerCarrier)) return;
+
+        Vector3 screen = worldCamera.WorldToScreenPoint(playerInteraction.transform.position + holdBarWorldOffset);
+        if (screen.z <= 0f) return;
+
+        EnsureStyles();
+
+        float centerX = screen.x;
+        float top = Screen.height - screen.y;
+        string stationLabel = CareStepStyle.LabelOf(station.Step);
+
+        bool holding = ReferenceEquals(playerInteraction.ActiveHoldTarget, station);
+        if (!holding)
+        {
+            chipBuffer.Clear();
+            chipBuffer.Add(($"กด {playerInteraction.InteractKey} ค้าง: {stationLabel}", CareStepStyle.ColorOf(station.Step)));
+            DrawChipRow(centerX, top, chipBuffer);
+            return;
+        }
+
+        float held = playerInteraction.CurrentHoldSeconds;
+        float windowStart = station.HoldWindowStart;
+        float windowEnd = station.HoldWindowEnd;
+        float barSeconds = Mathf.Max(0.01f, windowEnd * holdBarOvershoot);
+
+        bool failed = station.HoldFailed;
+        bool inWindow = !failed && held >= windowStart && held <= windowEnd;
+        Color stateColor = failed ? HoldFailColor : inWindow ? HoldReadyColor : HoldChargingColor;
+
+        Rect bar = new Rect(centerX - holdBarWidth * 0.5f, top + chipHeight + 4f, holdBarWidth, holdBarHeight);
+
+        DrawBox(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), new Color(0f, 0f, 0f, 0.75f));
+        DrawBox(bar, new Color(0.18f, 0.18f, 0.18f, 0.9f));
+
+        // โซนสีเขียว = ช่วงที่ต้องปล่อยปุ่ม
+        DrawBox(new Rect(
+            bar.x + bar.width * (windowStart / barSeconds),
+            bar.y,
+            bar.width * ((windowEnd - windowStart) / barSeconds),
+            bar.height), HoldZoneColor);
+
+        // แถบเวลาที่กดค้างมาแล้ว + เข็มขาวตรงปลาย ให้เห็นชัดว่าอยู่ก่อน/ในหรือเลยโซนเขียว
+        float fill = Mathf.Clamp01(held / barSeconds);
+        DrawBox(new Rect(bar.x, bar.y + bar.height * 0.3f, bar.width * fill, bar.height * 0.4f), stateColor);
+        DrawBox(new Rect(bar.x + bar.width * fill - 1.5f, bar.y - 4f, 3f, bar.height + 8f), Color.white);
+
+        string caption = failed ? "ค้างนานเกิน — ปล่อยแล้วลองใหม่"
+            : inWindow ? "ปล่อยเลย!"
+            : $"ค้างไว้... ({stationLabel})";
+
+        chipBuffer.Clear();
+        chipBuffer.Add((caption, stateColor));
+        DrawChipRow(centerX, top, chipBuffer);
     }
 
     private void DrawChipRow(float centerX, float top, List<(string text, Color color)> chips)
