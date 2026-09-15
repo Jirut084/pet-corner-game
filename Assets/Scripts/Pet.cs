@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// แทนสัตว์เลี้ยง 1 ตัวในโลกเกม (ใน Prototype ใช้ Cube/Capsule แทนโมเดลจริง)
+/// แทนสัตว์เลี้ยง 1 ตัวในโลกเกม
 ///
 /// ใบสั่งงานเป็น "checklist ไม่มีลำดับ" — ต้องผ่านทุกสถานีที่ระบุ แต่ทำอันไหนก่อนก็ได้
 /// ผู้เล่นจึงเลือกเส้นทางเองได้ ซึ่งเป็นจุดที่ทำให้เกิดการตัดสินใจในเกม
 ///
-/// ย้อมสีตัวสัตว์ตามขั้นตอนที่ยังเหลืออันแรก เพื่อให้เทสได้โดยยังไม่มี UI
-/// รองรับทั้ง cube ต้นแบบ และโมเดลจริงที่ mesh อยู่ในลูกหลายชิ้น
-/// (ไม่บังคับ MeshRenderer ที่ root แล้ว เพื่อให้สลับเป็นโมเดลได้)
+/// สิ่งที่สัตว์ต้องการแสดงเป็นป้ายลอยเหนือหัว (วาดโดย GameHudOverlay) แทนการย้อมสีตัวสัตว์
+/// ซึ่งเคยทำให้สีจริงของโมเดลเพี้ยน — Pet แค่บอกตำแหน่งเหนือหัวและขอบเขตของโมเดลให้
 /// </summary>
 public class Pet : MonoBehaviour, ICarryable
 {
@@ -19,19 +18,29 @@ public class Pet : MonoBehaviour, ICarryable
     [SerializeField] private PetSpecies species;
 
     [Header("Visual")]
-    [Tooltip("ย้อมสีตัวสัตว์ตามขั้นตอนถัดไป — ปิดได้เมื่อมีไอคอนบอกขั้นตอนแล้ว " +
-             "(สีจะคูณกับ texture ของโมเดล ทำให้สีจริงของอาร์ตเพี้ยน)")]
-    [SerializeField] private bool tintByNextStep = true;
-
-    [Tooltip("Renderer ที่จะย้อมสี ปล่อยว่างจะเก็บทุกชิ้นข้างใต้ให้อัตโนมัติ")]
+    [Tooltip("Renderer ของโมเดล ใช้หาขอบเขตตัวสัตว์ ปล่อยว่างจะเก็บทุกชิ้นข้างใต้ให้อัตโนมัติ")]
     [SerializeField] private Renderer[] petRenderers;
 
-    private static readonly Color FeedColor = Color.yellow;
-    private static readonly Color BathColor = new Color(0.3f, 0.6f, 1f);
-    private static readonly Color GroomColor = Color.magenta;
-    private static readonly Color PlayColor = Color.green;
-    private static readonly Color RestColor = new Color(1f, 0.6f, 0.2f);
-    private static readonly Color DoneColor = Color.white;
+    [Tooltip("ระยะป้ายเหนือหัวสัตว์ นับจากจุดสูงสุดของโมเดล")]
+    [SerializeField] private float overheadOffset = 0.25f;
+
+    [Header("Face (ใช้กับหน้าต่างซูม)")]
+    [Tooltip("ทิศที่หน้าสัตว์หันไป ในพิกัดของตัวสัตว์ — เลือก prefab แล้วดูลูกศรสีฟ้าใน Scene view " +
+             "ถ้าชี้ไปทางหาง ให้เปลี่ยนเป็น (0, 0, -1)")]
+    [SerializeField] private Vector3 faceLocalDirection = Vector3.forward;
+
+    [Tooltip("จุดกึ่งกลางใบหน้า (ไม่บังคับ) — ปล่อยว่างจะประมาณจากขนาดโมเดลให้เอง")]
+    [SerializeField] private Transform faceAnchor;
+
+    [Tooltip("ความสูงของใบหน้า คิดเป็นสัดส่วนความสูงโมเดล (0 = เท้า, 1 = ยอดหัว)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float faceHeight = 0.65f;
+
+    // ทะเบียนสัตว์ที่อยู่ในฉาก ให้ HUD วนวาดป้ายได้โดยไม่ต้อง Find ทุกเฟรม
+    private static readonly List<Pet> activePets = new List<Pet>();
+
+    /// <summary>สัตว์ทุกตัวที่เปิดใช้งานอยู่ในฉากตอนนี้</summary>
+    public static IReadOnlyList<Pet> All => activePets;
 
     // ขั้นตอนที่ทำสำเร็จแล้ว และสถานีที่จ่ายทิปไปแล้ว (จำกัดสถานีละครั้งต่อสัตว์ 1 ตัว)
     private readonly HashSet<CareStep> completedSteps = new HashSet<CareStep>();
@@ -71,13 +80,117 @@ public class Pet : MonoBehaviour, ICarryable
             ? Mathf.Clamp01(patienceRemaining / species.patienceSeconds)
             : 0f;
 
+    // ตอนอยู่ใน Edit mode (วาด gizmo ใน prefab) Awake ยังไม่ทำงาน จึงดึง renderer สดๆ เมื่อยังว่าง
+    private Renderer[] Renderers =>
+        petRenderers != null && petRenderers.Length > 0 ? petRenderers : GetComponentsInChildren<Renderer>();
+
+    /// <summary>ขอบเขตของโมเดลในโลก ใช้วางป้ายเหนือหัวและเล็งกล้องซูม</summary>
+    public Bounds VisualBounds
+    {
+        get
+        {
+            Bounds bounds = new Bounds(transform.position, Vector3.zero);
+            bool found = false;
+
+            foreach (Renderer target in Renderers)
+            {
+                if (target == null || !target.enabled) continue;
+
+                if (!found)
+                {
+                    bounds = target.bounds;
+                    found = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(target.bounds);
+                }
+            }
+
+            return bounds;
+        }
+    }
+
+    /// <summary>ตำแหน่งเหนือหัวสัตว์ในโลก สำหรับวาดป้ายบอกสิ่งที่ต้องการ</summary>
+    public Vector3 OverheadWorldPosition
+    {
+        get
+        {
+            Bounds bounds = VisualBounds;
+            return new Vector3(bounds.center.x, bounds.max.y + overheadOffset, bounds.center.z);
+        }
+    }
+
+    /// <summary>ทิศที่หน้าสัตว์หันไปในโลก (แนวราบเท่านั้น กล้องซูมจะมองระดับสายตา ไม่ก้มเงยตามโมเดล)</summary>
+    public Vector3 FaceWorldDirection
+    {
+        get
+        {
+            Vector3 direction = transform.TransformDirection(faceLocalDirection);
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude < 0.0001f)
+            {
+                direction = transform.forward;
+                direction.y = 0f;
+            }
+
+            return direction.sqrMagnitude < 0.0001f ? Vector3.forward : direction.normalized;
+        }
+    }
+
+    /// <summary>
+    /// จุดกึ่งกลางใบหน้าในโลก — ใช้ faceAnchor ถ้ามี ไม่งั้นประมาณจากกล่องขอบเขตของโมเดล:
+    /// ค่อนไปทางด้านหน้าตามทิศที่หันหน้า และสูงตามสัดส่วน faceHeight
+    /// </summary>
+    public Vector3 FaceWorldPoint
+    {
+        get
+        {
+            if (faceAnchor != null) return faceAnchor.position;
+
+            Bounds bounds = VisualBounds;
+            Vector3 direction = FaceWorldDirection;
+
+            // ระยะจากกลางตัวไปถึงผิวด้านหน้าตามทิศที่หันหน้า
+            float reach = Mathf.Abs(direction.x) * bounds.extents.x + Mathf.Abs(direction.z) * bounds.extents.z;
+
+            Vector3 point = bounds.center + direction * reach * 0.8f;
+            point.y = bounds.min.y + bounds.size.y * faceHeight;
+            return point;
+        }
+    }
+
+    // เลือก prefab สัตว์แล้วจะเห็นจุดหน้า + ลูกศรสีฟ้าบอกทิศที่หันหน้า ใช้เช็คก่อนกด Play
+    private void OnDrawGizmosSelected()
+    {
+        Vector3 face = FaceWorldPoint;
+        Vector3 direction = FaceWorldDirection;
+        float size = Mathf.Max(0.2f, VisualBounds.size.magnitude * 0.5f);
+
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(face, size * 0.08f);
+        Gizmos.DrawLine(face, face + direction * size);
+        Gizmos.DrawWireSphere(face + direction * size, size * 0.04f);
+    }
+
     private void Awake()
     {
-        // โมเดลจริงมักมี mesh อยู่ที่ลูกและมีหลายชิ้น จึงเก็บทุก Renderer ข้างใต้มาย้อมพร้อมกัน
+        // โมเดลจริงมักมี mesh อยู่ที่ลูกและมีหลายชิ้น จึงเก็บทุก Renderer ข้างใต้มาคิดขอบเขตรวม
         if (petRenderers == null || petRenderers.Length == 0)
         {
             petRenderers = GetComponentsInChildren<Renderer>();
         }
+    }
+
+    private void OnEnable()
+    {
+        if (!activePets.Contains(this)) activePets.Add(this);
+    }
+
+    private void OnDisable()
+    {
+        activePets.Remove(this);
     }
 
     /// <summary>เรียกจาก IntakePoint ทันทีหลัง Spawn เพื่อกำหนดชนิดและรีเซ็ตความคืบหน้า</summary>
@@ -99,8 +212,6 @@ public class Pet : MonoBehaviour, ICarryable
         {
             Debug.LogWarning($"[Pet] {species.speciesName} ไม่มีขั้นตอนใน requiredSteps เลย จะนับว่าเสร็จทันที");
         }
-
-        UpdateVisual();
     }
 
     /// <summary>ยังต้องผ่านสถานีชนิดนี้อยู่หรือไม่ (อยู่ใน checklist และยังไม่ได้ทำ)</summary>
@@ -108,6 +219,12 @@ public class Pet : MonoBehaviour, ICarryable
     {
         if (species == null) return false;
         return species.Requires(step) && !completedSteps.Contains(step);
+    }
+
+    /// <summary>ทำขั้นตอนนี้ไปแล้วหรือยัง ใช้วาดเครื่องหมายถูกบนป้าย</summary>
+    public bool HasCompleted(CareStep step)
+    {
+        return completedSteps.Contains(step);
     }
 
     /// <summary>ขั้นตอนที่ยังเหลือทั้งหมด</summary>
@@ -132,8 +249,6 @@ public class Pet : MonoBehaviour, ICarryable
         if (!NeedsStep(step)) return false;
 
         completedSteps.Add(step);
-        UpdateVisual();
-
         OnStepCompleted?.Invoke(this);
 
         if (IsComplete)
@@ -195,14 +310,15 @@ public class Pet : MonoBehaviour, ICarryable
         OnPatienceExpired?.Invoke(this);
     }
 
-    /// <summary>ข้อความสรุปความคืบหน้าไว้ debug/แสดงบน ticket UI ชั่วคราว</summary>
+    /// <summary>ข้อความสรุปความคืบหน้าไว้แสดงใน log</summary>
     public string GetProgressText()
     {
         if (species == null) return "(ไม่มีข้อมูลสัตว์)";
 
         if (IsComplete) return $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] พร้อมส่งคืน";
 
-        return $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] ยังต้อง: {string.Join(", ", RemainingSteps())}";
+        List<string> labels = RemainingSteps().ConvertAll(CareStepStyle.LabelOf);
+        return $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] ยังต้อง: {string.Join(", ", labels)}";
     }
 
     public void OnPickedUp(PlayerCarrier carrier)
@@ -213,38 +329,5 @@ public class Pet : MonoBehaviour, ICarryable
     public void OnDropped(PlayerCarrier carrier)
     {
         IsCarried = false;
-    }
-
-    /// <summary>เปลี่ยนสีตามขั้นตอนที่เหลืออันแรก เพื่อให้ผู้เล่นรู้คร่าวๆ ว่ายังต้องไปไหน</summary>
-    private void UpdateVisual()
-    {
-        if (!tintByNextStep || petRenderers == null || petRenderers.Length == 0) return;
-
-        Color targetColor = DoneColor;
-        List<CareStep> remaining = RemainingSteps();
-
-        if (remaining.Count > 0)
-        {
-            switch (remaining[0])
-            {
-                case CareStep.Feed: targetColor = FeedColor; break;
-                case CareStep.Bath: targetColor = BathColor; break;
-                case CareStep.Groom: targetColor = GroomColor; break;
-                case CareStep.Play: targetColor = PlayColor; break;
-                case CareStep.Rest: targetColor = RestColor; break;
-            }
-        }
-
-        // ใช้ MaterialPropertyBlock เพื่อเลี่ยงการสร้าง material instance ใหม่ทุกครั้ง (ดีต่อ performance)
-        // URP Lit คูณ _BaseColor กับ texture — ขาว = สีจริงของอาร์ต, สีอื่น = ย้อมทับ
-        var block = new MaterialPropertyBlock();
-        foreach (Renderer target in petRenderers)
-        {
-            if (target == null) continue;
-
-            target.GetPropertyBlock(block);
-            block.SetColor("_BaseColor", targetColor);
-            target.SetPropertyBlock(block);
-        }
     }
 }

@@ -282,7 +282,10 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
     // ---------- ส่วนกลาง ----------
 
-    private string Label => mode == ServiceMode.Holding ? "โต๊ะพัก" : step.ToString();
+    private string Label => mode == ServiceMode.Holding ? "โต๊ะพัก" : CareStepStyle.LabelOf(step);
+
+    /// <summary>ชื่อสถานีภาษาไทย ใช้แสดงบนหน้าต่างซูม</summary>
+    public string DisplayLabel => Label;
 
     private bool CanTip(Pet pet)
     {
@@ -349,6 +352,9 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         // สัตว์ที่เพิ่งถูกอุ้มมาจะติดมุมของผู้เล่นมาด้วย จัดให้ตรงแนวสถานีเสมอ
         pet.transform.rotation = transform.rotation;
+
+        // เปิดหน้าต่างซูมให้เห็นสัตว์ขณะอยู่ในสถานี (โต๊ะพักถูกกรองออกที่ตัว overlay)
+        StationCloseupOverlay.Show(this, pet);
     }
 
     private void ReleaseOccupant()
@@ -361,6 +367,8 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         OccupyingPet = null;
         State = StationState.Idle;
         progress = 0f;
+
+        StationCloseupOverlay.Hide(this);
     }
 
     /// <summary>
@@ -369,6 +377,8 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     /// </summary>
     private void OnDestroy()
     {
+        StationCloseupOverlay.Hide(this);
+
         if (OccupyingPet == null) return;
 
         Pet stranded = OccupyingPet;
@@ -387,23 +397,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
     private void OnDrawGizmos()
     {
-        if (mode == ServiceMode.Holding)
-        {
-            Gizmos.color = Color.gray;
-        }
-        else
-        {
-            switch (step)
-            {
-                case CareStep.Feed: Gizmos.color = Color.yellow; break;
-                case CareStep.Bath: Gizmos.color = new Color(0.3f, 0.6f, 1f); break;
-                case CareStep.Groom: Gizmos.color = Color.magenta; break;
-                case CareStep.Play: Gizmos.color = Color.green; break;
-                case CareStep.Rest: Gizmos.color = new Color(1f, 0.6f, 0.2f); break;
-                default: Gizmos.color = Color.white; break;
-            }
-        }
-
+        Gizmos.color = mode == ServiceMode.Holding ? Color.gray : CareStepStyle.ColorOf(step);
         Gizmos.DrawWireSphere(transform.position, gizmoRadius);
     }
 }

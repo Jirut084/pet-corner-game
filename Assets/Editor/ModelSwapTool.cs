@@ -11,11 +11,15 @@ using UnityEngine;
 /// StationCatalog / LevelInitializer / scene ที่ผูกไว้จึงไม่ต้องผูกใหม่เลย
 ///
 /// สิ่งที่ทำกับแต่ละ prefab:
-///   1) จำระดับฐานของหน้าตาเดิม (เพื่อไม่ให้โมเดลใหม่จมพื้นหรือลอย)
+///   1) หาระดับฐาน — ถ้ายังมี mesh ต้นแบบที่ root ใช้ฐานของมัน ไม่งั้นใช้ค่า floorLocalY
 ///   2) ลบ MeshFilter + MeshRenderer ที่ root และลูก "Visual" ตัวเก่า (รันซ้ำได้)
-///   3) ใส่โมเดลเป็นลูกชื่อ "Visual" แล้วจัดให้อยู่กลางช่อง ฐานแตะพื้นเท่าเดิม
+///   3) ใส่โมเดลเป็นลูกชื่อ "Visual" จัดกึ่งกลางช่อง ฐานแตะระดับที่หาได้ในข้อ 1
 ///   4) ปรับ BoxCollider / CapsuleCollider ที่ root ให้ครอบโมเดลใหม่
 ///   5) ไม่แตะ Transform ของ root เพราะ TilePlacer / LevelInitializer เขียนทับค่านั้นตลอด
+///
+/// ขนาดคำนวณจาก vertex bounds ของ mesh × matrix ของ transform เอง ไม่ใช้ Renderer.bounds
+/// เพราะใน prefab preview scene ค่า Renderer.bounds ยังไม่อัปเดตทันทีหลัง instantiate
+/// โมเดลจาก Blender ที่ node มี scale 100 จึงถูกวัดเล็กไป 100 เท่า (อาการ: โมเดลจมพื้น, collider เหลือ 1 ซม.)
 ///
 /// สำหรับสัตว์: คัดลอก PetProto ออกมาเป็น Pet_[ชนิด].prefab แล้วผูกเข้า PetSpecies.petPrefab ให้อัตโนมัติ
 /// </summary>
@@ -39,6 +43,10 @@ public class ModelSwapTool : EditorWindow
 
     [SerializeField] private bool fitCollider = true;
     [SerializeField] private bool keepFloorContact = true;
+
+    [Tooltip("ระดับฐานของโมเดลในพิกัดของ root ใช้เมื่อไม่มี mesh ต้นแบบเหลือให้วัด (เช่นตอนรันซ้ำ) " +
+             "-0.5 = ฐานของ cube 1 หน่วยที่ pivot อยู่กลางตัว ซึ่งเป็นแบบของ prefab ทุกตัวในโปรเจกต์นี้")]
+    [SerializeField] private float floorLocalY = -0.5f;
 
     [SerializeField] private List<StationSwap> stationSwaps = new List<StationSwap>();
 
@@ -74,7 +82,9 @@ public class ModelSwapTool : EditorWindow
         EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(fitCollider)),
             new GUIContent("ปรับ Collider ให้ครอบโมเดล"));
         EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(keepFloorContact)),
-            new GUIContent("วางฐานโมเดลให้แตะพื้นเท่าของเดิม"));
+            new GUIContent("วางฐานโมเดลให้แตะพื้น"));
+        EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(floorLocalY)),
+            new GUIContent("ระดับฐาน (พิกัด root)"));
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("1) สถานี / เคาน์เตอร์ — แก้ prefab เดิม", EditorStyles.boldLabel);
@@ -112,9 +122,10 @@ public class ModelSwapTool : EditorWindow
     private void AutoFill()
     {
         stationSwaps.Clear();
-        AddStation("Assets/Prefabs/Food.prefab", "feeding bowl");
+        // ใช้เวอร์ชันลงสีก่อน ถ้าไม่มีค่อยถอยไปใช้ไฟล์ชุดแรก
+        AddStation("Assets/Prefabs/Food.prefab", "feed bowl colored 2", "feeding bowl");
         AddStation("Assets/Prefabs/Bath.prefab", "Bath-Colored");
-        AddStation("Assets/Prefabs/IntakePoint.prefab", "Cashier Machine");
+        AddStation("Assets/Prefabs/IntakePoint.prefab", "cashier colored", "Cashier Machine");
 
         basePetPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Object/PetProto.prefab");
 
@@ -127,14 +138,20 @@ public class ModelSwapTool : EditorWindow
         Repaint();
     }
 
-    private void AddStation(string prefabPath, string modelName)
+    private void AddStation(string prefabPath, params string[] modelNames)
     {
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-        GameObject model = FindModel(modelName);
+        GameObject model = null;
+
+        foreach (string candidate in modelNames)
+        {
+            model = FindModel(candidate);
+            if (model != null) break;
+        }
 
         if (prefab == null || model == null)
         {
-            Debug.LogWarning($"[ModelSwap] ข้าม {prefabPath} ← {modelName} (หาไฟล์ไม่เจอ)");
+            Debug.LogWarning($"[ModelSwap] ข้าม {prefabPath} ← {string.Join(" / ", modelNames)} (หาไฟล์ไม่เจอ)");
             return;
         }
 
@@ -264,54 +281,59 @@ public class ModelSwapTool : EditorWindow
         {
             Transform rootTransform = root.transform;
 
-            // การจัดตำแหน่งด้านล่างคิดใน world space แล้วลบตำแหน่ง root ออก
-            // ใช้ได้ถูกต้องเฉพาะ root ที่ไม่หมุนและ scale = 1 (prefab ทุกตัวในโปรเจกต์นี้เป็นแบบนั้น)
-            bool rootIsPlain = rootTransform.rotation == Quaternion.identity && rootTransform.lossyScale == Vector3.one;
-            if (!rootIsPlain)
-            {
-                Debug.LogWarning($"[ModelSwap] {prefabPath}: root มีการหมุนหรือ scale ไม่เท่ากับ 1 จะข้ามการจัดตำแหน่งอัตโนมัติ");
-            }
+            // ทุกค่าด้านล่างคิดใน "พิกัดของ root" จึงใช้ได้แม้ root จะมี scale (เช่น PetProto = 0.5)
+            // และตรงกับพิกัดที่ใช้ตั้ง localPosition ของลูก Visual และ center/size ของ collider พอดี
 
-            // 1) จำระดับฐานของหน้าตาเดิมก่อนลบ
-            bool hasOldBounds = TryGetWorldBounds(root, out Bounds oldBounds);
+            // 1) หาระดับฐาน — ใช้ mesh ต้นแบบที่ root ถ้ายังมี (รันครั้งแรก) ไม่งั้นใช้ค่าที่ตั้งไว้
+            //    ห้ามวัดจาก Visual ตัวเก่า เพราะถ้ารอบก่อนวางผิด จะพาความผิดนั้นมาด้วย
+            float baseY = floorLocalY;
+            MeshRenderer oldRenderer = root.GetComponent<MeshRenderer>();
+            if (oldRenderer != null && TryGetLocalBounds(rootTransform, new Renderer[] { oldRenderer }, out Bounds oldBounds))
+            {
+                baseY = oldBounds.min.y;
+            }
 
             // 2) ลบหน้าตาเดิม (ลูก Visual เก่าจากการรันครั้งก่อน + mesh ที่ root)
             Transform oldVisual = rootTransform.Find(VisualChildName);
             if (oldVisual != null) DestroyImmediate(oldVisual.gameObject);
 
-            MeshRenderer oldRenderer = root.GetComponent<MeshRenderer>();
             if (oldRenderer != null) DestroyImmediate(oldRenderer);
 
             MeshFilter oldFilter = root.GetComponent<MeshFilter>();
             if (oldFilter != null) DestroyImmediate(oldFilter);
 
             // 3) ใส่โมเดลเป็นลูก (เป็น prefab instance ของไฟล์ fbx แก้ Scale Factor ทีหลังจะอัปเดตตาม)
+            // ห้ามรีเซ็ต rotation/scale ของโมเดล — fbx ที่มี mesh ชิ้นเดียว Unity จะยุบ node นั้นขึ้นมาเป็น root
+            // พร้อม scale 100 และหมุน -90 จาก Blender ติดมาด้วย ถ้าตั้งเป็น 1/identity โมเดลจะเล็กลง 100 เท่า
+            // (เหลือ ~1 ซม. จนมองไม่เห็น) และนอนตะแคง — ใช้ค่าจากไฟล์ต้นทางตามเดิม แล้วค่อยเลื่อนตำแหน่งด้านล่าง
             GameObject visual = (GameObject)PrefabUtility.InstantiatePrefab(model, rootTransform);
             visual.name = VisualChildName;
-            visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.identity;
-            visual.transform.localScale = Vector3.one;
 
-            if (rootIsPlain && TryGetWorldBounds(visual, out Bounds newBounds))
+            if (!TryGetLocalBounds(rootTransform, visual.GetComponentsInChildren<Renderer>(), out Bounds modelBounds))
             {
-                Vector3 rootPos = rootTransform.position;
-
+                Debug.LogWarning($"[ModelSwap] {prefabPath}: โมเดลไม่มี mesh ให้วัดขนาด ข้ามการจัดตำแหน่งและ collider");
+            }
+            else
+            {
                 // จัดกึ่งกลางช่องบนแกน X/Z เพราะ pivot ของโมเดลมักไม่ได้อยู่กลางตัว
-                Vector3 offset = new Vector3(rootPos.x - newBounds.center.x, 0f, rootPos.z - newBounds.center.z);
+                Vector3 offset = new Vector3(-modelBounds.center.x, 0f, -modelBounds.center.z);
 
                 // ให้ฐานโมเดลอยู่ระดับเดียวกับฐานของ cube เดิม จะได้ไม่จมพื้นหรือลอย
-                if (keepFloorContact && hasOldBounds)
+                if (keepFloorContact)
                 {
-                    offset.y = oldBounds.min.y - newBounds.min.y;
+                    offset.y = baseY - modelBounds.min.y;
                 }
 
                 visual.transform.localPosition += offset;
-            }
+                modelBounds.center += offset;
 
-            // 4) ปรับ collider ที่ root ให้ครอบโมเดลใหม่ (InteractionManager ใช้ collider หาสถานี)
-            if (fitCollider && rootIsPlain && TryGetWorldBounds(visual, out Bounds fitBounds))
-            {
-                FitRootCollider(root, fitBounds);
+                // 4) ปรับ collider ที่ root ให้ครอบโมเดลใหม่ (InteractionManager ใช้ collider หาสถานี)
+                if (fitCollider)
+                {
+                    FitRootCollider(root, modelBounds);
+                }
+
+                Debug.Log($"[ModelSwap] {prefabPath}: ขนาดโมเดล {FormatSize(modelBounds.size, rootTransform.lossyScale)}");
             }
 
             WarnAboutModelColliders(visual, prefabPath);
@@ -331,25 +353,78 @@ public class ModelSwapTool : EditorWindow
         }
     }
 
-    private static void FitRootCollider(GameObject root, Bounds worldBounds)
+    private static void FitRootCollider(GameObject root, Bounds localBounds)
     {
-        Vector3 localCenter = worldBounds.center - root.transform.position;
-
         BoxCollider box = root.GetComponent<BoxCollider>();
         if (box != null)
         {
-            box.center = localCenter;
-            box.size = worldBounds.size;
+            box.center = localBounds.center;
+            box.size = localBounds.size;
         }
 
         CapsuleCollider capsule = root.GetComponent<CapsuleCollider>();
         if (capsule != null)
         {
             capsule.direction = 1; // แกน Y
-            capsule.center = localCenter;
-            capsule.height = worldBounds.size.y;
-            capsule.radius = Mathf.Max(worldBounds.size.x, worldBounds.size.z) * 0.5f;
+            capsule.center = localBounds.center;
+            capsule.height = localBounds.size.y;
+            capsule.radius = Mathf.Max(localBounds.size.x, localBounds.size.z) * 0.5f;
         }
+    }
+
+    /// <summary>
+    /// วัดขอบเขตของ renderer ทั้งหมดในพิกัดของ space
+    /// คิดจาก vertex bounds ของ mesh × matrix ของ transform ซึ่งอัปเดตทันทีเสมอ
+    /// (ต่างจาก Renderer.bounds ที่อาจยังเป็นค่าเก่าใน prefab preview scene)
+    /// </summary>
+    private static bool TryGetLocalBounds(Transform space, IEnumerable<Renderer> renderers, out Bounds bounds)
+    {
+        bounds = default;
+        bool found = false;
+        Matrix4x4 worldToSpace = space.worldToLocalMatrix;
+
+        foreach (Renderer renderer in renderers)
+        {
+            Mesh mesh = GetMesh(renderer);
+            if (mesh == null) continue;
+
+            Matrix4x4 meshToSpace = worldToSpace * renderer.transform.localToWorldMatrix;
+            Bounds meshBounds = mesh.bounds;
+
+            // แปลงมุมทั้ง 8 ของกล่อง เพราะ node ในไฟล์ fbx มักหมุน (Blender หมุน -90 รอบแกน X)
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 sign = new Vector3((i & 1) == 0 ? -1f : 1f, (i & 2) == 0 ? -1f : 1f, (i & 4) == 0 ? -1f : 1f);
+                Vector3 corner = meshToSpace.MultiplyPoint3x4(meshBounds.center + Vector3.Scale(meshBounds.extents, sign));
+
+                if (!found)
+                {
+                    bounds = new Bounds(corner, Vector3.zero);
+                    found = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(corner);
+                }
+            }
+        }
+
+        return found;
+    }
+
+    private static Mesh GetMesh(Renderer renderer)
+    {
+        if (renderer is SkinnedMeshRenderer skinned) return skinned.sharedMesh;
+
+        MeshFilter filter = renderer.GetComponent<MeshFilter>();
+        return filter != null ? filter.sharedMesh : null;
+    }
+
+    /// <summary>ขนาดจริงในโลก (คูณ scale ของ root แล้ว) เอาไว้ให้ดูใน Console ว่าพอดี 1 ช่องไหม</summary>
+    private static string FormatSize(Vector3 localSize, Vector3 rootScale)
+    {
+        Vector3 world = Vector3.Scale(localSize, rootScale);
+        return $"กว้าง {world.x:F2} × สูง {world.y:F2} × ลึก {world.z:F2} หน่วย";
     }
 
     /// <summary>
@@ -362,27 +437,6 @@ public class ModelSwapTool : EditorWindow
 
         Debug.LogWarning($"[ModelSwap] {prefabPath}: โมเดลมี Collider ติดมาด้วย — " +
                          "ไปที่ไฟล์ .fbx → แท็บ Model → ปิด Generate Colliders → Apply");
-    }
-
-    private static bool TryGetWorldBounds(GameObject target, out Bounds bounds)
-    {
-        bounds = default;
-        bool found = false;
-
-        foreach (Renderer renderer in target.GetComponentsInChildren<Renderer>())
-        {
-            if (!found)
-            {
-                bounds = renderer.bounds;
-                found = true;
-            }
-            else
-            {
-                bounds.Encapsulate(renderer.bounds);
-            }
-        }
-
-        return found;
     }
 
     private static void EnsureFolder(string folder)

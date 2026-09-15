@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Species_Pig
   m_EditorClassIdentifier: Assembly-CSharp::PetSpecies
   speciesName: Pig
+  petPrefab: {fileID: 8284398693088725970, guid: a3f866ff784e7e948940f92b6ff2592d, type: 3}
   requiredSteps: 0000000001000000
   patienceSeconds: 30
   baseFee: 50

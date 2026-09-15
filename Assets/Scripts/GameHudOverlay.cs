@@ -1,14 +1,16 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// HUD หลักของเกม วาดด้วย OnGUI (ยังไม่ใช้ Canvas)
-/// แสดง 3 อย่าง:
+/// แสดง 4 อย่าง:
 ///   1) แถบสถานะ — เงิน / วัน / ออเดอร์ / ร้องเรียน
 ///   2) เกจความอดทนลอยเหนือหัวลูกค้าที่กำลังรออยู่
-///   3) บันทึกเหตุการณ์ล่าสุดจาก GameLog มุมล่างซ้าย
+///   3) ป้ายเหนือหัวสัตว์ บอกว่ายังต้องไปสถานีไหน (แทนการย้อมสีตัวสัตว์แบบเดิม)
+///   4) บันทึกเหตุการณ์ล่าสุดจาก GameLog มุมล่างซ้าย
 ///
+/// หน้าต่างซูมดูสัตว์ในสถานีแยกไปอยู่ที่ StationCloseupOverlay
 /// แยกจาก GameFlowDebugControls ที่ดูแลเฉพาะหน้าเมนูกับหน้าเลือกรางวัล
-/// ทำให้เปลี่ยนไปใช้ Canvas จริงทีหลังได้ทีละส่วนโดยไม่กระทบกัน
 /// </summary>
 public class GameHudOverlay : MonoBehaviour
 {
@@ -20,11 +22,23 @@ public class GameHudOverlay : MonoBehaviour
     [SerializeField] private float gaugeWidth = 74f;
     [SerializeField] private float gaugeHeight = 9f;
 
+    [Header("Pet Need Tags")]
+    [SerializeField] private float chipHeight = 20f;
+    [SerializeField] private float chipPadding = 8f;
+    [SerializeField] private float chipSpacing = 3f;
+
     [Header("Event Log")]
     [Tooltip("ข้อความจะจางหายหลังผ่านไปกี่วินาที (0 = ไม่จาง)")]
     [SerializeField] private float logFadeSeconds = 9f;
 
+    private static readonly Color DoneChipColor = new Color(0.45f, 0.47f, 0.46f, 0.9f);
+    private static readonly Color ReadyChipColor = new Color(0.45f, 0.85f, 0.55f);
+
     private Texture2D pixel;
+    private GUIStyle chipStyle;
+
+    // ใช้ซ้ำทุกเฟรม ไม่สร้างลิสต์ใหม่ทุกครั้งที่วาด (OnGUI ถูกเรียกหลายรอบต่อเฟรม)
+    private readonly List<(string text, Color color)> chipBuffer = new List<(string, Color)>();
 
     private void Awake()
     {
@@ -49,8 +63,11 @@ public class GameHudOverlay : MonoBehaviour
         // หน้าเมนู/หน้าเลือกรางวัลมี UI ของตัวเองอยู่แล้ว ไม่ต้องวาดทับ
         if (game.Phase == GamePhase.MainMenu || game.Phase == GamePhase.DayEnd) return;
 
+        if (worldCamera == null) worldCamera = Camera.main;
+
         DrawStatusBar(game);
         DrawCustomerGauges();
+        DrawPetNeedTags();
         DrawEventLog();
     }
 
@@ -77,10 +94,7 @@ public class GameHudOverlay : MonoBehaviour
     private void DrawCustomerGauges()
     {
         CustomerManager manager = CustomerManager.Instance;
-        if (manager == null) return;
-
-        if (worldCamera == null) worldCamera = Camera.main;
-        if (worldCamera == null) return;
+        if (manager == null || worldCamera == null) return;
 
         foreach (Customer customer in manager.Customers)
         {
@@ -102,6 +116,67 @@ public class GameHudOverlay : MonoBehaviour
 
             string label = customer.AssignedPet != null ? customer.AssignedPet.DisplayName : string.Empty;
             GUI.Label(new Rect(x - 20, y - 19, gaugeWidth + 40, 18), label);
+        }
+    }
+
+    /// <summary>
+    /// ป้ายเหนือหัวสัตว์: 1 ชิ้นต่อ 1 ขั้นตอน — สีตามสถานีถ้ายังไม่ได้ทำ, สีเทามีเครื่องหมายถูกถ้าทำแล้ว
+    /// ทำครบทุกขั้นตอนแล้วเหลือป้ายเขียว "ส่งคืนได้" อันเดียว
+    /// </summary>
+    private void DrawPetNeedTags()
+    {
+        if (worldCamera == null) return;
+
+        EnsureStyles();
+
+        foreach (Pet pet in Pet.All)
+        {
+            if (pet == null || pet.Species == null || pet.Species.requiredSteps == null) continue;
+
+            Vector3 screen = worldCamera.WorldToScreenPoint(pet.OverheadWorldPosition);
+            if (screen.z <= 0f) continue;
+
+            chipBuffer.Clear();
+
+            if (pet.IsComplete)
+            {
+                string tip = pet.CollectedTip > 0 ? $"  +ทิป {pet.CollectedTip}" : string.Empty;
+                chipBuffer.Add(($"✓ ส่งคืนได้{tip}", ReadyChipColor));
+            }
+            else
+            {
+                foreach (CareStep step in pet.Species.requiredSteps)
+                {
+                    bool done = pet.HasCompleted(step);
+                    string text = done ? $"✓ {CareStepStyle.LabelOf(step)}" : CareStepStyle.LabelOf(step);
+                    chipBuffer.Add((text, done ? DoneChipColor : CareStepStyle.ColorOf(step)));
+                }
+            }
+
+            DrawChipRow(screen.x, Screen.height - screen.y - chipHeight, chipBuffer);
+        }
+    }
+
+    private void DrawChipRow(float centerX, float top, List<(string text, Color color)> chips)
+    {
+        float totalWidth = -chipSpacing;
+        foreach (var chip in chips)
+        {
+            totalWidth += chipStyle.CalcSize(new GUIContent(chip.text)).x + chipPadding * 2f + chipSpacing;
+        }
+
+        float x = centerX - totalWidth * 0.5f;
+
+        foreach (var chip in chips)
+        {
+            float width = chipStyle.CalcSize(new GUIContent(chip.text)).x + chipPadding * 2f;
+            Rect rect = new Rect(x, top, width, chipHeight);
+
+            DrawBox(new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, rect.height + 2f), new Color(0f, 0f, 0f, 0.6f));
+            DrawBox(rect, chip.color);
+            GUI.Label(rect, chip.text, chipStyle);
+
+            x += width + chipSpacing;
         }
     }
 
@@ -143,6 +218,20 @@ public class GameHudOverlay : MonoBehaviour
         }
 
         GUI.color = previous;
+    }
+
+    private void EnsureStyles()
+    {
+        if (chipStyle != null) return;
+
+        // GUI.skin ใช้ได้เฉพาะใน OnGUI จึงสร้าง style ตอนวาดครั้งแรก
+        chipStyle = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontStyle = FontStyle.Bold,
+            fontSize = 12
+        };
+        chipStyle.normal.textColor = new Color(0.08f, 0.08f, 0.08f);
     }
 
     private void DrawBox(Rect rect, Color color)
