@@ -48,13 +48,29 @@ public class PlayerController : MonoBehaviour
         HandleGravity();
     }
 
+    private void OnDisable()
+    {
+        // กันเสียงฝีเท้าค้างเวลาตัวละครถูกปิดกะทันหัน (จบวัน / เปิดเมนู)
+        AudioManager.Instance?.SetWalking(false);
+    }
+
     private void HandleMovement()
     {
         float horizontal = Input.GetAxisRaw("Horizontal"); // A/D
         float vertical = Input.GetAxisRaw("Vertical");      // W/S
         Vector3 input = new Vector3(horizontal, 0f, vertical);
 
-        if (input.sqrMagnitude < 0.0001f)
+        // หยุดเกมอยู่ = ไม่รับปุ่มเดิน (timeScale 0 หยุดแค่ระยะทาง ปุ่มยังถูกอ่านตามปกติ)
+        if (GameManager.Instance != null && GameManager.Instance.IsPaused)
+        {
+            input = Vector3.zero;
+        }
+
+        // ส่งสถานะ "กำลังเดินอยู่ไหม" ให้ AudioManager ทุกเฟรม (มันเช็คซ้ำให้เอง ไม่เล่นทับ)
+        bool isMoving = input.sqrMagnitude > 0.0001f;
+        AudioManager.Instance?.SetWalking(isMoving);
+
+        if (!isMoving)
         {
             return; // No input, skip movement/rotation this frame.
         }

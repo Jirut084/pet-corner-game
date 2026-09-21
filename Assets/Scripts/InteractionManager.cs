@@ -87,6 +87,20 @@ public class InteractionManager : MonoBehaviour
 
     private void Update()
     {
+        // หยุดเกมอยู่ = ไม่รับปุ่มโต้ตอบ และตัดการกดค้างที่ค้างอยู่ทิ้ง
+        if (GameManager.Instance != null && GameManager.Instance.IsPaused)
+        {
+            CurrentTarget = null;
+
+            if (activeHoldTarget != null)
+            {
+                activeHoldTarget.OnHoldCancel(gameObject);
+                activeHoldTarget = null;
+            }
+
+            return;
+        }
+
         CurrentTarget = interactionType == InteractionType.Raycast
             ? FindTargetViaRaycast()
             : FindTargetViaOverlap();

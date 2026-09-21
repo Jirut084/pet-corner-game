@@ -52,6 +52,13 @@ public class Customer : MonoBehaviour
     /// <summary>จุดรอที่ลูกค้าคนนี้จองไว้ ให้ CustomerManager เอาไปคืนตอนลูกค้าออก</summary>
     public int SeatIndex { get; private set; } = -1;
 
+    /// <summary>ลำดับในแถวหน้าเคาน์เตอร์ (0 = หัวแถว, -1 = ไม่ได้อยู่ในแถวแล้ว)</summary>
+    public int QueueIndex { get; private set; } = -1;
+
+    /// <summary>ยังต่อแถวรอส่งออเดอร์อยู่ไหม (กำลังเดินมา หรือยืนรออยู่แล้ว)</summary>
+    public bool IsWaitingInLine =>
+        State == CustomerState.WalkingToCounter || State == CustomerState.AtCounter;
+
     public float GaugeHeight => gaugeHeight;
 
     /// <summary>มิเตอร์เหลือกี่ส่วน 0–1 (คืน 1 ถ้ายังไม่ได้รับออเดอร์)</summary>
@@ -87,7 +94,12 @@ public class Customer : MonoBehaviour
                 {
                     State = CustomerState.AtCounter;
                     idleFacing = FacingTowardCounter();
-                    GameLog.Push($"ลูกค้า {RequestedSpecies.speciesName} รออยู่ที่เคาน์เตอร์ — กด E เพื่อรับออเดอร์", LogTone.Warn);
+
+                    // บอกเฉพาะหัวแถว คนที่ยืนต่อท้ายยังกดรับไม่ได้ ไม่ต้องรก log
+                    if (QueueIndex <= 0)
+                    {
+                        GameLog.Push($"ลูกค้า {RequestedSpecies.speciesName} รออยู่ที่เคาน์เตอร์ — กด E เพื่อรับออเดอร์", LogTone.Warn);
+                    }
                 }
                 break;
 
@@ -114,12 +126,32 @@ public class Customer : MonoBehaviour
     }
 
     /// <summary>
+    /// ย้ายไปยืนช่องที่ระบุในแถว — CustomerManager เรียกทุกเฟรมระหว่างเปิดร้าน
+    /// คนข้างหน้าถูกรับออเดอร์ไปเมื่อไหร่ ทุกคนขยับขึ้นมาหนึ่งช่องเอง
+    /// </summary>
+    public void SetQueueSlot(int index, Vector3 position)
+    {
+        if (!IsWaitingInLine) return;
+
+        QueueIndex = index;
+        SetTarget(position);
+
+        // ยืนรออยู่แล้วแต่แถวขยับ ต้องกลับไปเดินต่อ ไม่ใช่ยืนค้างที่เดิม
+        if (State == CustomerState.AtCounter && !ReachedTarget())
+        {
+            State = CustomerState.WalkingToCounter;
+            idleFacing = null;
+        }
+    }
+
+    /// <summary>
     /// ผู้เล่นรับออเดอร์แล้ว — ผูกสัตว์ที่เกิดขึ้นเข้ากับลูกค้าคนนี้ แล้วเดินไปนั่งรอ
     /// </summary>
     public void OnOrderTaken(Pet pet, int seatIndex, Vector3 seatPosition)
     {
         AssignedPet = pet;
         SeatIndex = seatIndex;
+        QueueIndex = -1; // ออกจากแถวแล้ว คนข้างหลังจะขยับขึ้นมาแทนในเฟรมถัดไป
 
         // ลูกค้าเป็นคนเฝ้ามิเตอร์ของตัวเอง เพราะเป็นคนที่ต้องเดินออกเมื่อหมดอดทน
         pet.OnPatienceExpired += HandlePatienceExpired;
@@ -186,6 +218,13 @@ public class Customer : MonoBehaviour
     private void SetTarget(Vector3 position)
     {
         targetPosition = new Vector3(position.x, transform.position.y, position.z);
+    }
+
+    /// <summary>ถึงเป้าหมายปัจจุบันแล้วหรือยัง (วัดเฉพาะแนวราบ)</summary>
+    private bool ReachedTarget()
+    {
+        Vector3 flatTarget = new Vector3(targetPosition.x, transform.position.y, targetPosition.z);
+        return (flatTarget - transform.position).sqrMagnitude <= arriveThreshold * arriveThreshold;
     }
 
     /// <summary>เดินเข้าหาเป้าหมาย คืน true เมื่อถึงแล้ว</summary>

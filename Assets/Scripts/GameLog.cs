@@ -26,7 +26,17 @@ public static class GameLog
         public float time; // เวลาที่บันทึก ใช้ทำ fade
     }
 
-    private const int MaxEntries = 8;
+    /// <summary>
+    /// เก็บข้อความไว้กี่บรรทัด — GameHudOverlay ตั้งค่านี้จาก Inspector ตอนเริ่มเกม
+    /// ตั้งน้อยลงเมื่อไหร่ บรรทัดเก่าที่เกินจะถูกตัดทิ้งทันทีในการ Push ครั้งถัดไป
+    /// </summary>
+    public static int MaxEntries
+    {
+        get => maxEntries;
+        set => maxEntries = Mathf.Max(1, value);
+    }
+
+    private static int maxEntries = 8;
 
     private static readonly List<Entry> entries = new List<Entry>();
 
@@ -40,7 +50,7 @@ public static class GameLog
         Entry entry = new Entry { text = text, tone = tone, time = Time.unscaledTime };
 
         entries.Add(entry);
-        if (entries.Count > MaxEntries)
+        while (entries.Count > maxEntries)
         {
             entries.RemoveAt(0);
         }

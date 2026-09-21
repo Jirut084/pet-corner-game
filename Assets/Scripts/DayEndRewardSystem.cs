@@ -104,6 +104,7 @@ public class DayEndRewardSystem : MonoBehaviour
 
         // รับปุ่มเฉพาะช่วงจบวัน — กันกดเลือกรางวัลที่ค้างอยู่หลังจบ run แล้วเกมเล่นต่อเกินวันสุดท้าย
         if (GameManager.Instance == null || GameManager.Instance.Phase != GamePhase.DayEnd) return;
+        if (GameManager.Instance.IsPaused) return; // เมนู Esc เปิดอยู่ ไม่รับปุ่มเลือกรางวัล
 
         for (int i = 0; i < currentOffer.Count && i < 9; i++)
         {

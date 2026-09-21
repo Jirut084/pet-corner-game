@@ -24,6 +24,7 @@ public class GameHudOverlay : MonoBehaviour
     [SerializeField] private float gaugeHeight = 9f;
 
     [Header("Pet Need Tags")]
+    [Tooltip("ความสูงขั้นต่ำของป้าย — ถ้าตัวอักษรใหญ่กว่านี้ ป้ายจะสูงตามเอง")]
     [SerializeField] private float chipHeight = 20f;
     [SerializeField] private float chipPadding = 8f;
     [SerializeField] private float chipSpacing = 3f;
@@ -42,6 +43,26 @@ public class GameHudOverlay : MonoBehaviour
     [Tooltip("ข้อความจะจางหายหลังผ่านไปกี่วินาที (0 = ไม่จาง)")]
     [SerializeField] private float logFadeSeconds = 9f;
 
+    [Tooltip("ขนาดตัวอักษรของบันทึกเหตุการณ์ (ค่าเดิมของ GUI คือ 12)")]
+    [Range(8, 40)]
+    [SerializeField] private int logFontSize = 18;
+
+    [Tooltip("เก็บข้อความไว้กี่บรรทัด — กล่องจะสูงขึ้นตามจำนวนบรรทัดที่มีจริง")]
+    [Range(1, 20)]
+    [SerializeField] private int logMaxLines = 8;
+
+    [Tooltip("ความกว้างของกล่องบันทึกเหตุการณ์ (พิกเซล) ข้อความยาวเกินจะถูกตัดท้าย")]
+    [SerializeField] private float logWidth = 760f;
+
+    [Header("Status Bar")]
+    [Tooltip("ขนาดตัวอักษรของแถบสถานะด้านบน")]
+    [Range(8, 40)]
+    [SerializeField] private int statusFontSize = 18;
+
+    [Tooltip("ขนาดตัวอักษรบนป้ายเหนือหัวสัตว์และชื่อเหนือเกจลูกค้า")]
+    [Range(8, 32)]
+    [SerializeField] private int tagFontSize = 14;
+
     private static readonly Color DoneChipColor = new Color(0.45f, 0.47f, 0.46f, 0.9f);
     private static readonly Color ReadyChipColor = new Color(0.45f, 0.85f, 0.55f);
 
@@ -52,6 +73,9 @@ public class GameHudOverlay : MonoBehaviour
 
     private Texture2D pixel;
     private GUIStyle chipStyle;
+    private GUIStyle statusStyle;
+    private GUIStyle logStyle;
+    private GUIStyle tagStyle;
 
     // ใช้ซ้ำทุกเฟรม ไม่สร้างลิสต์ใหม่ทุกครั้งที่วาด (OnGUI ถูกเรียกหลายรอบต่อเฟรม)
     private readonly List<(string text, Color color)> chipBuffer = new List<(string, Color)>();
@@ -60,9 +84,22 @@ public class GameHudOverlay : MonoBehaviour
     private InteractionManager playerInteraction;
     private PlayerCarrier playerCarrier;
 
+    // ปรับค่าใน Inspector ระหว่างกด Play แล้วเห็นผลทันที ไม่ต้องหยุดเล่นก่อน
+    private void OnValidate()
+    {
+        chipStyle = null;
+        statusStyle = null;
+        logStyle = null;
+        tagStyle = null;
+
+        GameLog.MaxEntries = logMaxLines;
+    }
+
     private void Awake()
     {
         if (worldCamera == null) worldCamera = Camera.main;
+
+        GameLog.MaxEntries = logMaxLines;
 
         // เท็กซ์เจอร์ 1x1 ไว้ระบายสีสี่เหลี่ยม ใช้ซ้ำทั้งเกม ไม่สร้างใหม่ทุกเฟรม
         pixel = new Texture2D(1, 1);
@@ -85,6 +122,9 @@ public class GameHudOverlay : MonoBehaviour
 
         if (worldCamera == null) worldCamera = Camera.main;
 
+        // ทุกส่วนด้านล่างใช้ style ร่วมกัน สร้างให้ครบก่อนวาดชิ้นแรก
+        EnsureStyles();
+
         DrawStatusBar(game);
         DrawCustomerGauges();
         DrawPetNeedTags();
@@ -95,6 +135,12 @@ public class GameHudOverlay : MonoBehaviour
         }
 
         DrawEventLog();
+    }
+
+    /// <summary>ความสูงของบรรทัดที่พอดีกับขนาดตัวอักษร — เผื่อหัว/หางอักษรไทยด้วย</summary>
+    private static float LineHeightFor(int fontSize)
+    {
+        return fontSize * 1.6f;
     }
 
     private void DrawStatusBar(GameManager game)
@@ -112,8 +158,15 @@ public class GameHudOverlay : MonoBehaviour
             line += "    ช่วงจัดร้าน — G ยก/วางสถานี, Enter เปิดร้าน";
         }
 
-        DrawBox(new Rect(8, 8, 720, 26), new Color(0f, 0f, 0f, 0.55f));
-        GUI.Label(new Rect(16, 12, 710, 22), line);
+        float lineHeight = LineHeightFor(statusFontSize);
+        float boxHeight = lineHeight + 10f;
+
+        // กว้างตามข้อความจริง ไม่ใช่ค่าตายตัว ไม่งั้นพอขยายตัวอักษรแล้วข้อความจะล้นกล่อง
+        float textWidth = statusStyle.CalcSize(new GUIContent(line)).x;
+        float boxWidth = textWidth + 22f;
+
+        DrawBox(new Rect(8, 8, boxWidth, boxHeight), new Color(0f, 0f, 0f, 0.55f));
+        GUI.Label(new Rect(16, 8 + 5f, textWidth + 4f, lineHeight), line, statusStyle);
     }
 
     /// <summary>วาดเกจความอดทนลอยเหนือหัวลูกค้าที่นั่งรออยู่</summary>
@@ -141,7 +194,8 @@ public class GameHudOverlay : MonoBehaviour
             DrawBox(new Rect(x, y, gaugeWidth * fill, gaugeHeight), PatienceColor(fill));
 
             string label = customer.AssignedPet != null ? customer.AssignedPet.DisplayName : string.Empty;
-            GUI.Label(new Rect(x - 20, y - 19, gaugeWidth + 40, 18), label);
+            float labelHeight = LineHeightFor(tagFontSize);
+            GUI.Label(new Rect(x - 20, y - labelHeight - 1f, gaugeWidth + 40, labelHeight), label, tagStyle);
         }
     }
 
@@ -152,8 +206,6 @@ public class GameHudOverlay : MonoBehaviour
     private void DrawPetNeedTags()
     {
         if (worldCamera == null) return;
-
-        EnsureStyles();
 
         foreach (Pet pet in Pet.All)
         {
@@ -179,7 +231,7 @@ public class GameHudOverlay : MonoBehaviour
                 }
             }
 
-            DrawChipRow(screen.x, Screen.height - screen.y - chipHeight, chipBuffer);
+            DrawChipRow(screen.x, Screen.height - screen.y - ChipHeight, chipBuffer);
         }
     }
 
@@ -231,7 +283,7 @@ public class GameHudOverlay : MonoBehaviour
         bool inWindow = !failed && held >= windowStart && held <= windowEnd;
         Color stateColor = failed ? HoldFailColor : inWindow ? HoldReadyColor : HoldChargingColor;
 
-        Rect bar = new Rect(centerX - holdBarWidth * 0.5f, top + chipHeight + 4f, holdBarWidth, holdBarHeight);
+        Rect bar = new Rect(centerX - holdBarWidth * 0.5f, top + ChipHeight + 4f, holdBarWidth, holdBarHeight);
 
         DrawBox(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), new Color(0f, 0f, 0f, 0.75f));
         DrawBox(bar, new Color(0.18f, 0.18f, 0.18f, 0.9f));
@@ -257,6 +309,9 @@ public class GameHudOverlay : MonoBehaviour
         DrawChipRow(centerX, top, chipBuffer);
     }
 
+    /// <summary>ความสูงป้ายที่ใช้จริง — ขยายตามขนาดตัวอักษรเพื่อไม่ให้ข้อความโดนตัดบน/ล่าง</summary>
+    private float ChipHeight => Mathf.Max(chipHeight, LineHeightFor(tagFontSize));
+
     private void DrawChipRow(float centerX, float top, List<(string text, Color color)> chips)
     {
         float totalWidth = -chipSpacing;
@@ -270,7 +325,7 @@ public class GameHudOverlay : MonoBehaviour
         foreach (var chip in chips)
         {
             float width = chipStyle.CalcSize(new GUIContent(chip.text)).x + chipPadding * 2f;
-            Rect rect = new Rect(x, top, width, chipHeight);
+            Rect rect = new Rect(x, top, width, ChipHeight);
 
             DrawBox(new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, rect.height + 2f), new Color(0f, 0f, 0f, 0.6f));
             DrawBox(rect, chip.color);
@@ -292,11 +347,11 @@ public class GameHudOverlay : MonoBehaviour
         var entries = GameLog.Entries;
         if (entries.Count == 0) return;
 
-        const float lineHeight = 20f;
+        float lineHeight = LineHeightFor(logFontSize);
         float boxHeight = entries.Count * lineHeight + 10f;
         float top = Screen.height - boxHeight - 10f;
 
-        DrawBox(new Rect(8, top, 640, boxHeight), new Color(0f, 0f, 0f, 0.45f));
+        DrawBox(new Rect(8, top, logWidth, boxHeight), new Color(0f, 0f, 0f, 0.45f));
 
         Color previous = GUI.color;
 
@@ -314,7 +369,7 @@ public class GameHudOverlay : MonoBehaviour
 
             Color tone = GameLog.ColorFor(entry.tone);
             GUI.color = new Color(tone.r, tone.g, tone.b, alpha);
-            GUI.Label(new Rect(16, top + 5 + i * lineHeight, 626, lineHeight), entry.text);
+            GUI.Label(new Rect(16, top + 5f + i * lineHeight, logWidth - 14f, lineHeight), entry.text, logStyle);
         }
 
         GUI.color = previous;
@@ -329,9 +384,35 @@ public class GameHudOverlay : MonoBehaviour
         {
             alignment = TextAnchor.MiddleCenter,
             fontStyle = FontStyle.Bold,
-            fontSize = 12
+            fontSize = tagFontSize
         };
         chipStyle.normal.textColor = new Color(0.08f, 0.08f, 0.08f);
+
+        // สีของข้อความล็อก/ป้ายมาจาก GUI.color ตอนวาด style จึงต้องเป็นสีขาวล้วนไว้ก่อน
+        statusStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = statusFontSize,
+            alignment = TextAnchor.MiddleLeft,
+            wordWrap = false
+        };
+        statusStyle.normal.textColor = Color.white;
+
+        logStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = logFontSize,
+            alignment = TextAnchor.MiddleLeft,
+            wordWrap = false,
+            clipping = TextClipping.Clip
+        };
+        logStyle.normal.textColor = Color.white;
+
+        tagStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = tagFontSize,
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = false
+        };
+        tagStyle.normal.textColor = Color.white;
     }
 
     private void DrawBox(Rect rect, Color color)

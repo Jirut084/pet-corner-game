@@ -30,6 +30,13 @@ public class CustomerManager : MonoBehaviour
     [Tooltip("จุดนั่งรอ — ควรมีอย่างน้อยเท่ากับจำนวนออเดอร์พร้อมกันสูงสุด")]
     [SerializeField] private Transform[] waitSeats;
 
+    [Header("Counter Queue")]
+    [Tooltip("ระยะห่างระหว่างลูกค้าที่ต่อแถวหน้าเคาน์เตอร์ (เมตร) — เลือก CustomerManager แล้วดูจุดสีส้มใน Scene view")]
+    [SerializeField] private float queueSpacing = 1.3f;
+
+    [Tooltip("ทิศที่แถวทอดยาวออกไป ปล่อยเป็น (0,0,0) จะคิดจากแนวเคาน์เตอร์→จุดยืนลูกค้าให้เอง")]
+    [SerializeField] private Vector3 queueDirection = Vector3.zero;
+
     [Header("Spawn Pacing")]
     [Tooltip("ระยะห่างระหว่างลูกค้าในวันแรก (วินาที)")]
     [SerializeField] private float spawnGapFirstDay = 6f;
@@ -47,6 +54,10 @@ public class CustomerManager : MonoBehaviour
     public Vector3 ExitPosition => doorPoint != null ? doorPoint.position : transform.position;
 
     private readonly List<Customer> customers = new List<Customer>();
+
+    // แถวหน้าเคาน์เตอร์ เรียงตามลำดับมาก่อน-หลัง index 0 คือคนที่ผู้เล่นกดรับได้
+    private readonly List<Customer> counterQueue = new List<Customer>();
+
     private readonly Dictionary<int, Customer> seatOwners = new Dictionary<int, Customer>();
     private float spawnTimer;
 
@@ -101,6 +112,7 @@ public class CustomerManager : MonoBehaviour
         if (game == null || game.Phase != GamePhase.Service) return;
 
         customers.RemoveAll(c => c == null);
+        RefreshCounterQueue();
 
         if (!ShouldSpawnMore(game)) return;
 
@@ -218,6 +230,55 @@ public class CustomerManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// จัดตำแหน่งทุกคนในแถวใหม่ — คนที่ถูกรับออเดอร์ไปแล้วจะหลุดออกจากแถวเอง
+    /// (เช็คจาก State ไม่ต้องให้ใครมาสั่งถอดออก) แล้วคนข้างหลังขยับขึ้นมาแทน
+    /// </summary>
+    private void RefreshCounterQueue()
+    {
+        counterQueue.RemoveAll(c => c == null || !c.IsWaitingInLine);
+
+        if (counterQueue.Count == 0) return;
+        if (!TryGetCounterPosition(out Vector3 stand)) return;
+
+        Vector3 direction = QueueDirection();
+
+        for (int i = 0; i < counterQueue.Count; i++)
+        {
+            counterQueue[i].SetQueueSlot(i, stand + direction * (i * queueSpacing));
+        }
+    }
+
+    /// <summary>
+    /// ทิศที่แถวทอดยาวออกจากเคาน์เตอร์ — ใช้แนวเดียวกับที่จุดยืนลูกค้าเยื้องออกมาจาก IntakePoint
+    /// ย้าย/หมุนเคาน์เตอร์เมื่อไหร่ แถวก็หันตามเอง ไม่ต้องมาตั้งค่าใหม่
+    /// </summary>
+    private Vector3 QueueDirection()
+    {
+        if (queueDirection.sqrMagnitude > 0.0001f)
+        {
+            Vector3 manual = queueDirection;
+            manual.y = 0f;
+            if (manual.sqrMagnitude > 0.0001f) return manual.normalized;
+        }
+
+        if (intake != null)
+        {
+            Vector3 away = intake.CustomerStandPosition - intake.transform.position;
+            away.y = 0f;
+            if (away.sqrMagnitude > 0.0001f) return away.normalized;
+        }
+
+        return Vector3.forward;
+    }
+
+    /// <summary>ตำแหน่งยืนของช่องที่ n ในแถว (0 = ติดเคาน์เตอร์)</summary>
+    private Vector3 QueueSlotPosition(int index)
+    {
+        TryGetCounterPosition(out Vector3 stand);
+        return stand + QueueDirection() * (index * queueSpacing);
+    }
+
     private void SpawnCustomer()
     {
         if (!TryGetCounterPosition(out Vector3 counterPosition)) return;
@@ -240,7 +301,15 @@ public class CustomerManager : MonoBehaviour
         }
 
         obj.name = $"Customer ({species.speciesName})";
-        customer.Initialize(this, species, counterPosition);
+
+        // ต่อท้ายแถวทันที ไม่งั้นทุกคนจะเดินไปจุดเดียวกันแล้วยืนซ้อนกันหน้าเคาน์เตอร์
+        int slot = counterQueue.Count;
+        Vector3 slotPosition = QueueSlotPosition(slot);
+
+        customer.Initialize(this, species, slotPosition);
+        customer.SetQueueSlot(slot, slotPosition);
+
+        counterQueue.Add(customer);
         customers.Add(customer);
     }
 
@@ -252,12 +321,17 @@ public class CustomerManager : MonoBehaviour
         return progress.UnlockedSpecies[Random.Range(0, progress.UnlockedSpecies.Count)];
     }
 
-    /// <summary>ลูกค้าที่ยืนรออยู่ที่เคาน์เตอร์ตอนนี้ (null ถ้ายังไม่มีใครถึง)</summary>
+    /// <summary>
+    /// ลูกค้าที่ผู้เล่นกดรับออเดอร์ได้ตอนนี้ — หัวแถวที่ยืนถึงที่แล้วเท่านั้น
+    /// หัวแถวยังเดินอยู่ก็คืน null ไม่ข้ามไปรับคนที่ต่อท้าย (ไม่งั้นแซงคิวกันได้)
+    /// </summary>
     public Customer CustomerAtCounter()
     {
-        foreach (Customer c in customers)
+        foreach (Customer c in counterQueue)
         {
-            if (c != null && c.State == Customer.CustomerState.AtCounter) return c;
+            if (c == null || !c.IsWaitingInLine) continue;
+
+            return c.State == Customer.CustomerState.AtCounter ? c : null;
         }
 
         return null;
@@ -329,7 +403,28 @@ public class CustomerManager : MonoBehaviour
         }
 
         customers.Clear();
+        counterQueue.Clear();
         seatOwners.Clear();
+    }
+
+    /// <summary>จุดส้มเรียงกัน = ช่องยืนของแต่ละคนในแถว ใช้เช็คระยะห่างกับทิศแถวก่อนกด Play</summary>
+    private void DrawQueueGizmo()
+    {
+        if (!TryGetCounterPosition(out Vector3 stand)) return;
+
+        Vector3 direction = QueueDirection();
+        Gizmos.color = new Color(1f, 0.6f, 0.15f);
+
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 slot = stand + direction * (i * queueSpacing);
+            Gizmos.DrawWireSphere(slot, 0.3f);
+
+            if (i > 0)
+            {
+                Gizmos.DrawLine(slot - direction * queueSpacing, slot);
+            }
+        }
     }
 
     private void OnDrawGizmos()
@@ -346,6 +441,8 @@ public class CustomerManager : MonoBehaviour
             Gizmos.color = Color.gray;
             Gizmos.DrawWireSphere(counterPoint.position, 0.4f);
         }
+
+        DrawQueueGizmo();
 
         if (waitSeats == null) return;
 

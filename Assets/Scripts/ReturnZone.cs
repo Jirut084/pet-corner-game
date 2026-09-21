@@ -87,6 +87,7 @@ public class ReturnZone : MonoBehaviour, IInteractable
 
         TotalWallet += earned;
         OnWalletChanged?.Invoke(TotalWallet);
+        AudioManager.Instance?.PlayGetMoney();
 
         pet.StopPatience();
 

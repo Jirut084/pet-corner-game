@@ -28,15 +28,32 @@ public class TilePlacer : MonoBehaviour
     private PlayerController playerController;
     private PlayerCarrier carrier;
 
+    /// <summary>กริดที่ใช้อยู่ — ระบบพรีวิวอ่านไปคำนวณตำแหน่งช่อง</summary>
+    public TileGrid Grid => grid;
+
+    /// <summary>ช่องที่ผู้เล่นเล็งอยู่ตอนนี้ คิดสดทุกครั้งที่เรียก</summary>
+    public Vector2Int TargetCell => GetTargetCell();
+
+    /// <summary>ปุ่มยก/วาง ใช้แสดงบนป้ายบอกวิธีกด</summary>
+    public KeyCode GrabKey => grabKey;
+
     private void Awake()
     {
         playerController = GetComponent<PlayerController>();
         carrier = GetComponent<PlayerCarrier>();
+
+        // ภาพตัวอย่างตำแหน่งวาง ใส่ให้เองจะได้ไม่ต้องเพิ่ม component ในฉาก
+        // อยากปรับสี/ขนาด ให้ Add Component "PlacementPreview" ลงตัวผู้เล่นเองแล้วตั้งใน Inspector
+        if (GetComponent<PlacementPreview>() == null)
+        {
+            gameObject.AddComponent<PlacementPreview>();
+        }
     }
 
     private void Update()
     {
         if (grid == null) return;
+        if (GameManager.Instance != null && GameManager.Instance.IsPaused) return;
 
         // จัดสถานีได้เฉพาะช่วง Setup — เปิดร้านแล้วห้ามย้ายอะไรทั้งนั้น
         if (GameManager.Instance != null && !GameManager.Instance.CanArrangeStations)

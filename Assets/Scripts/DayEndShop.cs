@@ -204,6 +204,7 @@ public class DayEndShop : MonoBehaviour
         }
 
         if (!allowKeyboard) return;
+        if (game != null && game.IsPaused) return; // เมนู Esc เปิดอยู่ ไม่รับปุ่มซื้อของ
 
         // เฟรมเดียวกับที่เปิดร้าน ปุ่มเลขที่เพิ่งกดเลือกรางวัลฟรียังนับเป็น GetKeyDown อยู่
         // ถ้าไม่ข้ามจะซื้อสินค้าชิ้นแรกไปทันทีโดยผู้เล่นไม่ได้ตั้งใจ

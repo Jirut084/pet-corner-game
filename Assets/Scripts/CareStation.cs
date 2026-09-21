@@ -57,6 +57,14 @@ public class CareStation : MonoBehaviour, IHoldInteractable
     [Tooltip("เงินทิปที่ได้เมื่อพาสัตว์ที่ดูแลครบแล้วมาเข้าสถานีที่ไม่ได้ต้องการ (สถานีละครั้งต่อสัตว์ 1 ตัว)")]
     [SerializeField] private int tipAmount = 4;
 
+    [Header("Audio")]
+    [Tooltip("0 = ได้ยินเท่ากันทั้งแผนที่ (2D), 1 = ดังตามระยะห่างจากสถานี (3D)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float soundSpatialBlend = 0f;
+
+    [Tooltip("ความเร็วของคลิปที่เล่นวนระหว่างสถานีทำงาน — ตั้งเกิน 1 ให้ฟังกระฉับกระเฉงขึ้น")]
+    [SerializeField] private float loopPitch = 1.35f;
+
     [Header("Visual")]
     [Tooltip("จุดที่เท้าสัตว์จะแตะเมื่อวางบนสถานี (เช่นพื้นในกรง) — ปล่อยว่างจะวางบนผิวบนสุดของโมเดลสถานีให้เอง")]
     [SerializeField] private Transform petAnchor;
@@ -68,6 +76,9 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
     // กดค้างรอบนี้มีสัตว์ให้ดูแล/ให้ทิปจริงไหม — ถ้าไม่มี ไม่ต้องแจ้งปล่อยเร็ว/ค้างนานเกินให้รก HUD
     private bool holdHasTarget;
+
+    // ลำโพงประจำสถานี ตั้งให้เองตอน Awake
+    private AudioSource stationAudioSource;
 
     private float progress; // 0–1 สำหรับโหมด DropOff
 
@@ -140,6 +151,18 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         {
             gameObject.AddComponent<CareStationEffects>();
         }
+
+        // ลำโพงประจำสถานี ใช้เล่นเสียงวนระหว่างทำงาน (คนละตัวกับ SFX กลางของ AudioManager)
+        // ใส่ให้เองทุกสถานี จะได้ไม่ต้องไล่เพิ่ม AudioSource ทีละ prefab
+        stationAudioSource = GetComponent<AudioSource>();
+        if (stationAudioSource == null)
+        {
+            stationAudioSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        stationAudioSource.playOnAwake = false;
+        stationAudioSource.loop = true;
+        stationAudioSource.spatialBlend = soundSpatialBlend;
     }
 
     private void Update()
@@ -150,6 +173,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         {
             State = StationState.Idle;
             progress = 0f;
+            StopStationLoop();
         }
 
         if (State != StationState.Working) return;
@@ -262,24 +286,29 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         progress = 0f;
         State = StationState.Working;
+        StartStationSound();
         GameLog.Push($"วาง {held.DisplayName} ไว้ที่ {Label} (~{processSeconds / InteractSpeed:F1} วิ) ไปทำอย่างอื่นก่อนได้");
     }
 
     /// <summary>สถานี DropOff ทำงานเสร็จ — เช็คขั้นตอนหรือจ่ายทิป</summary>
     private void FinishDropOffWork()
     {
+        StopStationLoop();
+
         Pet pet = OccupyingPet;
         if (pet == null) return;
 
         if (pet.TryComplete(step))
         {
             OnStepApplied(pet);
+            AudioManager.Instance?.PlayTaskDone();
             GameLog.Push($"{Label} เสร็จแล้ว → {pet.GetProgressText()}", LogTone.Good);
             return;
         }
 
         if (pet.TryCollectTip(step, tipAmount))
         {
+            AudioManager.Instance?.PlayTaskDone();
             GameLog.Push($"บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})", LogTone.Good);
         }
     }
@@ -298,7 +327,11 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         if (!holdHasTarget)
         {
             GameLog.Push(reason, LogTone.Warn);
+            return;
         }
+
+        // เริ่มเสียงตั้งแต่กดลง ให้รู้ว่ากำลังทำอยู่ — เสียงไม่เกี่ยวกับการจ่ายทิป จ่ายตอนปล่อยเหมือนเดิม
+        StartStationSound();
     }
 
     public void OnHoldTick(GameObject interactor, float heldSeconds)
@@ -308,11 +341,14 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         currentHoldFailed = true;
         OnHoldOvertime();
+        StopStationLoop();
         GameLog.Push($"{Label}: ค้างนานเกิน — ปล่อยปุ่มแล้วลองใหม่ (ปล่อยตอนเข็มอยู่ในช่วงสีเขียว)", LogTone.Warn);
     }
 
     public void OnHoldRelease(GameObject interactor, float heldSeconds)
     {
+        StopStationLoop();
+
         bool hadTarget = holdHasTarget;
         bool failed = currentHoldFailed;
 
@@ -335,6 +371,8 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
     public void OnHoldCancel(GameObject interactor)
     {
+        StopStationLoop();
+
         if (holdHasTarget && !currentHoldFailed)
         {
             GameLog.Push($"{Label}: เดินออกห่างระหว่างกดค้าง — ยกเลิก ลองใหม่ได้เลย", LogTone.Warn);
@@ -416,6 +454,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
             case ServeResult.GiveTip:
                 if (pet.TryCollectTip(step, tipAmount))
                 {
+                    AudioManager.Instance?.PlayTaskDone();
                     GameLog.Push($"บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})", LogTone.Good);
                 }
                 break;
@@ -435,6 +474,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         }
 
         OnStepApplied(pet);
+        AudioManager.Instance?.PlayTaskDone();
         GameLog.Push($"{Label} สำเร็จ → {pet.GetProgressText()}", LogTone.Good);
     }
 
@@ -468,6 +508,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         State = StationState.Idle;
         progress = 0f;
 
+        StopStationLoop();
         StationCloseupOverlay.Hide(this);
     }
 
@@ -487,6 +528,50 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         stranded.transform.SetParent(null);
         stranded.transform.position = transform.position;
         Debug.LogWarning($"[CareStation:{Label}] ถูกทำลายขณะมี {stranded.DisplayName} อยู่ — วางสัตว์คืนลงพื้น");
+    }
+
+    // ---------- เสียงประจำสถานี ----------
+
+    /// <summary>
+    /// เริ่มเสียงตอนสถานีลงมือทำงาน
+    /// อ่างอาบน้ำยิงคลิปครั้งเดียว (กดค้างแป๊บเดียว เสียงวนจะรัวจนฟังไม่รู้เรื่อง)
+    /// สถานีที่เหลือเล่นวนจนกว่าจะเสร็จหรือยกเลิก
+    /// </summary>
+    private void StartStationSound()
+    {
+        AudioManager audio = AudioManager.Instance;
+        if (audio == null) return;
+
+        if (step == CareStep.Bath)
+        {
+            audio.PlayShower();
+            return;
+        }
+
+        AudioClip loopClip = null;
+        switch (step)
+        {
+            case CareStep.Feed: loopClip = audio.EatClip; break;
+            case CareStep.Play: loopClip = audio.PlayToyClip; break;
+            case CareStep.Groom: loopClip = audio.CuttingHairClip; break;
+            case CareStep.Rest: loopClip = audio.SleepClip; break;
+        }
+
+        if (loopClip == null || stationAudioSource == null) return;
+
+        // บัฟ "ใช้สถานีเร็วขึ้น" ย่นเวลาทำงาน เร่ง pitch ตามไปด้วยเสียงจะได้จบพร้อมงาน
+        stationAudioSource.pitch = loopPitch * InteractSpeed;
+        stationAudioSource.clip = loopClip;
+        stationAudioSource.Play();
+    }
+
+    /// <summary>หยุดเสียงวน เรียกได้เสมอ ไม่ต้องเช็คก่อนว่ากำลังเล่นอยู่ไหม</summary>
+    private void StopStationLoop()
+    {
+        if (stationAudioSource == null || !stationAudioSource.isPlaying) return;
+
+        stationAudioSource.Stop();
+        stationAudioSource.pitch = 1f;
     }
 
     /// <summary>hook ให้สถานีเฉพาะทาง override เพิ่มเอฟเฟกต์/เสียงตอนทำสำเร็จ</summary>

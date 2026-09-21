@@ -84,6 +84,8 @@ public class PlayerCarrier : MonoBehaviour
         target.transform.localRotation = Quaternion.identity;
 
         target.GetComponent<ICarryable>()?.OnPickedUp(this);
+
+        PlayCarryAudio(target);
         return true;
     }
 
@@ -116,6 +118,8 @@ public class PlayerCarrier : MonoBehaviour
 
         released.GetComponent<ICarryable>()?.OnDropped(this);
 
+        PlayCarryAudio(released);
+
         ClearHeldState();
         return released;
     }
@@ -140,6 +144,24 @@ public class PlayerCarrier : MonoBehaviour
     public T GetHeld<T>() where T : Component
     {
         return HeldObject != null ? HeldObject.GetComponent<T>() : null;
+    }
+
+    /// <summary>
+    /// เสียงตอนหยิบ/วาง แยกเป็นสัตว์เลี้ยงกับเฟอร์นิเจอร์
+    /// ใช้ GetComponentInChildren เพราะบาง prefab วาง script Pet ไว้ในโมเดลลูก ไม่ได้อยู่ที่ root
+    /// </summary>
+    private void PlayCarryAudio(GameObject target)
+    {
+        if (AudioManager.Instance == null || target == null) return;
+
+        if (target.GetComponentInChildren<Pet>() != null)
+        {
+            AudioManager.Instance.PlayPickupPet();
+        }
+        else
+        {
+            AudioManager.Instance.PlayPickupFurniture();
+        }
     }
 
     private void ClearHeldState()

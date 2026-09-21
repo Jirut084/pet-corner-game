@@ -115,6 +115,12 @@ public class LevelInitializer : MonoBehaviour
 
     private void HandlePhaseChanged(GamePhase phase)
     {
+        if (phase == GamePhase.MainMenu)
+        {
+            ClearShopForNewRun();
+            return;
+        }
+
         if (phase != GamePhase.Setup) return;
 
         // ตาข่ายกันพลาด: ถ้ามีอะไรหลุดจาก event ไป ให้ตามวางตอนเข้าช่วงจัดร้าน
@@ -124,6 +130,39 @@ public class LevelInitializer : MonoBehaviour
         {
             SpawnRandomParcel();
         }
+    }
+
+    /// <summary>
+    /// ล้างร้านให้ว่างก่อนเริ่มรันใหม่ — ลบทุกอย่างที่ผู้เล่นยกย้ายได้ (สถานี + กล่องอุปกรณ์)
+    /// จุดรับ/จุดคืนตั้ง removable = false ไว้จึงรอด ไม่ต้องวางใหม่
+    ///
+    /// ต้องล้าง placedPrefabs ด้วย ไม่งั้นรันถัดไปจะคิดว่าวางสถานีชนิดนั้นไปแล้วและไม่วางให้อีก
+    /// </summary>
+    private void ClearShopForNewRun()
+    {
+        int removed = 0;
+
+        foreach (GridOccupant occupant in FindObjectsByType<GridOccupant>())
+        {
+            if (occupant == null || !occupant.Removable) continue;
+
+            occupant.Unregister();
+            Destroy(occupant.gameObject);
+            removed++;
+        }
+
+        // กล่องอุปกรณ์ที่ยังไม่ได้แกะไม่มี GridOccupant จึงต้องเก็บแยก
+        foreach (EquipmentParcel parcel in FindObjectsByType<EquipmentParcel>())
+        {
+            if (parcel == null) continue;
+
+            Destroy(parcel.gameObject);
+            removed++;
+        }
+
+        placedPrefabs.Clear();
+
+        Debug.Log($"[LevelInitializer] ล้างร้านก่อนเริ่มรันใหม่ — ลบของออก {removed} ชิ้น");
     }
 
     private void SpawnFixedCounters()
