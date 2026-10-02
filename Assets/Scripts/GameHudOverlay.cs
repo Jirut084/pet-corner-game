@@ -23,6 +23,9 @@ public class GameHudOverlay : MonoBehaviour
     [SerializeField] private float gaugeWidth = 74f;
     [SerializeField] private float gaugeHeight = 9f;
 
+    [Tooltip("สีขอบเกจรอสั่ง (ลูกค้ายืนรอหน้าเคาน์เตอร์) — ต่างจากขอบดำของเกจหลังรับออเดอร์ ผู้เล่นจะแยกออกว่าเป็นเกจไหน")]
+    [SerializeField] private Color counterGaugeFrameColor = new Color(0.35f, 0.65f, 1f, 0.95f);
+
     [Header("Pet Need Tags")]
     [Tooltip("ความสูงขั้นต่ำของป้าย — ถ้าตัวอักษรใหญ่กว่านี้ ป้ายจะสูงตามเอง")]
     [SerializeField] private float chipHeight = 20f;
@@ -177,7 +180,12 @@ public class GameHudOverlay : MonoBehaviour
 
         foreach (Customer customer in manager.Customers)
         {
-            if (customer == null || !customer.ShowGauge) continue;
+            if (customer == null) continue;
+
+            // สองเกจไม่มีทางเดินพร้อมกัน: รอสั่ง (ก่อนรับออเดอร์) → มิเตอร์สัตว์ (หลังรับออเดอร์)
+            bool orderGauge = customer.ShowGauge;
+            bool counterGauge = !orderGauge && customer.ShowCounterGauge;
+            if (!orderGauge && !counterGauge) continue;
 
             Vector3 worldPos = customer.transform.position + Vector3.up * customer.GaugeHeight;
             Vector3 screen = worldCamera.WorldToScreenPoint(worldPos);
@@ -188,12 +196,20 @@ public class GameHudOverlay : MonoBehaviour
             float x = screen.x - gaugeWidth * 0.5f;
             float y = Screen.height - screen.y;
 
-            float fill = Mathf.Clamp01(customer.PatienceNormalized);
+            float fill = Mathf.Clamp01(orderGauge ? customer.PatienceNormalized : customer.CounterPatienceNormalized);
+
+            // เกจรอสั่งมีขอบสีฟ้าหนากว่า ส่วนเกจหลังรับออเดอร์ใช้ขอบดำแบบเดิม
+            if (counterGauge)
+            {
+                DrawBox(new Rect(x - 2, y - 2, gaugeWidth + 4, gaugeHeight + 4), counterGaugeFrameColor);
+            }
 
             DrawBox(new Rect(x - 1, y - 1, gaugeWidth + 2, gaugeHeight + 2), new Color(0f, 0f, 0f, 0.7f));
             DrawBox(new Rect(x, y, gaugeWidth * fill, gaugeHeight), PatienceColor(fill));
 
-            string label = customer.AssignedPet != null ? customer.AssignedPet.DisplayName : string.Empty;
+            string label = orderGauge
+                ? (customer.AssignedPet != null ? customer.AssignedPet.DisplayName : string.Empty)
+                : $"รอสั่ง · {(customer.RequestedSpecies != null ? customer.RequestedSpecies.speciesName : string.Empty)}";
             float labelHeight = LineHeightFor(tagFontSize);
             GUI.Label(new Rect(x - 20, y - labelHeight - 1f, gaugeWidth + 40, labelHeight), label, tagStyle);
         }

@@ -37,6 +37,13 @@ public class CustomerManager : MonoBehaviour
     [Tooltip("ทิศที่แถวทอดยาวออกไป ปล่อยเป็น (0,0,0) จะคิดจากแนวเคาน์เตอร์→จุดยืนลูกค้าให้เอง")]
     [SerializeField] private Vector3 queueDirection = Vector3.zero;
 
+    [Tooltip("ลูกค้ารอสั่งนานจนเกจหมดแล้วเดินออก ให้นับเป็นร้องเรียน 1 ครั้งด้วยไหม " +
+             "(ความยาวเกจตั้งที่ Counter Patience Seconds ของแต่ละ PetSpecies)")]
+    [SerializeField] private bool complainOnCounterTimeout = true;
+
+    /// <summary>ลูกค้าที่รอสั่งจนหมดความอดทนต้องร้องเรียนไหม</summary>
+    public bool ComplainOnCounterTimeout => complainOnCounterTimeout;
+
     [Header("Spawn Pacing")]
     [Tooltip("ระยะห่างระหว่างลูกค้าในวันแรก (วินาที)")]
     [SerializeField] private float spawnGapFirstDay = 6f;

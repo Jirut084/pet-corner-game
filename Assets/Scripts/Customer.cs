@@ -67,6 +67,27 @@ public class Customer : MonoBehaviour
     /// <summary>ควรวาดเกจไหม — วาดเฉพาะตอนมิเตอร์เดินอยู่จริง</summary>
     public bool ShowGauge => AssignedPet != null && AssignedPet.IsPatienceRunning;
 
+    // ---------- เกจรอสั่ง (ก่อนผู้เล่นรับออเดอร์) ----------
+    // แยกจากมิเตอร์ของสัตว์โดยสิ้นเชิง: อันนี้อยู่ที่ลูกค้า เดินตอนต่อแถว หยุดทันทีที่ผู้เล่นกดรับออเดอร์
+    // จากนั้นมิเตอร์ของสัตว์ (Pet) ค่อยเริ่มนับต่อ — สองเกจจึงไม่มีวันเดินพร้อมกัน
+
+    private bool counterPatienceRunning;
+    private float counterPatienceRemaining;
+    private bool hasJoinedLine;
+
+    /// <summary>เกจรอสั่งเหลือกี่ส่วน 0–1</summary>
+    public float CounterPatienceNormalized
+    {
+        get
+        {
+            float total = RequestedSpecies != null ? RequestedSpecies.counterPatienceSeconds : 0f;
+            return total > 0f ? Mathf.Clamp01(counterPatienceRemaining / total) : 1f;
+        }
+    }
+
+    /// <summary>ควรวาดเกจรอสั่งไหม — เฉพาะตอนต่อแถวอยู่และเกจกำลังเดิน</summary>
+    public bool ShowCounterGauge => counterPatienceRunning && IsWaitingInLine;
+
     private Vector3 targetPosition;
     private CustomerManager manager;
 
@@ -87,6 +108,8 @@ public class Customer : MonoBehaviour
 
     private void Update()
     {
+        TickCounterPatience();
+
         switch (State)
         {
             case CustomerState.WalkingToCounter:
@@ -94,6 +117,14 @@ public class Customer : MonoBehaviour
                 {
                     State = CustomerState.AtCounter;
                     idleFacing = FacingTowardCounter();
+
+                    // เกจรอสั่งเริ่มตอนมาถึงแถวครั้งแรก ไม่นับช่วงเดินจากประตู
+                    // ขยับขึ้นในแถวทีหลังก็ไม่รีเซ็ต — รอมานานเท่าไหร่ก็นับต่อจากเดิม
+                    if (!hasJoinedLine)
+                    {
+                        hasJoinedLine = true;
+                        StartCounterPatience();
+                    }
 
                     // บอกเฉพาะหัวแถว คนที่ยืนต่อท้ายยังกดรับไม่ได้ ไม่ต้องรก log
                     if (QueueIndex <= 0)
@@ -153,6 +184,9 @@ public class Customer : MonoBehaviour
         SeatIndex = seatIndex;
         QueueIndex = -1; // ออกจากแถวแล้ว คนข้างหลังจะขยับขึ้นมาแทนในเฟรมถัดไป
 
+        // ส่งออเดอร์ทันแล้ว หยุดเกจรอสั่ง — จากนี้ไปใช้มิเตอร์ของสัตว์แทน
+        counterPatienceRunning = false;
+
         // ลูกค้าเป็นคนเฝ้ามิเตอร์ของตัวเอง เพราะเป็นคนที่ต้องเดินออกเมื่อหมดอดทน
         pet.OnPatienceExpired += HandlePatienceExpired;
 
@@ -166,6 +200,57 @@ public class Customer : MonoBehaviour
     {
         UnsubscribeFromPet();
         AssignedPet = null;
+        LeaveShop();
+    }
+
+    private void StartCounterPatience()
+    {
+        float total = RequestedSpecies != null ? RequestedSpecies.counterPatienceSeconds : 0f;
+        if (total <= 0f) return; // ตั้งเป็น 0 = รอได้ไม่จำกัด ไม่ต้องมีเกจ
+
+        counterPatienceRemaining = total;
+        counterPatienceRunning = true;
+    }
+
+    /// <summary>
+    /// ลดเกจรอสั่งระหว่างต่อแถว — เดินทั้งตอนยืนนิ่งและตอนขยับขึ้นในแถว
+    /// Time.deltaTime เป็น 0 ตอนหยุดเกม เกจจึงหยุดตามไปด้วยเอง
+    /// </summary>
+    private void TickCounterPatience()
+    {
+        if (!counterPatienceRunning) return;
+
+        if (!IsWaitingInLine)
+        {
+            counterPatienceRunning = false;
+            return;
+        }
+
+        // บัฟ "มิเตอร์ลดช้าลง" ใช้กับเกจนี้ด้วย ผู้เล่นที่ซื้อมาจะรู้สึกได้ทั้งสองช่วง
+        float drainRate = PlayerProgress.Instance != null
+            ? PlayerProgress.Instance.PatienceDrainMultiplier
+            : 1f;
+
+        counterPatienceRemaining -= Time.deltaTime * drainRate;
+        if (counterPatienceRemaining > 0f) return;
+
+        counterPatienceRemaining = 0f;
+        HandleCounterPatienceExpired();
+    }
+
+    /// <summary>รอสั่งนานเกิน — ยังไม่มีออเดอร์ให้ยกเลิก แค่ร้องเรียนแล้วเดินออก ลูกค้าคนใหม่จะมาแทนที่เอง</summary>
+    private void HandleCounterPatienceExpired()
+    {
+        counterPatienceRunning = false;
+
+        string speciesName = RequestedSpecies != null ? RequestedSpecies.speciesName : name;
+        GameLog.Push($"ลูกค้า {speciesName} รอสั่งนานเกินไป เดินออกจากร้าน!", LogTone.Bad);
+
+        if (manager == null || manager.ComplainOnCounterTimeout)
+        {
+            GameManager.Instance?.AddComplaint($"ลูกค้า {speciesName} รอหน้าเคาน์เตอร์นานเกินไป");
+        }
+
         LeaveShop();
     }
 
