@@ -1,11 +1,14 @@
 using UnityEngine;
 
 /// <summary>
-/// ยก/วางอุปกรณ์บน TileGrid แบบ PlateUp! — ใช้ปุ่มเดียว (grabKey) สลับหน้าที่ตามสถานการณ์:
+/// ยก/วางอุปกรณ์บน TileGrid แบบ PlateUp! — ใช้ปุ่ม E ร่วมกับการโต้ตอบอื่นทั้งหมด
+/// InteractionManager เรียก TryHandleInteract() ก่อนทุกครั้งที่กด E
+/// ถ้าสถานการณ์ตรงกับการยก/วางอุปกรณ์ สคริปต์นี้จะรับไปทำและคืน true ให้ระบบหยุดที่นี่
 ///
-///  - มือว่าง + หันหน้าไปที่ช่องที่มีสถานีย้ายได้  → ยกสถานีนั้นขึ้นมา (ช่องเดิมว่างทันที)
-///  - ถือกล่องอุปกรณ์ + หันหน้าไปที่ช่องว่าง       → กล่องแปลงเป็นสถานีจริงลงช่องนั้น
-///  - ถือสถานีอยู่ + หันหน้าไปที่ช่องว่าง          → วางสถานีลงช่องใหม่
+///  - ช่วงจัดร้าน + มือว่าง + หันหน้าไปที่ช่องที่มีสถานีย้ายได้  → ยกสถานีนั้นขึ้นมา (ช่องเดิมว่างทันที)
+///  - ช่วงจัดร้าน + ถือกล่องอุปกรณ์ + หันไปที่ช่องว่าง          → กล่องแปลงเป็นสถานีจริงลงช่องนั้น
+///  - ช่วงจัดร้าน + ถือสถานีอยู่ + หันไปที่ช่องว่าง             → วางสถานีลงช่องใหม่
+///  - นอกเหนือจากนี้ (เปิดร้านแล้ว / ถือสัตว์ / เล็งที่ว่าง)     → คืน false ให้ E ไปทำงานปกติ
 ///
 /// สถานีที่ตั้ง GridOccupant.removable = false (เช่น จุดรับ/จุดคืน) จะยกไม่ขึ้น
 /// เพื่อกันผู้เล่นรื้อจุดที่ core loop ต้องใช้จนเล่นต่อไม่ได้
@@ -21,10 +24,6 @@ public class TilePlacer : MonoBehaviour
     [Tooltip("ระยะห่างจากผู้เล่นที่จะเล็งช่องเป้าหมาย (หน่วยเมตร)")]
     [SerializeField] private float placeDistance = 1.5f;
 
-    [Header("Input")]
-    [Tooltip("ปุ่มยก/วางอุปกรณ์บนกริด (ปุ่มเดียวทำทั้งสองอย่างตามสถานการณ์)")]
-    [SerializeField] private KeyCode grabKey = KeyCode.G;
-
     private PlayerController playerController;
     private PlayerCarrier carrier;
 
@@ -33,9 +32,6 @@ public class TilePlacer : MonoBehaviour
 
     /// <summary>ช่องที่ผู้เล่นเล็งอยู่ตอนนี้ คิดสดทุกครั้งที่เรียก</summary>
     public Vector2Int TargetCell => GetTargetCell();
-
-    /// <summary>ปุ่มยก/วาง ใช้แสดงบนป้ายบอกวิธีกด</summary>
-    public KeyCode GrabKey => grabKey;
 
     private void Awake()
     {
@@ -50,33 +46,38 @@ public class TilePlacer : MonoBehaviour
         }
     }
 
-    private void Update()
+    /// <summary>
+    /// InteractionManager เรียกตอนกด E — คืน true ถ้ารับไปจัดการเป็นการยก/วางอุปกรณ์แล้ว
+    /// คืน false เมื่อสถานการณ์ไม่ใช่งานของกริด เพื่อให้ E ไปทำงานปกติ (รับออเดอร์/ใช้สถานี/ส่งคืน)
+    /// </summary>
+    public bool TryHandleInteract()
     {
-        if (grid == null) return;
-        if (GameManager.Instance != null && GameManager.Instance.IsPaused) return;
+        if (grid == null) return false;
 
-        // จัดสถานีได้เฉพาะช่วง Setup — เปิดร้านแล้วห้ามย้ายอะไรทั้งนั้น
-        if (GameManager.Instance != null && !GameManager.Instance.CanArrangeStations)
-        {
-            if (Input.GetKeyDown(grabKey))
-            {
-                Debug.Log("[TilePlacer] เปิดร้านแล้ว จัดสถานีไม่ได้ ต้องรอจบวันก่อน");
-            }
-            return;
-        }
-
-        if (!Input.GetKeyDown(grabKey)) return;
+        // จัดสถานีได้เฉพาะช่วง Setup — เปิดร้านแล้ว E เป็นของการดูแลสัตว์ทั้งหมด
+        if (GameManager.Instance != null && !GameManager.Instance.CanArrangeStations) return false;
 
         Vector2Int cell = GetTargetCell();
 
         if (carrier.IsCarrying)
         {
+            // ถือสัตว์หรือของอื่นที่ลงกริดไม่ได้ ปล่อยให้ระบบ interact จัดการต่อ
+            bool holdsEquipment = carrier.GetHeld<EquipmentParcel>() != null || carrier.GetHeld<GridOccupant>() != null;
+            if (!holdsEquipment) return false;
+
             TryPlace(cell);
+            return true;
         }
-        else
-        {
-            TryPickUp(cell);
-        }
+
+        // มือว่าง: ยกได้เฉพาะตอนเล็งช่องที่มีสถานีย้ายได้จริง ไม่งั้นคืนให้ E ไปโต้ตอบตามปกติ
+        GameObject target = grid.GetOccupant(cell);
+        if (target == null) return false;
+
+        GridOccupant occupant = target.GetComponent<GridOccupant>();
+        if (occupant == null || !occupant.Removable) return false;
+
+        TryPickUp(cell);
+        return true;
     }
 
     /// <summary>หาช่องกริดที่อยู่ด้านหน้าผู้เล่นตามทิศที่หันล่าสุด</summary>

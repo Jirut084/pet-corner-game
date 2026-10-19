@@ -117,8 +117,9 @@ public class CameraController : MonoBehaviour
     private void UpdateThirdPerson()
     {
         // Mouse look input controls yaw/pitch around the target.
-        yaw += Input.GetAxis("Mouse X") * mouseSensitivity;
-        pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
+        Vector2 look = GameInput.Look;
+        yaw += look.x * mouseSensitivity;
+        pitch -= look.y * mouseSensitivity;
         pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
 
         Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);

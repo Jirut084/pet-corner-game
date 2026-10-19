@@ -25,6 +25,9 @@ public class PlayerProgress : MonoBehaviour
     public float FeeMultiplier { get; private set; } = 1f;
     public float CatchRadiusMultiplier { get; private set; } = 1f;
 
+    /// <summary>ออเดอร์ที่ถูกบวกเพิ่มต่อวันจากการ์ดรางวัลที่แลกมาด้วยความยาก (GameManager อ่านไปรวมกับโควตาของวัน)</summary>
+    public int ExtraOrdersPerDay { get; private set; }
+
     /// <summary>สัตว์ที่ปลดล็อกแล้ว — IntakePoint สุ่มออเดอร์จากลิสต์นี้</summary>
     public List<PetSpecies> UnlockedSpecies { get; private set; } = new List<PetSpecies>();
 
@@ -62,6 +65,7 @@ public class PlayerProgress : MonoBehaviour
         PatienceDrainMultiplier = 1f;
         FeeMultiplier = 1f;
         CatchRadiusMultiplier = 1f;
+        ExtraOrdersPerDay = 0;
 
         UnlockedSpecies.Clear();
         UnlockedStations.Clear();
@@ -130,6 +134,15 @@ public class PlayerProgress : MonoBehaviour
         }
 
         return false;
+    }
+
+    /// <summary>การ์ดที่แลกพลังมาด้วยลูกค้าที่มากขึ้น — บวกโควตาออเดอร์ต่อวันถาวรตลอด run</summary>
+    public void AddDailyOrders(int amount)
+    {
+        if (amount <= 0) return;
+
+        ExtraOrdersPerDay += amount;
+        Debug.Log($"[PlayerProgress] ออเดอร์ต่อวัน +{amount} (รวม +{ExtraOrdersPerDay})");
     }
 
     public void ApplyBuff(PerkType perk, float amount)

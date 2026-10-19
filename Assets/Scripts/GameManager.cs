@@ -239,7 +239,9 @@ public class GameManager : MonoBehaviour
         OrdersCompleted = 0;
         OrdersIssued = 0;
         activeOrders.Clear();
-        OrdersTarget = ordersOnFirstDay + (ordersAddedPerDay * (Day - 1));
+        // การ์ดรางวัลบางใบแลกพลังมาด้วยลูกค้าที่มากขึ้น จึงบวกโควตาเพิ่มจาก PlayerProgress ด้วย
+        int extraOrders = PlayerProgress.Instance != null ? PlayerProgress.Instance.ExtraOrdersPerDay : 0;
+        OrdersTarget = ordersOnFirstDay + (ordersAddedPerDay * (Day - 1)) + extraOrders;
 
         OnOrderProgressChanged?.Invoke(OrdersCompleted, OrdersTarget);
         SetPhase(GamePhase.Setup);

@@ -100,6 +100,9 @@ public class Customer : MonoBehaviour
         manager = owner;
         RequestedSpecies = species;
 
+        // ลูกค้าไม่มี Rigidbody และเดินแบบคงค่า y เดิมไว้ ถ้า spawn มาสูง/ต่ำกว่าพื้นจะลอยหรือจมอยู่อย่างนั้นทั้งวัน
+        SnapToGround();
+
         SetTarget(counterPosition);
         State = CustomerState.WalkingToCounter;
 
@@ -298,6 +301,30 @@ public class Customer : MonoBehaviour
         {
             manager.ReleaseSeat(this);
         }
+    }
+
+    /// <summary>
+    /// ยกตัวลูกค้าให้เท้าแตะพื้นที่อยู่ใต้จุด spawn
+    /// จุดประตู/จุดนั่งในฉากจะตั้ง y ไว้เท่าไหร่ก็ได้ ไม่ต้องคอยปรับให้พอดีความสูงโมเดล
+    /// </summary>
+    private void SnapToGround()
+    {
+        Collider self = GetComponent<Collider>();
+        float feet = self != null ? self.bounds.min.y : transform.position.y;
+
+        // RaycastAll เพราะเรย์ออกจากในตัวลูกค้าเอง ต้องข้าม collider ตัวเองก่อนถึงจะเจอพื้นจริง
+        RaycastHit[] hits = Physics.RaycastAll(transform.position + Vector3.up * 2f, Vector3.down, 20f);
+
+        float floorY = float.NegativeInfinity;
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider.transform.IsChildOf(transform)) continue;
+            if (hit.point.y > floorY) floorY = hit.point.y;
+        }
+
+        if (float.IsNegativeInfinity(floorY)) return;
+
+        transform.position += Vector3.up * (floorY - feet);
     }
 
     private void SetTarget(Vector3 position)

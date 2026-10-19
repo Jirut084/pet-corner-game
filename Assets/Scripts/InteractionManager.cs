@@ -58,6 +58,7 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private float overlapForwardOffset = 1f;
 
     private PlayerController playerController;
+    private TilePlacer placer;
 
     // Last interactable found, exposed for optional UI prompts (e.g. "Press E").
     public IInteractable CurrentTarget { get; private set; }
@@ -78,6 +79,7 @@ public class InteractionManager : MonoBehaviour
     private void Awake()
     {
         playerController = GetComponent<PlayerController>();
+        placer = GetComponent<TilePlacer>(); // ไม่มีก็ได้ แค่จะไม่มีการยก/วางอุปกรณ์
 
         if (interactionCamera == null)
         {
@@ -101,9 +103,10 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
-        CurrentTarget = interactionType == InteractionType.Raycast
+        // สัตว์ที่หนีจนมุมอยู่ข้างตัวมาก่อนเสมอ ไม่งั้นถ้ามันไปยืนทับสถานี เรย์จะไปโดนสถานีแทนแล้วจับไม่ได้
+        CurrentTarget = FindCorneredPet() ?? (interactionType == InteractionType.Raycast
             ? FindTargetViaRaycast()
-            : FindTargetViaOverlap();
+            : FindTargetViaOverlap());
 
         if (activeHoldTarget != null)
         {
@@ -111,10 +114,13 @@ public class InteractionManager : MonoBehaviour
             return; // ระหว่างกดค้างอยู่ ไม่รับ input อื่น
         }
 
-        if (Input.GetKeyDown(interactKey))
-        {
-            BeginInteraction();
-        }
+        if (!GameInput.Pressed(interactKey)) return;
+
+        // ปุ่ม E ปุ่มเดียวทำทุกอย่าง — ช่วงจัดร้านให้ TilePlacer ชิงไปยก/วางอุปกรณ์ก่อน
+        // ถ้าไม่ใช่สถานการณ์ของกริด (เปิดร้านแล้ว / ถือสัตว์ / เล็งที่ว่าง) มันจะคืน false ให้มาทำงานปกติ
+        if (placer != null && placer.TryHandleInteract()) return;
+
+        BeginInteraction();
     }
 
     private void BeginInteraction()
@@ -146,7 +152,7 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
-        if (Input.GetKey(interactKey))
+        if (GameInput.Held(interactKey))
         {
             activeHoldTarget.OnHoldTick(gameObject, held);
             return;
@@ -154,6 +160,23 @@ public class InteractionManager : MonoBehaviour
 
         activeHoldTarget.OnHoldRelease(gameObject, held);
         activeHoldTarget = null;
+    }
+
+    /// <summary>
+    /// สัตว์ที่กำลังหนีและผู้เล่นเข้าไปใกล้จนมันหยุดให้จับแล้ว (PetEscape.IsCornered)
+    /// เช็คจากระยะห่างตรงๆ ไม่ต้องพึ่ง collider จึงจับได้แม้สัตว์ยืนทับสถานีหรือ collider ถูกปิดอยู่
+    /// </summary>
+    private IInteractable FindCorneredPet()
+    {
+        foreach (Pet pet in Pet.All)
+        {
+            if (pet == null) continue;
+
+            PetEscape escape = pet.GetComponent<PetEscape>();
+            if (escape != null && escape.IsEscaping && escape.IsCornered) return escape;
+        }
+
+        return null;
     }
 
     private IInteractable FindTargetViaRaycast()

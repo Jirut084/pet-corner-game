@@ -15,6 +15,7 @@ MonoBehaviour:
   speciesName: Cat
   petPrefab: {fileID: 8284398693088725970, guid: c2977118d79c2c841bec876aea067014, type: 3}
   requiredSteps: 0000000004000000
-  patienceSeconds: 25
-  baseFee: 10
-  feePerStep: 6
+  patienceSeconds: 75
+  baseFee: 15
+  feePerStep: 8
+  counterPatienceSeconds: 45

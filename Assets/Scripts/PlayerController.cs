@@ -56,9 +56,8 @@ public class PlayerController : MonoBehaviour
 
     private void HandleMovement()
     {
-        float horizontal = Input.GetAxisRaw("Horizontal"); // A/D
-        float vertical = Input.GetAxisRaw("Vertical");      // W/S
-        Vector3 input = new Vector3(horizontal, 0f, vertical);
+        Vector2 stick = GameInput.Move; // WASD / ลูกศร / จอย
+        Vector3 input = new Vector3(stick.x, 0f, stick.y);
 
         // หยุดเกมอยู่ = ไม่รับปุ่มเดิน (timeScale 0 หยุดแค่ระยะทาง ปุ่มยังถูกอ่านตามปกติ)
         if (GameManager.Instance != null && GameManager.Instance.IsPaused)

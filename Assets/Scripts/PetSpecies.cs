@@ -38,21 +38,21 @@ public class PetSpecies : ScriptableObject
 
     [Header("Patience")]
     [Tooltip("เวลาที่ลูกค้ารอได้ (วินาที) เริ่มนับตั้งแต่ผู้เล่นกดรับออเดอร์ที่จุด Intake " +
-             "ช่วงที่เหมาะสมคือ 56–86 วิ ตามที่เทียบกับ Paw Parlor แล้ว")]
-    public float patienceSeconds = 60f;
+             "ช่วงที่เหมาะสมคือ 70–90 วิ (Paw Parlor 56–86 วิ, PlateUp เล่นคนเดียวให้ถึง 120 วิ)")]
+    public float patienceSeconds = 75f;
 
     [Tooltip("เวลาที่ลูกค้ายอมยืนรอหน้าเคาน์เตอร์ก่อนผู้เล่นรับออเดอร์ (วินาที) — นับแยกจากค่าด้านบน " +
              "เริ่มนับตอนเดินมาถึงแถว หมดแล้วลูกค้าเดินออกพร้อมร้องเรียน (0 = รอได้ไม่จำกัด)")]
     [Min(0f)]
-    public float counterPatienceSeconds = 20f;
+    public float counterPatienceSeconds = 45f;
 
     [Header("Economy")]
     [Tooltip("ค่าบริการฐานของชนิดนี้ ค่าจริงจะบวกเพิ่มตามจำนวนขั้นตอนที่ทำสำเร็จ " +
              "(จูนคู่กับราคาในร้านค้าท้ายวัน: ออเดอร์ละ ~20–30 = จบวันซื้อได้ 1–2 ชิ้น ไม่ใช่ทุกชิ้น)")]
-    public int baseFee = 10;
+    public int baseFee = 15;
 
     [Tooltip("ค่าบริการที่ได้เพิ่มต่อ 1 ขั้นตอนที่ทำสำเร็จ")]
-    public int feePerStep = 6;
+    public int feePerStep = 8;
 
     /// <summary>จำนวนขั้นตอนทั้งหมดของสัตว์ชนิดนี้</summary>
     public int StepCount => requiredSteps != null ? requiredSteps.Length : 0;

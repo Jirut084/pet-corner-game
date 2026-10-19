@@ -497,6 +497,16 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         StationCloseupOverlay.Show(this, pet);
     }
 
+    /// <summary>
+    /// สัตว์หนีออกไปเอง (PetEscape) — เคลียร์ช่องให้สถานีกลับมาว่าง
+    /// ไม่เคลียร์ สถานีจะคิดว่ายังมีสัตว์อยู่แล้ววางตัวใหม่ไม่ได้
+    /// </summary>
+    public void ReleaseForEscape()
+    {
+        if (OccupyingPet == null) return;
+        ReleaseOccupant();
+    }
+
     private void ReleaseOccupant()
     {
         if (OccupyingPet != null)

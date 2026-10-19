@@ -46,7 +46,7 @@ public class StationCloseupOverlay : MonoBehaviour
     [Tooltip("ระยะกล้องจากกลางตัวสัตว์ คิดเป็นกี่เท่าของขนาดสัตว์ — น้อย = ซูมใกล้ขึ้น")]
     [SerializeField] private float distanceScale = 2.2f;
 
-    [SerializeField] private Color backgroundColor = new Color(0.13f, 0.16f, 0.15f);
+    [SerializeField] private Color backgroundColor = new Color(0.90f, 0.87f, 0.82f);
 
     [Header("Filter")]
     [Tooltip("แสดงหน้าต่างซูมตอนวางสัตว์บนโต๊ะพักด้วยหรือไม่ (ปกติโต๊ะพักไม่ได้ทำอะไร จึงปิดไว้)")]
@@ -251,7 +251,7 @@ public class StationCloseupOverlay : MonoBehaviour
             if (view.station == null || view.pet == null || view.texture == null) continue;
 
             Rect frame = new Rect(x - 5f, y - 5f, windowSize + 10f, headerHeight + windowSize + footerHeight + 10f);
-            DrawBox(frame, new Color(0f, 0f, 0f, 0.62f));
+            DrawBox(frame, new Color(0.99f, 0.97f, 0.93f, 0.97f));
 
             GUI.Label(new Rect(x, y, windowSize, headerHeight),
                 $"{view.pet.DisplayName} — {view.station.DisplayLabel}", titleStyle);
@@ -277,9 +277,9 @@ public class StationCloseupOverlay : MonoBehaviour
         bool ready = station.State == CareStation.StationState.Ready;
         Rect bar = new Rect(area.x, area.y, area.width, 7f);
 
-        DrawBox(bar, new Color(0f, 0f, 0f, 0.7f));
+        DrawBox(bar, new Color(0.22f, 0.19f, 0.16f, 0.12f));
         DrawBox(new Rect(bar.x, bar.y, bar.width * Mathf.Clamp01(station.Progress), bar.height),
-            ready ? new Color(0.45f, 0.85f, 0.55f) : CareStepStyle.ColorOf(station.Step));
+            ready ? new Color(0.40f, 0.72f, 0.45f) : CareStepStyle.ColorOf(station.Step));
 
         string caption = ready ? "เสร็จแล้ว — มาอุ้มไปได้" : $"กำลังดูแล {Mathf.RoundToInt(station.Progress * 100f)}%";
         GUI.Label(new Rect(area.x, bar.yMax + 1f, area.width, area.height - bar.height), caption, captionStyle);
@@ -295,13 +295,15 @@ public class StationCloseupOverlay : MonoBehaviour
             fontStyle = FontStyle.Bold,
             clipping = TextClipping.Clip
         };
+        titleStyle.normal.textColor = new Color(0.22f, 0.19f, 0.16f);
 
         captionStyle = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.UpperCenter,
-            fontSize = 11,
+            fontSize = 12,
             clipping = TextClipping.Clip
         };
+        captionStyle.normal.textColor = new Color(0.22f, 0.19f, 0.16f, 0.75f);
     }
 
     private void DrawBox(Rect rect, Color color)

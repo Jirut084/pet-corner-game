@@ -1,17 +1,24 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
-/// HUD หลักของเกม วาดด้วย OnGUI (ยังไม่ใช้ Canvas)
-/// แสดง 5 อย่าง:
-///   1) แถบสถานะ — เงิน / วัน / ออเดอร์ / ร้องเรียน
-///   2) เกจความอดทนลอยเหนือหัวลูกค้าที่กำลังรออยู่
-///   3) ป้ายเหนือหัวสัตว์ บอกว่ายังต้องไปสถานีไหน (แทนการย้อมสีตัวสัตว์แบบเดิม)
-///   4) ป้าย "กดค้าง" + หลอดเวลาใต้ตัวผู้เล่น สำหรับสถานีโหมดกดค้าง (เช่นอ่างอาบน้ำ)
-///   5) บันทึกเหตุการณ์ล่าสุดจาก GameLog มุมล่างซ้าย
+/// HUD หลักของเกม สร้างเป็น Canvas (uGUI) ด้วยโค้ดทั้งหมดตอน Awake — ไม่ต้องลาก UI ในฉาก
 ///
-/// หน้าต่างซูมดูสัตว์ในสถานีแยกไปอยู่ที่ StationCloseupOverlay
-/// แยกจาก GameFlowDebugControls ที่ดูแลเฉพาะหน้าเมนูกับหน้าเลือกรางวัล
+/// แนวทางหน้าตา (อิง PlateUp!): การ์ดสีครีมมุมโค้งบนเงาจางๆ ตัวหนังสือสีเข้ม
+/// ใช้สีเฉพาะจุดที่ต้องสื่อความหมาย (ขั้นตอนของสัตว์ / ความอดทน / คำเตือน) ที่เหลือเป็นกลางหมด
+/// ไม่มีกรอบ ไม่มีพื้นดำทึบ ไม่มีเส้นขอบรอบทุกอย่าง — ความชัดมาจากคอนทราสต์กับระยะห่าง
+///
+/// ส่วนประกอบ:
+///   1) มุมซ้ายบน — วันที่ + หลอดความคืบหน้าออเดอร์ + จุดร้องเรียน
+///   2) มุมขวาบน — เงิน
+///   3) วงแหวนความอดทนเหนือหัวลูกค้า (รอสั่ง = วงประจาง, หลังรับออเดอร์ = วงเต็ม)
+///   4) ป้ายขั้นตอนเหนือหัวสัตว์ — จุดสีประจำสถานี + ชื่อ, ทำแล้วจาง
+///   5) หลอดกดค้างใต้ตัวผู้เล่น (อ่างอาบน้ำ/แต่งขน)
+///   6) บันทึกเหตุการณ์มุมล่างซ้าย — เสียงเบาที่สุดในจอ
+///
+/// ของที่ลอยตามตัวละคร (3-5) ใช้ object pool วางตำแหน่งจากพิกัดจอทุกเฟรม ไม่สร้าง/ทำลายซ้ำ
+/// หน้าเมนู/รางวัล/ร้านค้า ยังเป็น OnGUI อยู่ที่ GameFlowDebugControls
 /// </summary>
 public class GameHudOverlay : MonoBehaviour
 {
@@ -19,83 +26,120 @@ public class GameHudOverlay : MonoBehaviour
     [Tooltip("กล้องที่ใช้แปลงตำแหน่งโลกเป็นตำแหน่งจอ ปล่อยว่างจะใช้ Camera.main")]
     [SerializeField] private Camera worldCamera;
 
-    [Header("Gauge")]
-    [SerializeField] private float gaugeWidth = 74f;
-    [SerializeField] private float gaugeHeight = 9f;
+    [Header("Layout")]
+    [Tooltip("ความละเอียดอ้างอิงของ Canvas — UI จะย่อ/ขยายตามจอจริงโดยอัตโนมัติ")]
+    [SerializeField] private Vector2 referenceResolution = new Vector2(1600f, 900f);
 
-    [Tooltip("สีขอบเกจรอสั่ง (ลูกค้ายืนรอหน้าเคาน์เตอร์) — ต่างจากขอบดำของเกจหลังรับออเดอร์ ผู้เล่นจะแยกออกว่าเป็นเกจไหน")]
-    [SerializeField] private Color counterGaugeFrameColor = new Color(0.35f, 0.65f, 1f, 0.95f);
+    [Tooltip("ระยะห่างจากขอบจอของการ์ดมุมบน")]
+    [SerializeField] private float screenMargin = 28f;
 
-    [Header("Pet Need Tags")]
-    [Tooltip("ความสูงขั้นต่ำของป้าย — ถ้าตัวอักษรใหญ่กว่านี้ ป้ายจะสูงตามเอง")]
-    [SerializeField] private float chipHeight = 20f;
-    [SerializeField] private float chipPadding = 8f;
-    [SerializeField] private float chipSpacing = 3f;
+    [Header("Patience Ring")]
+    [Tooltip("ขนาดวงแหวนความอดทนเหนือหัวลูกค้า")]
+    [SerializeField] private float ringSize = 70f;
+
+    [Header("Pet Tags")]
+    [SerializeField] private float chipHeight = 34f;
+    [SerializeField] private float chipPadding = 12f;
+    [SerializeField] private float chipSpacing = 5f;
 
     [Header("Hold Bar")]
-    [Tooltip("ตำแหน่งหลอดกดค้างเทียบกับจุดกลางตัวผู้เล่น — ค่าเริ่มต้นอยู่แถวเท้า ไม่ทับป้ายเหนือหัวสัตว์ที่อุ้มอยู่")]
+    [Tooltip("ตำแหน่งหลอดกดค้างเทียบกับจุดกลางตัวผู้เล่น")]
     [SerializeField] private Vector3 holdBarWorldOffset = new Vector3(0f, -1.1f, 0f);
 
-    [SerializeField] private float holdBarWidth = 130f;
+    [SerializeField] private float holdBarWidth = 170f;
     [SerializeField] private float holdBarHeight = 12f;
 
-    [Tooltip("หลอดยาวเลยท้ายช่วงสีเขียวไปอีกกี่เท่า ให้เห็นว่าเข็มกำลังจะเลยช่วง")]
+    [Tooltip("หลอดยาวเลยท้ายช่วงที่ต้องปล่อยไปอีกกี่เท่า ให้เห็นว่าเข็มกำลังจะเลยช่วง")]
     [SerializeField] private float holdBarOvershoot = 1.35f;
 
     [Header("Event Log")]
     [Tooltip("ข้อความจะจางหายหลังผ่านไปกี่วินาที (0 = ไม่จาง)")]
-    [SerializeField] private float logFadeSeconds = 9f;
+    [SerializeField] private float logFadeSeconds = 7f;
 
-    [Tooltip("ขนาดตัวอักษรของบันทึกเหตุการณ์ (ค่าเดิมของ GUI คือ 12)")]
     [Range(8, 40)]
-    [SerializeField] private int logFontSize = 18;
+    [SerializeField] private int logFontSize = 19;
 
-    [Tooltip("เก็บข้อความไว้กี่บรรทัด — กล่องจะสูงขึ้นตามจำนวนบรรทัดที่มีจริง")]
+    [Tooltip("เก็บข้อความไว้กี่บรรทัด — น้อยไว้ดีกว่า ล็อกไม่ควรแย่งสายตาจากร้าน")]
     [Range(1, 20)]
-    [SerializeField] private int logMaxLines = 8;
+    [SerializeField] private int logMaxLines = 4;
 
-    [Tooltip("ความกว้างของกล่องบันทึกเหตุการณ์ (พิกเซล) ข้อความยาวเกินจะถูกตัดท้าย")]
-    [SerializeField] private float logWidth = 760f;
+    [SerializeField] private float logWidth = 560f;
 
-    [Header("Status Bar")]
-    [Tooltip("ขนาดตัวอักษรของแถบสถานะด้านบน")]
+    [Header("Type")]
+    [Range(8, 48)]
+    [SerializeField] private int titleFontSize = 34;
+
     [Range(8, 40)]
-    [SerializeField] private int statusFontSize = 18;
+    [SerializeField] private int bodyFontSize = 20;
 
-    [Tooltip("ขนาดตัวอักษรบนป้ายเหนือหัวสัตว์และชื่อเหนือเกจลูกค้า")]
     [Range(8, 32)]
-    [SerializeField] private int tagFontSize = 14;
+    [SerializeField] private int tagFontSize = 19;
 
-    private static readonly Color DoneChipColor = new Color(0.45f, 0.47f, 0.46f, 0.9f);
-    private static readonly Color ReadyChipColor = new Color(0.45f, 0.85f, 0.55f);
+    // สีและชิ้นส่วนทั้งหมดมาจาก UiKit เพื่อให้ HUD กับหน้าจอเมนูเป็นชุดเดียวกัน
+    private static Color Card => UiKit.Card;
+    private static Color CardQuiet => UiKit.CardQuiet;
+    private static Color Ink => UiKit.Ink;
+    private static Color InkSoft => UiKit.InkSoft;
+    private static Color Track => UiKit.Track;
+    private static Color Money => UiKit.Money;
+    private static Color Good => UiKit.Good;
+    private static Color Warn => UiKit.Warn;
+    private static Color Danger => UiKit.Danger;
 
-    private static readonly Color HoldZoneColor = new Color(0.35f, 0.85f, 0.45f, 0.55f);
-    private static readonly Color HoldChargingColor = new Color(0.98f, 0.82f, 0.35f);
-    private static readonly Color HoldReadyColor = new Color(0.45f, 0.95f, 0.55f);
-    private static readonly Color HoldFailColor = new Color(0.95f, 0.4f, 0.4f);
+    private Canvas canvas;
+    private RectTransform floatLayer;
 
-    private Texture2D pixel;
-    private GUIStyle chipStyle;
-    private GUIStyle statusStyle;
-    private GUIStyle logStyle;
-    private GUIStyle tagStyle;
+    // มุมบน
+    private Text dayText;
+    private RectTransform orderFill;
+    private Text orderText;
+    private Text moneyText;
+    private readonly List<Image> complaintDots = new List<Image>();
+    private GameObject hintCard;
+    private Text hintText;
 
-    // ใช้ซ้ำทุกเฟรม ไม่สร้างลิสต์ใหม่ทุกครั้งที่วาด (OnGUI ถูกเรียกหลายรอบต่อเฟรม)
-    private readonly List<(string text, Color color)> chipBuffer = new List<(string, Color)>();
+    // บันทึกเหตุการณ์
+    private GameObject logPanel;
+    private readonly List<Text> logRows = new List<Text>();
 
-    // ผู้เล่น — หาเมื่อต้องใช้ครั้งแรก
+    // ของที่ลอยตามตัวละคร
+    private readonly List<Chip> chipPool = new List<Chip>();
+    private int chipsUsed;
+    private readonly List<Ring> ringPool = new List<Ring>();
+    private int ringsUsed;
+    private HoldBar holdBar;
+
+    private readonly List<(string text, Color dot, bool done)> chipBuffer = new List<(string, Color, bool)>();
+
     private InteractionManager playerInteraction;
     private PlayerCarrier playerCarrier;
 
-    // ปรับค่าใน Inspector ระหว่างกด Play แล้วเห็นผลทันที ไม่ต้องหยุดเล่นก่อน
-    private void OnValidate()
+    /// <summary>ป้ายใบเดียว: การ์ดครีม + จุดสีบอกประเภท + ข้อความ</summary>
+    private class Chip
     {
-        chipStyle = null;
-        statusStyle = null;
-        logStyle = null;
-        tagStyle = null;
+        public RectTransform rect;
+        public Image card;
+        public Image dot;
+        public Text label;
+    }
 
-        GameLog.MaxEntries = logMaxLines;
+    /// <summary>วงแหวนความอดทนเหนือหัวลูกค้า + ชื่อสัตว์ใต้วง</summary>
+    private class Ring
+    {
+        public RectTransform rect;
+        public Image track;
+        public Image fill;
+        public Image badge;   // จุดกลางวง บอกว่าเป็นช่วงรอสั่งหรือรอรับคืน
+        public Text label;
+    }
+
+    private class HoldBar
+    {
+        public RectTransform rect;
+        public RectTransform zone;
+        public RectTransform progress;
+        public Image progressImage;
+        public RectTransform needle;
     }
 
     private void Awake()
@@ -104,76 +148,254 @@ public class GameHudOverlay : MonoBehaviour
 
         GameLog.MaxEntries = logMaxLines;
 
-        // เท็กซ์เจอร์ 1x1 ไว้ระบายสีสี่เหลี่ยม ใช้ซ้ำทั้งเกม ไม่สร้างใหม่ทุกเฟรม
-        pixel = new Texture2D(1, 1);
-        pixel.SetPixel(0, 0, Color.white);
-        pixel.Apply();
+        BuildCanvas();
     }
 
-    private void OnDestroy()
+    private void OnValidate()
     {
-        if (pixel != null) Destroy(pixel);
+        GameLog.MaxEntries = logMaxLines;
     }
 
-    private void OnGUI()
+    // ---------- สร้าง UI ----------
+
+    private void BuildCanvas()
+    {
+        // sortingOrder 10 = อยู่เหนือฉากแต่ต่ำกว่าหน้าจอเมนู (50) และไม่รับคลิก เพราะ HUD ไม่มีปุ่ม
+        canvas = UiKit.MakeCanvas("HUD Canvas", transform, 10, false, referenceResolution);
+
+        BuildDayCard();
+        BuildMoneyCard();
+        BuildHintCard();
+        BuildEventLog();
+
+        floatLayer = UiKit.MakeRect("Float Layer", canvas.transform);
+        UiKit.Stretch(floatLayer);
+
+        holdBar = BuildHoldBar();
+    }
+
+    /// <summary>การ์ดมุมซ้ายบน: วันที่ตัวใหญ่ + หลอดออเดอร์ + จุดร้องเรียน</summary>
+    private void BuildDayCard()
+    {
+        RectTransform card = UiKit.MakeCard("Day Card", canvas.transform, Card);
+        card.anchorMin = card.anchorMax = new Vector2(0f, 1f);
+        card.pivot = new Vector2(0f, 1f);
+        card.anchoredPosition = new Vector2(screenMargin, -screenMargin);
+        card.sizeDelta = new Vector2(230f, 112f);
+
+        dayText = UiKit.MakeText("Day", card, titleFontSize, Ink, TextAnchor.UpperLeft);
+        dayText.fontStyle = FontStyle.Bold;
+        UiKit.Place(dayText.rectTransform, new Vector2(20f, -14f), new Vector2(200f, titleFontSize * 1.3f));
+
+        // หลอดความคืบหน้าออเดอร์ของวัน
+        RectTransform track = UiKit.MakeImage("Order Track", card, Track).rectTransform;
+        UiKit.Place(track, new Vector2(20f, -58f), new Vector2(190f, 8f));
+
+        orderFill = UiKit.MakeImage("Order Fill", track, Good).rectTransform;
+        orderFill.anchorMin = new Vector2(0f, 0f);
+        orderFill.anchorMax = new Vector2(0f, 1f);
+        orderFill.pivot = new Vector2(0f, 0.5f);
+        orderFill.anchoredPosition = Vector2.zero;
+
+        orderText = UiKit.MakeText("Order Label", card, bodyFontSize - 2, InkSoft, TextAnchor.UpperLeft);
+        UiKit.Place(orderText.rectTransform, new Vector2(20f, -72f), new Vector2(190f, bodyFontSize * 1.4f));
+
+        // จุดร้องเรียน — เห็นปราดเดียวว่าเหลืออีกกี่ครั้งถึงแพ้ ไม่ต้องอ่านตัวเลข
+        for (int i = 0; i < 5; i++)
+        {
+            Image dot = UiKit.MakeImage($"Complaint {i}", card, Track);
+            dot.sprite = UiKit.Circle;
+            UiKit.Place(dot.rectTransform, new Vector2(150f + i * 15f, -22f), new Vector2(11f, 11f));
+            complaintDots.Add(dot);
+        }
+    }
+
+    private void BuildMoneyCard()
+    {
+        RectTransform card = UiKit.MakeCard("Money Card", canvas.transform, Card);
+        card.anchorMin = card.anchorMax = new Vector2(1f, 1f);
+        card.pivot = new Vector2(1f, 1f);
+        card.anchoredPosition = new Vector2(-screenMargin, -screenMargin);
+        card.sizeDelta = new Vector2(190f, 64f);
+
+        Image coin = UiKit.MakeImage("Coin", card, Money);
+        coin.sprite = UiKit.Circle;
+        UiKit.Place(coin.rectTransform, new Vector2(18f, -20f), new Vector2(24f, 24f));
+
+        moneyText = UiKit.MakeText("Money", card, titleFontSize - 4, Ink, TextAnchor.UpperLeft);
+        moneyText.fontStyle = FontStyle.Bold;
+        UiKit.Place(moneyText.rectTransform, new Vector2(52f, -16f), new Vector2(130f, titleFontSize * 1.2f));
+    }
+
+    /// <summary>แถบบอกวิธีเล่นช่วงจัดร้าน — ลอยกลางล่าง เสียงเบา ไม่แย่งสายตา</summary>
+    private void BuildHintCard()
+    {
+        RectTransform card = UiKit.MakeCard("Hint", canvas.transform, CardQuiet);
+        card.anchorMin = card.anchorMax = new Vector2(0.5f, 0f);
+        card.pivot = new Vector2(0.5f, 0f);
+        card.anchoredPosition = new Vector2(0f, screenMargin + 6f);
+        card.sizeDelta = new Vector2(560f, 46f);
+        hintCard = card.gameObject;
+
+        hintText = UiKit.MakeText("Hint Text", card, bodyFontSize, Ink, TextAnchor.MiddleCenter);
+        UiKit.Stretch(hintText.rectTransform);
+    }
+
+    private void BuildEventLog()
+    {
+        float lineHeight = logFontSize * 1.6f;
+        const float padding = 12f;
+
+        // การ์ดจางรองข้อความไว้ — ล็อกลอยบนพื้นร้านเฉยๆ จะอ่านไม่ออกเวลาข้อความไปทับพื้นสีใกล้กัน
+        RectTransform panel = UiKit.MakeCard("Event Log", canvas.transform, CardQuiet);
+        panel.anchorMin = panel.anchorMax = new Vector2(0f, 0f);
+        panel.pivot = new Vector2(0f, 0f);
+        panel.anchoredPosition = new Vector2(screenMargin, screenMargin);
+        panel.sizeDelta = new Vector2(logWidth, logMaxLines * lineHeight + padding * 2f);
+        logPanel = panel.gameObject;
+
+        // เรียงจากล่างขึ้นบน: บรรทัดล่าสุดอยู่ติดขอบล่าง เหมือนแชท
+        for (int i = 0; i < logMaxLines; i++)
+        {
+            Text row = UiKit.MakeText($"Line {i}", panel, logFontSize, Ink, TextAnchor.LowerLeft);
+            row.rectTransform.anchorMin = row.rectTransform.anchorMax = new Vector2(0f, 0f);
+            row.rectTransform.pivot = new Vector2(0f, 0f);
+            row.rectTransform.anchoredPosition = new Vector2(padding, padding + i * lineHeight);
+            row.rectTransform.sizeDelta = new Vector2(logWidth - padding * 2f, lineHeight);
+            row.gameObject.SetActive(false);
+            logRows.Add(row);
+        }
+    }
+
+    private HoldBar BuildHoldBar()
+    {
+        RectTransform rect = UiKit.MakeCard("Hold Bar", floatLayer, Card);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.sizeDelta = new Vector2(holdBarWidth + 12f, holdBarHeight + 12f);
+
+        RectTransform track = UiKit.MakeImage("Track", rect, Track).rectTransform;
+        UiKit.Stretch(track, 6f);
+
+        RectTransform zone = UiKit.MakeImage("Zone", track, new Color(Good.r, Good.g, Good.b, 0.35f)).rectTransform;
+        zone.anchorMin = new Vector2(0f, 0f);
+        zone.anchorMax = new Vector2(0f, 1f);
+        zone.pivot = new Vector2(0f, 0.5f);
+
+        Image progressImage = UiKit.MakeImage("Progress", track, Warn);
+        RectTransform progress = progressImage.rectTransform;
+        progress.anchorMin = new Vector2(0f, 0f);
+        progress.anchorMax = new Vector2(0f, 1f);
+        progress.pivot = new Vector2(0f, 0.5f);
+
+        RectTransform needle = UiKit.MakeImage("Needle", track, Ink).rectTransform;
+        needle.anchorMin = new Vector2(0f, 0f);
+        needle.anchorMax = new Vector2(0f, 1f);
+        needle.pivot = new Vector2(0.5f, 0.5f);
+        needle.sizeDelta = new Vector2(3f, 6f);
+
+        rect.gameObject.SetActive(false);
+
+        return new HoldBar { rect = rect, zone = zone, progress = progress, progressImage = progressImage, needle = needle };
+    }
+
+    // ---------- อัปเดตทุกเฟรม ----------
+
+    private void LateUpdate()
     {
         GameManager game = GameManager.Instance;
-        if (game == null) return;
 
-        // หน้าเมนู/หน้าเลือกรางวัลมี UI ของตัวเองอยู่แล้ว ไม่ต้องวาดทับ
-        if (game.Phase == GamePhase.MainMenu || game.Phase == GamePhase.DayEnd) return;
+        // หน้าเมนู/หน้าเลือกรางวัลมี UI ของตัวเองอยู่แล้ว ซ่อน HUD ทั้งก้อน
+        bool visible = game != null && game.Phase != GamePhase.MainMenu && game.Phase != GamePhase.DayEnd;
+        if (canvas.enabled != visible) canvas.enabled = visible;
+        if (!visible) return;
 
         if (worldCamera == null) worldCamera = Camera.main;
 
-        // ทุกส่วนด้านล่างใช้ style ร่วมกัน สร้างให้ครบก่อนวาดชิ้นแรก
-        EnsureStyles();
+        UpdateTopCards(game);
+        UpdateEventLog();
 
-        DrawStatusBar(game);
-        DrawCustomerGauges();
-        DrawPetNeedTags();
+        chipsUsed = 0;
+        ringsUsed = 0;
 
-        if (game.Phase == GamePhase.Service)
-        {
-            DrawHoldPrompt();
-        }
+        UpdateCustomerRings();
+        UpdatePetTags();
 
-        DrawEventLog();
+        if (game.Phase == GamePhase.Service) UpdateHoldPrompt();
+        else holdBar.rect.gameObject.SetActive(false);
+
+        HideUnused(chipPool, chipsUsed, c => c.rect.gameObject);
+        HideUnused(ringPool, ringsUsed, r => r.rect.gameObject);
     }
 
-    /// <summary>ความสูงของบรรทัดที่พอดีกับขนาดตัวอักษร — เผื่อหัว/หางอักษรไทยด้วย</summary>
-    private static float LineHeightFor(int fontSize)
+    private void UpdateTopCards(GameManager game)
     {
-        return fontSize * 1.6f;
+        dayText.text = $"วันที่ {game.Day}";
+        moneyText.text = ReturnZone.TotalWallet.ToString();
+
+        bool service = game.Phase == GamePhase.Service;
+
+        float progress = game.OrdersTarget > 0 ? Mathf.Clamp01((float)game.OrdersCompleted / game.OrdersTarget) : 0f;
+        orderFill.sizeDelta = new Vector2(190f * progress, 0f);
+        orderText.text = service
+            ? $"ออเดอร์ {game.OrdersCompleted}/{game.OrdersTarget}   ·   ดูแลอยู่ {game.ActiveOrderCount}/{game.ConcurrentOrderLimit}"
+            : $"วันนี้ {game.OrdersTarget} ออเดอร์";
+
+        for (int i = 0; i < complaintDots.Count; i++)
+        {
+            bool used = i < game.Complaints;
+            complaintDots[i].color = used ? Danger : Track;
+        }
+
+        bool setup = game.Phase == GamePhase.Setup;
+        if (hintCard.activeSelf != setup) hintCard.SetActive(setup);
+        if (setup) hintText.text = "จัดร้าน — E ยก/วางสถานี   ·   Enter เปิดร้าน";
     }
 
-    private void DrawStatusBar(GameManager game)
+    private void UpdateEventLog()
     {
-        string line = $"เงิน {ReturnZone.TotalWallet}    วันที่ {game.Day}";
+        var entries = GameLog.Entries;
+        if (logPanel.activeSelf != (entries.Count > 0)) logPanel.SetActive(entries.Count > 0);
 
-        if (game.Phase == GamePhase.Service)
+        // entries[0] = เก่าสุด แต่แถวที่ index 0 อยู่ล่างสุด จึงไล่กลับด้าน
+        for (int row = 0; row < logRows.Count; row++)
         {
-            line += $"    ออเดอร์ {game.OrdersCompleted}/{game.OrdersTarget}" +
-                    $"    ดูแลอยู่ {game.ActiveOrderCount}/{game.ConcurrentOrderLimit}" +
-                    $"    ร้องเรียน {game.Complaints}";
+            int entryIndex = entries.Count - 1 - row;
+            Text line = logRows[row];
+
+            if (entryIndex < 0)
+            {
+                if (line.gameObject.activeSelf) line.gameObject.SetActive(false);
+                continue;
+            }
+
+            GameLog.Entry entry = entries[entryIndex];
+
+            float alpha = 1f;
+            if (logFadeSeconds > 0f)
+            {
+                float age = Time.unscaledTime - entry.time;
+                alpha = Mathf.Clamp01(1f - (age - logFadeSeconds) / 2.5f);
+            }
+
+            // บรรทัดเก่ากว่าจางลงตามลำดับด้วย ให้สายตาจับบรรทัดล่าสุดได้เอง
+            alpha *= Mathf.Lerp(1f, 0.55f, row / Mathf.Max(1f, logRows.Count - 1f));
+
+            if (alpha <= 0.02f)
+            {
+                if (line.gameObject.activeSelf) line.gameObject.SetActive(false);
+                continue;
+            }
+
+            if (!line.gameObject.activeSelf) line.gameObject.SetActive(true);
+
+            Color tone = GameLog.ColorFor(entry.tone);
+            line.text = entry.text;
+            Color readable = Color.Lerp(Ink, tone * 0.75f, 0.55f); // ผสมกับสีหมึกให้ยังแยกโทนออกแต่ไม่ซีด
+            line.color = new Color(readable.r, readable.g, readable.b, alpha);
         }
-        else if (game.Phase == GamePhase.Setup)
-        {
-            line += "    ช่วงจัดร้าน — G ยก/วางสถานี, Enter เปิดร้าน";
-        }
-
-        float lineHeight = LineHeightFor(statusFontSize);
-        float boxHeight = lineHeight + 10f;
-
-        // กว้างตามข้อความจริง ไม่ใช่ค่าตายตัว ไม่งั้นพอขยายตัวอักษรแล้วข้อความจะล้นกล่อง
-        float textWidth = statusStyle.CalcSize(new GUIContent(line)).x;
-        float boxWidth = textWidth + 22f;
-
-        DrawBox(new Rect(8, 8, boxWidth, boxHeight), new Color(0f, 0f, 0f, 0.55f));
-        GUI.Label(new Rect(16, 8 + 5f, textWidth + 4f, lineHeight), line, statusStyle);
     }
 
-    /// <summary>วาดเกจความอดทนลอยเหนือหัวลูกค้าที่นั่งรออยู่</summary>
-    private void DrawCustomerGauges()
+    private void UpdateCustomerRings()
     {
         CustomerManager manager = CustomerManager.Instance;
         if (manager == null || worldCamera == null) return;
@@ -187,77 +409,62 @@ public class GameHudOverlay : MonoBehaviour
             bool counterGauge = !orderGauge && customer.ShowCounterGauge;
             if (!orderGauge && !counterGauge) continue;
 
-            Vector3 worldPos = customer.transform.position + Vector3.up * customer.GaugeHeight;
-            Vector3 screen = worldCamera.WorldToScreenPoint(worldPos);
-
-            // อยู่หลังกล้อง = ไม่ต้องวาด ไม่งั้นเกจจะไปโผล่กลับด้านบนจอ
-            if (screen.z <= 0f) continue;
-
-            float x = screen.x - gaugeWidth * 0.5f;
-            float y = Screen.height - screen.y;
+            if (!TryGetScreenPoint(customer.transform.position + Vector3.up * customer.GaugeHeight, out Vector2 point)) continue;
 
             float fill = Mathf.Clamp01(orderGauge ? customer.PatienceNormalized : customer.CounterPatienceNormalized);
-
-            // เกจรอสั่งมีขอบสีฟ้าหนากว่า ส่วนเกจหลังรับออเดอร์ใช้ขอบดำแบบเดิม
-            if (counterGauge)
-            {
-                DrawBox(new Rect(x - 2, y - 2, gaugeWidth + 4, gaugeHeight + 4), counterGaugeFrameColor);
-            }
-
-            DrawBox(new Rect(x - 1, y - 1, gaugeWidth + 2, gaugeHeight + 2), new Color(0f, 0f, 0f, 0.7f));
-            DrawBox(new Rect(x, y, gaugeWidth * fill, gaugeHeight), PatienceColor(fill));
-
             string label = orderGauge
                 ? (customer.AssignedPet != null ? customer.AssignedPet.DisplayName : string.Empty)
-                : $"รอสั่ง · {(customer.RequestedSpecies != null ? customer.RequestedSpecies.speciesName : string.Empty)}";
-            float labelHeight = LineHeightFor(tagFontSize);
-            GUI.Label(new Rect(x - 20, y - labelHeight - 1f, gaugeWidth + 40, labelHeight), label, tagStyle);
+                : "รอสั่ง";
+
+            ShowRing(point, fill, label, orderGauge);
         }
     }
 
     /// <summary>
-    /// ป้ายเหนือหัวสัตว์: 1 ชิ้นต่อ 1 ขั้นตอน — สีตามสถานีถ้ายังไม่ได้ทำ, สีเทามีเครื่องหมายถูกถ้าทำแล้ว
-    /// ทำครบทุกขั้นตอนแล้วเหลือป้ายเขียว "ส่งคืนได้" อันเดียว
+    /// ป้ายเหนือหัวสัตว์: 1 ใบต่อ 1 ขั้นตอน — จุดสีประจำสถานี + ชื่อขั้นตอน ทำแล้วจางลง
+    /// ครบทุกขั้นตอนเหลือใบเขียว "ส่งคืนได้" สัตว์ที่หนีอยู่มีใบแดงนำหน้า
     /// </summary>
-    private void DrawPetNeedTags()
+    private void UpdatePetTags()
     {
         if (worldCamera == null) return;
 
         foreach (Pet pet in Pet.All)
         {
             if (pet == null || pet.Species == null || pet.Species.requiredSteps == null) continue;
-
-            Vector3 screen = worldCamera.WorldToScreenPoint(pet.OverheadWorldPosition);
-            if (screen.z <= 0f) continue;
+            if (!TryGetScreenPoint(pet.OverheadWorldPosition, out Vector2 point)) continue;
 
             chipBuffer.Clear();
 
+            PetEscape escape = pet.GetComponent<PetEscape>();
+            if (escape != null && escape.IsEscaping)
+            {
+                chipBuffer.Add((escape.IsCornered ? "กด E จับ" : "หนีแล้ว!", Danger, false));
+            }
+
             if (pet.IsComplete)
             {
-                string tip = pet.CollectedTip > 0 ? $"  +ทิป {pet.CollectedTip}" : string.Empty;
-                chipBuffer.Add(($"✓ ส่งคืนได้{tip}", ReadyChipColor));
+                string tip = pet.CollectedTip > 0 ? $"ส่งคืนได้  +{pet.CollectedTip}" : "ส่งคืนได้";
+                chipBuffer.Add((tip, Good, false));
             }
             else
             {
                 foreach (CareStep step in pet.Species.requiredSteps)
                 {
                     bool done = pet.HasCompleted(step);
-                    string text = done ? $"✓ {CareStepStyle.LabelOf(step)}" : CareStepStyle.LabelOf(step);
-                    chipBuffer.Add((text, done ? DoneChipColor : CareStepStyle.ColorOf(step)));
+                    chipBuffer.Add((CareStepStyle.LabelOf(step), CareStepStyle.ColorOf(step), done));
                 }
             }
 
-            DrawChipRow(screen.x, Screen.height - screen.y - ChipHeight, chipBuffer);
+            ShowChipRow(point, chipBuffer);
         }
     }
 
     /// <summary>
-    /// ป้ายกับหลอดสำหรับสถานีโหมดกดค้าง — โชว์เฉพาะตอนหันไปหาสถานีนั้นและกดแล้วจะมีผลจริง
-    ///   ยังไม่กด:   ป้าย "กด E ค้าง: อาบน้ำ"
-    ///   กดค้างอยู่: หลอดมีโซนสีเขียว = ช่วงที่ต้องปล่อย, เข็มขาววิ่งตามเวลา
-    ///               สีเหลือง = ยังไม่ถึง / เขียว = ปล่อยได้ / แดง = เลยช่วงแล้ว
+    /// ป้ายกับหลอดสำหรับสถานีโหมดกดค้าง — โชว์เฉพาะตอนหันไปหาสถานีนั้นและกดแล้วมีผลจริง
+    ///   ยังไม่กด:   ป้าย "กด E ค้าง"
+    ///   กดค้างอยู่: หลอดมีช่วงเขียว = จังหวะที่ต้องปล่อย, เข็มวิ่งตามเวลา
     /// </summary>
-    private void DrawHoldPrompt()
+    private void UpdateHoldPrompt()
     {
         if (worldCamera == null) return;
 
@@ -270,23 +477,24 @@ public class GameHudOverlay : MonoBehaviour
         }
 
         CareStation station = playerInteraction.CurrentTarget as CareStation;
-        if (station == null || !station.UseHold || !station.CanServeByHold(playerCarrier)) return;
+        bool show = station != null && station.UseHold && station.CanServeByHold(playerCarrier);
 
-        Vector3 screen = worldCamera.WorldToScreenPoint(playerInteraction.transform.position + holdBarWorldOffset);
-        if (screen.z <= 0f) return;
+        if (!show || !TryGetScreenPoint(playerInteraction.transform.position + holdBarWorldOffset, out Vector2 point))
+        {
+            holdBar.rect.gameObject.SetActive(false);
+            return;
+        }
 
-        EnsureStyles();
-
-        float centerX = screen.x;
-        float top = Screen.height - screen.y;
         string stationLabel = CareStepStyle.LabelOf(station.Step);
-
         bool holding = ReferenceEquals(playerInteraction.ActiveHoldTarget, station);
+
         if (!holding)
         {
+            holdBar.rect.gameObject.SetActive(false);
+
             chipBuffer.Clear();
-            chipBuffer.Add(($"กด {playerInteraction.InteractKey} ค้าง: {stationLabel}", CareStepStyle.ColorOf(station.Step)));
-            DrawChipRow(centerX, top, chipBuffer);
+            chipBuffer.Add(($"กด {playerInteraction.InteractKey} ค้าง · {stationLabel}", CareStepStyle.ColorOf(station.Step), false));
+            ShowChipRow(point, chipBuffer);
             return;
         }
 
@@ -297,145 +505,196 @@ public class GameHudOverlay : MonoBehaviour
 
         bool failed = station.HoldFailed;
         bool inWindow = !failed && held >= windowStart && held <= windowEnd;
-        Color stateColor = failed ? HoldFailColor : inWindow ? HoldReadyColor : HoldChargingColor;
+        Color stateColor = failed ? Danger : inWindow ? Good : Warn;
 
-        Rect bar = new Rect(centerX - holdBarWidth * 0.5f, top + ChipHeight + 4f, holdBarWidth, holdBarHeight);
+        holdBar.rect.gameObject.SetActive(true);
+        holdBar.rect.sizeDelta = new Vector2(holdBarWidth + 12f, holdBarHeight + 12f);
+        holdBar.rect.anchoredPosition = point + new Vector2(0f, -ChipHeight - 8f);
 
-        DrawBox(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), new Color(0f, 0f, 0f, 0.75f));
-        DrawBox(bar, new Color(0.18f, 0.18f, 0.18f, 0.9f));
+        holdBar.zone.anchoredPosition = new Vector2(holdBarWidth * (windowStart / barSeconds), 0f);
+        holdBar.zone.sizeDelta = new Vector2(holdBarWidth * ((windowEnd - windowStart) / barSeconds), 0f);
 
-        // โซนสีเขียว = ช่วงที่ต้องปล่อยปุ่ม
-        DrawBox(new Rect(
-            bar.x + bar.width * (windowStart / barSeconds),
-            bar.y,
-            bar.width * ((windowEnd - windowStart) / barSeconds),
-            bar.height), HoldZoneColor);
-
-        // แถบเวลาที่กดค้างมาแล้ว + เข็มขาวตรงปลาย ให้เห็นชัดว่าอยู่ก่อน/ในหรือเลยโซนเขียว
         float fill = Mathf.Clamp01(held / barSeconds);
-        DrawBox(new Rect(bar.x, bar.y + bar.height * 0.3f, bar.width * fill, bar.height * 0.4f), stateColor);
-        DrawBox(new Rect(bar.x + bar.width * fill - 1.5f, bar.y - 4f, 3f, bar.height + 8f), Color.white);
+        holdBar.progress.sizeDelta = new Vector2(holdBarWidth * fill, 0f);
+        holdBar.progressImage.color = stateColor;
+        holdBar.needle.anchoredPosition = new Vector2(holdBarWidth * fill, 0f);
 
-        string caption = failed ? "ค้างนานเกิน — ปล่อยแล้วลองใหม่"
+        string caption = failed ? "ค้างนานไป — ปล่อยแล้วเริ่มใหม่"
             : inWindow ? "ปล่อยเลย!"
-            : $"ค้างไว้... ({stationLabel})";
+            : stationLabel;
 
         chipBuffer.Clear();
-        chipBuffer.Add((caption, stateColor));
-        DrawChipRow(centerX, top, chipBuffer);
+        chipBuffer.Add((caption, stateColor, false));
+        ShowChipRow(point, chipBuffer);
     }
 
-    /// <summary>ความสูงป้ายที่ใช้จริง — ขยายตามขนาดตัวอักษรเพื่อไม่ให้ข้อความโดนตัดบน/ล่าง</summary>
-    private float ChipHeight => Mathf.Max(chipHeight, LineHeightFor(tagFontSize));
+    // ---------- pool ของที่ลอยตามตัวละคร ----------
 
-    private void DrawChipRow(float centerX, float top, List<(string text, Color color)> chips)
+    private float ChipHeight => Mathf.Max(chipHeight, tagFontSize * 1.8f);
+
+    /// <summary>วางป้ายเรียงแถวเดียว จัดกึ่งกลางที่พิกัดจอที่ให้มา</summary>
+    private void ShowChipRow(Vector2 point, List<(string text, Color dot, bool done)> chips)
     {
+        if (chips.Count == 0) return;
+
+        const float dotSize = 10f;
+
         float totalWidth = -chipSpacing;
-        foreach (var chip in chips)
+        for (int i = 0; i < chips.Count; i++)
         {
-            totalWidth += chipStyle.CalcSize(new GUIContent(chip.text)).x + chipPadding * 2f + chipSpacing;
+            Chip chip = TakeChip(chipsUsed + i);
+            chip.label.text = chips[i].text;
+            totalWidth += chip.label.preferredWidth + chipPadding * 2f + dotSize + 6f + chipSpacing;
         }
 
-        float x = centerX - totalWidth * 0.5f;
+        float x = point.x - totalWidth * 0.5f;
 
-        foreach (var chip in chips)
+        for (int i = 0; i < chips.Count; i++)
         {
-            float width = chipStyle.CalcSize(new GUIContent(chip.text)).x + chipPadding * 2f;
-            Rect rect = new Rect(x, top, width, ChipHeight);
+            Chip chip = TakeChip(chipsUsed + i);
+            float width = chip.label.preferredWidth + chipPadding * 2f + dotSize + 6f;
 
-            DrawBox(new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, rect.height + 2f), new Color(0f, 0f, 0f, 0.6f));
-            DrawBox(rect, chip.color);
-            GUI.Label(rect, chip.text, chipStyle);
+            chip.rect.sizeDelta = new Vector2(width, ChipHeight);
+            chip.rect.anchoredPosition = new Vector2(x + width * 0.5f, point.y);
+
+            // ขั้นตอนที่ทำแล้วจางทั้งใบ เหลือเฉพาะของที่ยังต้องทำที่เด่น
+            bool done = chips[i].done;
+            chip.card.color = done ? CardQuiet : Card;
+            chip.dot.color = done ? Track : chips[i].dot;
+            chip.label.color = done ? new Color(Ink.r, Ink.g, Ink.b, 0.62f) : Ink;
+
+            UiKit.Place(chip.dot.rectTransform, new Vector2(chipPadding, -(ChipHeight - dotSize) * 0.5f), new Vector2(dotSize, dotSize));
+            UiKit.Place(chip.label.rectTransform, new Vector2(chipPadding + dotSize + 6f, 0f), new Vector2(width, ChipHeight));
 
             x += width + chipSpacing;
         }
+
+        chipsUsed += chips.Count;
     }
 
-    private static Color PatienceColor(float fill)
+    private Chip TakeChip(int index)
     {
-        if (fill > 0.5f) return new Color(0.45f, 0.85f, 0.55f);
-        if (fill > 0.25f) return new Color(0.95f, 0.8f, 0.35f);
-        return new Color(0.9f, 0.35f, 0.35f);
+        while (chipPool.Count <= index) chipPool.Add(BuildChip());
+
+        Chip chip = chipPool[index];
+        if (!chip.rect.gameObject.activeSelf) chip.rect.gameObject.SetActive(true);
+        return chip;
     }
 
-    private void DrawEventLog()
+    private Chip BuildChip()
     {
-        var entries = GameLog.Entries;
-        if (entries.Count == 0) return;
+        RectTransform rect = UiKit.MakeCard($"Chip {chipPool.Count}", floatLayer, Card, out Image card);
+        rect.pivot = new Vector2(0.5f, 1f);
 
-        float lineHeight = LineHeightFor(logFontSize);
-        float boxHeight = entries.Count * lineHeight + 10f;
-        float top = Screen.height - boxHeight - 10f;
+        Image dot = UiKit.MakeImage("Dot", rect, Ink);
+        dot.sprite = UiKit.Circle;
 
-        DrawBox(new Rect(8, top, logWidth, boxHeight), new Color(0f, 0f, 0f, 0.45f));
+        Text label = UiKit.MakeText("Label", rect, tagFontSize, Ink, TextAnchor.MiddleLeft);
+        label.fontStyle = FontStyle.Bold;
 
-        Color previous = GUI.color;
+        return new Chip { rect = rect, card = card, dot = dot, label = label };
+    }
 
-        for (int i = 0; i < entries.Count; i++)
+    private void ShowRing(Vector2 point, float fill, string label, bool afterOrder)
+    {
+        Ring ring = TakeRing(ringsUsed);
+        ringsUsed++;
+
+        ring.rect.sizeDelta = new Vector2(ringSize, ringSize);
+        ring.rect.anchoredPosition = point;
+
+        ring.fill.fillAmount = fill;
+        ring.fill.color = PatienceColor(fill);
+
+        // ช่วงรอสั่งใช้วงจางกว่า ผู้เล่นจึงแยกออกทันทีว่าคนไหนยังไม่ได้รับออเดอร์
+        ring.track.color = afterOrder ? Track : new Color(Ink.r, Ink.g, Ink.b, 0.07f);
+        ring.badge.color = afterOrder ? Card : new Color(0.55f, 0.72f, 0.95f, 0.95f);
+
+        ring.label.text = label;
+        ring.label.color = afterOrder ? Ink : InkSoft;
+    }
+
+    private Ring TakeRing(int index)
+    {
+        while (ringPool.Count <= index) ringPool.Add(BuildRing());
+
+        Ring ring = ringPool[index];
+        if (!ring.rect.gameObject.activeSelf) ring.rect.gameObject.SetActive(true);
+        return ring;
+    }
+
+    private Ring BuildRing()
+    {
+        RectTransform rect = UiKit.MakeRect($"Ring {ringPool.Count}", floatLayer);
+
+        Image track = UiKit.MakeImage("Track", rect, Track);
+        track.sprite = UiKit.Ring;
+        UiKit.Stretch(track.rectTransform);
+
+        Image fill = UiKit.MakeImage("Fill", rect, Good);
+        fill.sprite = UiKit.Ring;
+        fill.type = Image.Type.Filled;
+        fill.fillMethod = Image.FillMethod.Radial360;
+        fill.fillOrigin = (int)Image.Origin360.Top;
+        fill.fillClockwise = true;
+        UiKit.Stretch(fill.rectTransform);
+
+        // แผ่นกลมตรงกลางวง ทำให้วงแหวนอ่านง่ายแม้ทับพื้นลายๆ
+        Image badge = UiKit.MakeImage("Badge", rect, Card);
+        badge.sprite = UiKit.Circle;
+        UiKit.Stretch(badge.rectTransform, ringSize * 0.22f);
+
+        Text label = UiKit.MakeText("Label", rect, tagFontSize - 1, Ink, TextAnchor.MiddleCenter);
+        label.fontStyle = FontStyle.Bold;
+
+        // ชื่อสัตว์ยาวไม่เท่ากัน ให้ย่อขนาดตัวอักษรเองเพื่อไม่ให้ข้อความล้นออกนอกวง
+        label.resizeTextForBestFit = true;
+        label.resizeTextMinSize = 11;
+        label.resizeTextMaxSize = tagFontSize - 1;
+        label.horizontalOverflow = HorizontalWrapMode.Wrap;
+        label.verticalOverflow = VerticalWrapMode.Truncate;
+
+        RectTransform labelRect = label.rectTransform;
+        labelRect.anchorMin = labelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        labelRect.pivot = new Vector2(0.5f, 0.5f);
+        labelRect.sizeDelta = new Vector2(ringSize * 0.58f, ringSize * 0.58f);
+        labelRect.anchoredPosition = Vector2.zero;
+
+        return new Ring { rect = rect, track = track, fill = fill, badge = badge, label = label };
+    }
+
+    private static void HideUnused<T>(List<T> pool, int used, System.Func<T, GameObject> selector)
+    {
+        for (int i = used; i < pool.Count; i++)
         {
-            GameLog.Entry entry = entries[i];
+            GameObject go = selector(pool[i]);
+            if (go.activeSelf) go.SetActive(false);
+        }
+    }
 
-            float alpha = 1f;
-            if (logFadeSeconds > 0f)
-            {
-                float age = Time.unscaledTime - entry.time;
-                alpha = Mathf.Clamp01(1f - (age - logFadeSeconds) / 3f);
-                if (alpha <= 0f) continue;
-            }
+    // ---------- ตัวช่วยสร้าง UI ----------
 
-            Color tone = GameLog.ColorFor(entry.tone);
-            GUI.color = new Color(tone.r, tone.g, tone.b, alpha);
-            GUI.Label(new Rect(16, top + 5f + i * lineHeight, logWidth - 14f, lineHeight), entry.text, logStyle);
+    /// <summary>แปลงตำแหน่งโลกเป็นพิกัดใน Canvas — คืน false ถ้าอยู่หลังกล้อง</summary>
+    private bool TryGetScreenPoint(Vector3 worldPosition, out Vector2 point)
+    {
+        Vector3 screen = worldCamera.WorldToScreenPoint(worldPosition);
+        if (screen.z <= 0f)
+        {
+            point = Vector2.zero;
+            return false;
         }
 
-        GUI.color = previous;
+        // Canvas ย่อ/ขยายตามจอ ต้องหารด้วย scaleFactor ไม่งั้นตำแหน่งจะเพี้ยนเวลาจอไม่ใช่ 1920x1080
+        float scale = canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
+        point = new Vector2(screen.x / scale, screen.y / scale);
+        return true;
     }
 
-    private void EnsureStyles()
+    /// <summary>สีของมิเตอร์ความอดทน: เขียว → เหลือง → แดง ตามเวลาที่เหลือ</summary>
+    private static Color PatienceColor(float fill)
     {
-        if (chipStyle != null) return;
-
-        // GUI.skin ใช้ได้เฉพาะใน OnGUI จึงสร้าง style ตอนวาดครั้งแรก
-        chipStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontStyle = FontStyle.Bold,
-            fontSize = tagFontSize
-        };
-        chipStyle.normal.textColor = new Color(0.08f, 0.08f, 0.08f);
-
-        // สีของข้อความล็อก/ป้ายมาจาก GUI.color ตอนวาด style จึงต้องเป็นสีขาวล้วนไว้ก่อน
-        statusStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = statusFontSize,
-            alignment = TextAnchor.MiddleLeft,
-            wordWrap = false
-        };
-        statusStyle.normal.textColor = Color.white;
-
-        logStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = logFontSize,
-            alignment = TextAnchor.MiddleLeft,
-            wordWrap = false,
-            clipping = TextClipping.Clip
-        };
-        logStyle.normal.textColor = Color.white;
-
-        tagStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = tagFontSize,
-            alignment = TextAnchor.MiddleCenter,
-            wordWrap = false
-        };
-        tagStyle.normal.textColor = Color.white;
-    }
-
-    private void DrawBox(Rect rect, Color color)
-    {
-        Color previous = GUI.color;
-        GUI.color = color;
-        GUI.DrawTexture(rect, pixel);
-        GUI.color = previous;
+        if (fill > 0.5f) return Good;
+        if (fill > 0.25f) return Warn;
+        return Danger;
     }
 }

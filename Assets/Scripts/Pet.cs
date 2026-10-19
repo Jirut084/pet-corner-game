@@ -181,6 +181,13 @@ public class Pet : MonoBehaviour, ICarryable
         {
             petRenderers = GetComponentsInChildren<Renderer>();
         }
+
+        // ระบบหนี/ไล่จับ ใส่ให้อัตโนมัติ ไม่ต้องแก้ prefab สัตว์ทุกตัว
+        // อยากปรับค่า ให้ Add Component "PetEscape" ลง prefab เองแล้วตั้งใน Inspector
+        if (GetComponent<PetEscape>() == null)
+        {
+            gameObject.AddComponent<PetEscape>();
+        }
     }
 
     private void OnEnable()

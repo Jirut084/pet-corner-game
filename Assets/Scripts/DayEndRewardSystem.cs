@@ -39,6 +39,18 @@ public class RewardOption
 
     [Header("ใช้เมื่อ kind = UnlockSpecies")]
     public PetSpecies species;
+
+    [Header("ราคาที่ต้องจ่าย (ไม่บังคับ)")]
+    [Tooltip("บัฟที่จะถูกหักกลับ เช่น PatienceDrain 0.1 = ลูกค้าใจร้อนขึ้น 10%")]
+    public PerkType penaltyPerk = PerkType.PatienceDrain;
+
+    [Tooltip("ขนาดของโทษ (0 = การ์ดใบนี้ไม่มีข้อเสีย)")]
+    [Min(0f)]
+    public float penaltyAmount = 0f;
+
+    [Tooltip("ออเดอร์ต่อวันที่เพิ่มขึ้นถาวรจากการ์ดใบนี้")]
+    [Min(0)]
+    public int extraOrdersPerDay = 0;
 }
 
 /// <summary>
@@ -80,6 +92,8 @@ public class DayEndRewardSystem : MonoBehaviour
     // ทำให้ Instance ยังเป็น null แล้ว subscribe ไม่ติดเลยทั้งเกม
     private void Start()
     {
+        if (rewardPool.Count == 0) rewardPool = BuildDefaultPool();
+
         if (GameManager.Instance == null)
         {
             Debug.LogError("[DayEndRewardSystem] ไม่มี GameManager ในฉาก จะไม่มีรางวัลท้ายวัน");
@@ -87,6 +101,41 @@ public class DayEndRewardSystem : MonoBehaviour
         }
 
         GameManager.Instance.OnDayEnded += HandleDayEnded;
+    }
+
+    /// <summary>
+    /// คลังรางวัลเริ่มต้น ใช้เมื่อยังไม่ได้ตั้งอะไรใน Inspector — ฉากใหม่จึงมีรางวัลให้เลือกทันที
+    /// ครึ่งหนึ่งเป็นการ์ดที่แรงกว่าแต่มีราคาต้องจ่าย ตามหลักของ PlateUp ที่การ์ดทุกใบมีทั้งได้และเสีย
+    /// (การ์ดปลดล็อกสถานี/สัตว์ต้องอ้างอิง prefab จึงตั้งเองใน Inspector เท่านั้น ที่นี่มีแต่บัฟ)
+    /// </summary>
+    private static List<RewardOption> BuildDefaultPool()
+    {
+        return new List<RewardOption>
+        {
+            new RewardOption { label = "รองเท้าใหม่\nเดินเร็วขึ้น 20%", kind = RewardKind.Perk, perk = PerkType.MoveSpeed, amount = 0.2f },
+            new RewardOption { label = "มือฉมัง\nใช้สถานีไวขึ้น 20%", kind = RewardKind.Perk, perk = PerkType.InteractSpeed, amount = 0.2f },
+            new RewardOption { label = "มุมนั่งสบาย\nลูกค้าใจเย็นขึ้น 15%", kind = RewardKind.Perk, perk = PerkType.PatienceDrain, amount = 0.15f },
+            new RewardOption { label = "ถุงมือจับสัตว์\nไล่จับง่ายขึ้น 60%", kind = RewardKind.Perk, perk = PerkType.CatchRadius, amount = 0.6f },
+
+            new RewardOption
+            {
+                label = "ป้ายโฆษณา\nค่าบริการ +35%\nแต่ออเดอร์ต่อวัน +1",
+                kind = RewardKind.Perk, perk = PerkType.ServiceFee, amount = 0.35f,
+                extraOrdersPerDay = 1
+            },
+            new RewardOption
+            {
+                label = "เครื่องมือมืออาชีพ\nใช้สถานีไวขึ้น 40%\nแต่ลูกค้าใจร้อนขึ้น 15%",
+                kind = RewardKind.Perk, perk = PerkType.InteractSpeed, amount = 0.4f,
+                penaltyPerk = PerkType.PatienceDrain, penaltyAmount = 0.15f
+            },
+            new RewardOption
+            {
+                label = "เปิดร้านเช้าขึ้น\nเดินเร็วขึ้น 30%\nแต่ออเดอร์ต่อวัน +1",
+                kind = RewardKind.Perk, perk = PerkType.MoveSpeed, amount = 0.3f,
+                extraOrdersPerDay = 1
+            }
+        };
     }
 
     private void OnDestroy()
@@ -108,7 +157,7 @@ public class DayEndRewardSystem : MonoBehaviour
 
         for (int i = 0; i < currentOffer.Count && i < 9; i++)
         {
-            if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+            if (GameInput.DigitPressed(i + 1))
             {
                 Choose(i);
                 return;
@@ -231,6 +280,10 @@ public class DayEndRewardSystem : MonoBehaviour
                 progress.UnlockSpecies(option.species);
                 break;
         }
+
+        // ราคาที่ต้องจ่าย — การ์ดแรงๆ ต้องมีข้อเสียถ่วงไว้ ไม่งั้นเล่นไปยิ่งง่าย
+        if (option.penaltyAmount > 0f) progress.ApplyBuff(option.penaltyPerk, -option.penaltyAmount);
+        if (option.extraOrdersPerDay > 0) progress.AddDailyOrders(option.extraOrdersPerDay);
 
         GameLog.Push($"ได้รับรางวัล: {DescribeOption(option)}", LogTone.Good);
     }

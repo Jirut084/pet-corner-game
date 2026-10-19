@@ -1,17 +1,21 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
-/// หน้าจอเมนูทั้งหมดของเกม วาดด้วย OnGUI (ยังไม่ใช้ Canvas)
-/// ใช้ได้จริงตั้งแต่ตอนนี้ และแทนที่ด้วย UI จริงทีหลังได้โดยไม่ต้องแก้ระบบข้างล่าง
+/// หน้าจอเมนูทั้งหมดของเกม สร้างเป็น Canvas ด้วยโค้ดตอน Awake (ชิ้นส่วนมาจาก UiKit ชุดเดียวกับ HUD)
 ///
 ///   เมนูหลัก      — คลิกการ์ดสัตว์ (หรือกด 1..9) เพื่อเริ่มเล่น / Esc ออกเกม
-///   ช่วงจัดร้าน    — กด Enter เปิดร้าน
-///   ท้ายวัน       — คลิกการ์ดรางวัล (หรือกด 1..9) แล้วต่อด้วยร้านค้าท้ายวัน
+///   ช่วงจัดร้าน    — กด Enter เปิดร้าน (ไม่มีหน้าจอ มีแค่ป้ายบอกใน HUD)
+///   ท้ายวัน       — เลือกรางวัล 1 ใบ แล้วต่อด้วยร้านค้าท้ายวัน
 ///   จบเกม        — สรุปผล + ปุ่มเล่นใหม่ / ออกเกม
 ///   ระหว่างเล่น    — Esc เปิดเมนูหยุดเกม (เล่นต่อ / กลับเมนูหลัก / ออกเกม)
 ///
 /// เมนูหยุดเกมตั้ง Time.timeScale = 0 ซึ่งหยุดแค่การเคลื่อนที่ ส่วน Update กับ Input ยังทำงานอยู่
 /// ระบบที่รับปุ่ม (เดิน/โต้ตอบ/ยกสถานี/ซื้อของ) จึงเช็ค GameManager.IsPaused เองอีกชั้น
+///
+/// ปุ่มบนจอใช้ EventSystem ของฉาก (InputSystemUIInputModule) ส่วนปุ่มลัด 1..9 / Enter / Esc
+/// ยังอ่านผ่าน GameInput เหมือนเดิม ทั้งสองทางทำงานคู่กันได้
 /// </summary>
 public class GameFlowDebugControls : MonoBehaviour
 {
@@ -29,8 +33,13 @@ public class GameFlowDebugControls : MonoBehaviour
     [SerializeField] private KeyCode pauseKey = KeyCode.Escape;
 
     [Header("Layout")]
-    [SerializeField] private int cardWidth = 240;
-    [SerializeField] private int cardHeight = 132;
+    [SerializeField] private int cardWidth = 260;
+    [SerializeField] private int cardHeight = 190;
+
+    [SerializeField] private Vector2 referenceResolution = new Vector2(1600f, 900f);
+
+    [Tooltip("จำนวนช่องสินค้าสูงสุดที่เตรียมไว้ในหน้าร้านค้า")]
+    [SerializeField] private int maxShopSlots = 8;
 
     /// <summary>สัตว์ทั้งหมดที่ให้เลือกในหน้าเมนู — ร้านค้าท้ายวันใช้เป็นรายการสัตว์ที่ขายได้ ถ้าไม่ได้ตั้งรายการของตัวเอง</summary>
     public PetSpecies[] SelectableStarters => selectableStarters;
@@ -41,24 +50,45 @@ public class GameFlowDebugControls : MonoBehaviour
     // ถ้าไม่ข้าม ร้านจะเปิดรับลูกค้าทันทีโดยผู้เล่นยังไม่ได้จัดร้าน
     private int setupEnteredFrame = -1;
 
-    // พื้นหลังทึบของหน้าจอเมนู สร้างครั้งเดียวใช้ซ้ำทั้งเกม
-    private Texture2D pixel;
-    private GUIStyle titleStyle;
-    private GUIStyle headingStyle;
-    private GUIStyle centeredStyle;
+    private Canvas canvas;
+    private GameObject dim;
 
-    private static readonly Color ScreenDim = new Color(0.04f, 0.05f, 0.07f, 0.92f);
-    private static readonly Color PanelColor = new Color(0.12f, 0.14f, 0.18f, 0.97f);
-    private static readonly Color WinColor = new Color(0.5f, 0.9f, 0.6f);
-    private static readonly Color LoseColor = new Color(0.95f, 0.5f, 0.45f);
+    // หน้าเมนูหลัก
+    private GameObject mainMenuRoot;
+    private Text mainSubtitle;
+    private readonly List<Button> starterButtons = new List<Button>();
+    private readonly List<Text> starterLabels = new List<Text>();
+
+    // หน้าเลือกรางวัล
+    private GameObject rewardRoot;
+    private Text rewardTitle;
+    private readonly List<Button> rewardButtons = new List<Button>();
+    private readonly List<Text> rewardLabels = new List<Text>();
+
+    // หน้าร้านค้าท้ายวัน
+    private GameObject shopRoot;
+    private Text shopTitle;
+    private Text shopMoney;
+    private readonly List<Button> shopButtons = new List<Button>();
+    private readonly List<Text> shopLabels = new List<Text>();
+    private Text shopContinueLabel;
+
+    // หน้าหยุดเกม / จบเกม
+    private GameObject pauseRoot;
+    private Text pauseInfo;
+    private GameObject runOverRoot;
+    private Text runOverTitle;
+    private Text runOverSummary;
+    private Text runOverStats;
+
+    // ข้อความสำรองตอนท้ายวันที่ยังไม่มีอะไรให้เลือก
+    private GameObject waitingRoot;
+    private Text waitingText;
 
     private void Awake()
     {
         rewardSystem = FindAnyObjectByType<DayEndRewardSystem>();
-
-        pixel = new Texture2D(1, 1);
-        pixel.SetPixel(0, 0, Color.white);
-        pixel.Apply();
+        BuildCanvas();
     }
 
     private void Start()
@@ -75,8 +105,6 @@ public class GameFlowDebugControls : MonoBehaviour
         {
             GameManager.Instance.OnPhaseChanged -= HandlePhaseChanged;
         }
-
-        if (pixel != null) Destroy(pixel);
     }
 
     private void HandlePhaseChanged(GamePhase phase)
@@ -87,12 +115,14 @@ public class GameFlowDebugControls : MonoBehaviour
         }
     }
 
+    // ---------- ปุ่มลัด ----------
+
     private void Update()
     {
         GameManager game = GameManager.Instance;
         if (game == null) return;
 
-        if (Input.GetKeyDown(pauseKey))
+        if (GameInput.Pressed(pauseKey))
         {
             HandlePauseKey(game);
             return;
@@ -107,7 +137,7 @@ public class GameFlowDebugControls : MonoBehaviour
             return;
         }
 
-        if (game.Phase == GamePhase.Setup && Time.frameCount != setupEnteredFrame && Input.GetKeyDown(openShopKey))
+        if (game.Phase == GamePhase.Setup && Time.frameCount != setupEnteredFrame && GameInput.Pressed(openShopKey))
         {
             game.BeginServicePhase();
         }
@@ -134,7 +164,7 @@ public class GameFlowDebugControls : MonoBehaviour
 
         for (int i = 0; i < selectableStarters.Length && i < 9; i++)
         {
-            if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+            if (GameInput.DigitPressed(i + 1))
             {
                 StartRunWith(selectableStarters[i], game);
                 return;
@@ -144,7 +174,7 @@ public class GameFlowDebugControls : MonoBehaviour
 
     private void StartRunWith(PetSpecies starter, GameManager game)
     {
-        if (starter == null) return;
+        if (starter == null || game == null) return;
 
         // ต้อง ResetForNewRun ก่อน StartNewRun เสมอ เพราะ StartNewRun จะเข้า Setup ทันที
         // แล้ว LevelInitializer จะอ่านสถานีที่ปลดล็อกไปวางในจังหวะนั้นเลย
@@ -168,263 +198,337 @@ public class GameFlowDebugControls : MonoBehaviour
 #endif
     }
 
-    private void OnGUI()
+    // ---------- สร้างหน้าจอ ----------
+
+    private void BuildCanvas()
+    {
+        // sortingOrder สูงกว่า HUD (10) เมนูจึงอยู่หน้าเสมอ และเปิด raycast ไว้เพราะมีปุ่มให้กด
+        canvas = UiKit.MakeCanvas("Menu Canvas", transform, 50, true, referenceResolution);
+
+        Image dimImage = UiKit.MakeImage("Dim", canvas.transform, UiKit.Dim);
+        dimImage.raycastTarget = true; // กันคลิกทะลุไปโดนของในฉากข้างหลัง
+        UiKit.Stretch(dimImage.rectTransform);
+        dim = dimImage.gameObject;
+
+        BuildMainMenu();
+        BuildRewardScreen();
+        BuildShopScreen();
+        BuildPauseMenu();
+        BuildRunOverScreen();
+        BuildWaitingScreen();
+    }
+
+    private void BuildMainMenu()
+    {
+        int count = selectableStarters != null ? selectableStarters.Length : 0;
+        float cardsWidth = count > 0 ? count * cardWidth + (count - 1) * 16f : 520f;
+
+        RectTransform panel = MakePanel("Main Menu", Mathf.Max(760f, cardsWidth + 120f), cardHeight + 330f, out mainMenuRoot);
+
+        Text title = UiKit.MakeText("Title", panel, 46, UiKit.Ink, TextAnchor.UpperCenter);
+        title.fontStyle = FontStyle.Bold;
+        title.text = gameTitle;
+        Fill(title.rectTransform, 40f, 56f);
+
+        Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
+        subtitle.text = "ร้านรับฝากดูแลสัตว์เลี้ยง";
+        Fill(subtitle.rectTransform, 98f, 26f);
+
+        mainSubtitle = UiKit.MakeText("Brief", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
+        Fill(mainSubtitle.rectTransform, 128f, 26f);
+
+        float cardsLeft = (panel.sizeDelta.x - cardsWidth) * 0.5f;
+
+        for (int i = 0; i < count; i++)
+        {
+            int index = i;
+            Button button = UiKit.MakeButton($"Starter {i}", panel, 20, out Text label);
+            UiKit.Place(button.GetComponent<RectTransform>(),
+                new Vector2(cardsLeft + i * (cardWidth + 16f), -174f), new Vector2(cardWidth, cardHeight));
+
+            button.onClick.AddListener(() => StartRunWith(selectableStarters[index], GameManager.Instance));
+
+            starterButtons.Add(button);
+            starterLabels.Add(label);
+        }
+
+        Text hint = UiKit.MakeText("Hint", panel, 18, UiKit.InkSoft, TextAnchor.UpperCenter);
+        hint.text = "WASD เดิน   ·   E ทำทุกอย่าง (ยก / วาง / ดูแล)   ·   Enter เปิดร้าน";
+        Fill(hint.rectTransform, 174f + cardHeight + 26f, 24f);
+
+        Button quit = UiKit.MakeButton("Quit", panel, 19, out Text quitLabel);
+        quitLabel.text = $"ออกจากเกม  ({pauseKey})";
+        UiKit.Place(quit.GetComponent<RectTransform>(),
+            new Vector2((panel.sizeDelta.x - 220f) * 0.5f, -(174f + cardHeight + 62f)), new Vector2(220f, 46f));
+        quit.onClick.AddListener(QuitGame);
+    }
+
+    private void BuildRewardScreen()
+    {
+        RectTransform panel = MakePanel("Rewards", 3 * cardWidth + 32f + 120f, cardHeight + 200f, out rewardRoot);
+
+        rewardTitle = UiKit.MakeText("Title", panel, 34, UiKit.Ink, TextAnchor.UpperCenter);
+        rewardTitle.fontStyle = FontStyle.Bold;
+        Fill(rewardTitle.rectTransform, 36f, 40f);
+
+        Text subtitle = UiKit.MakeText("Subtitle", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
+        subtitle.text = "เลือกได้ 1 ใบ — ใบที่แรงกว่ามักมีราคาที่ต้องจ่าย";
+        Fill(subtitle.rectTransform, 84f, 24f);
+
+        float left = (panel.sizeDelta.x - (3 * cardWidth + 32f)) * 0.5f;
+
+        for (int i = 0; i < 3; i++)
+        {
+            int index = i;
+            Button button = UiKit.MakeButton($"Reward {i}", panel, 20, out Text label);
+            UiKit.Place(button.GetComponent<RectTransform>(),
+                new Vector2(left + i * (cardWidth + 16f), -124f), new Vector2(cardWidth, cardHeight));
+
+            button.onClick.AddListener(() => rewardSystem?.Choose(index));
+
+            rewardButtons.Add(button);
+            rewardLabels.Add(label);
+        }
+    }
+
+    private void BuildShopScreen()
+    {
+        const int columns = 4;
+        int rows = Mathf.CeilToInt(maxShopSlots / (float)columns);
+
+        float width = columns * cardWidth + (columns - 1) * 16f + 120f;
+        float height = rows * (cardHeight + 16f) + 230f;
+
+        RectTransform panel = MakePanel("Shop", width, height, out shopRoot);
+
+        shopTitle = UiKit.MakeText("Title", panel, 34, UiKit.Ink, TextAnchor.UpperCenter);
+        shopTitle.fontStyle = FontStyle.Bold;
+        Fill(shopTitle.rectTransform, 34f, 40f);
+
+        Text subtitle = UiKit.MakeText("Subtitle", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
+        subtitle.text = "ใช้เงินจากลูกค้าซื้อบัฟ / สถานีเพิ่ม / สัตว์ชนิดใหม่ — ชิ้นละครั้งต่อวัน";
+        Fill(subtitle.rectTransform, 80f, 24f);
+
+        // ป้ายเงินมุมขวาบนของแผง
+        RectTransform moneyCard = UiKit.MakeCard("Money", panel, UiKit.Card);
+        UiKit.Place(moneyCard, new Vector2(width - 190f, -30f), new Vector2(150f, 48f));
+
+        Image coin = UiKit.MakeImage("Coin", moneyCard, UiKit.Money);
+        coin.sprite = UiKit.Circle;
+        UiKit.Place(coin.rectTransform, new Vector2(16f, -16f), new Vector2(18f, 18f));
+
+        shopMoney = UiKit.MakeText("Amount", moneyCard, 26, UiKit.Ink, TextAnchor.MiddleLeft);
+        shopMoney.fontStyle = FontStyle.Bold;
+        UiKit.Place(shopMoney.rectTransform, new Vector2(42f, 0f), new Vector2(100f, 48f));
+
+        float left = (width - (columns * cardWidth + (columns - 1) * 16f)) * 0.5f;
+
+        for (int i = 0; i < maxShopSlots; i++)
+        {
+            int index = i;
+            Button button = UiKit.MakeButton($"Offer {i}", panel, 18, out Text label);
+            UiKit.Place(button.GetComponent<RectTransform>(),
+                new Vector2(left + (i % columns) * (cardWidth + 16f), -(118f + (i / columns) * (cardHeight + 16f))),
+                new Vector2(cardWidth, cardHeight));
+
+            button.onClick.AddListener(() => DayEndShop.Instance?.TryBuy(index));
+
+            shopButtons.Add(button);
+            shopLabels.Add(label);
+        }
+
+        Button continueButton = UiKit.MakeButton("Continue", panel, 20, out shopContinueLabel);
+        UiKit.Place(continueButton.GetComponent<RectTransform>(),
+            new Vector2((width - 260f) * 0.5f, -(height - 74f)), new Vector2(260f, 50f));
+        continueButton.onClick.AddListener(() => DayEndShop.Instance?.Close());
+    }
+
+    private void BuildPauseMenu()
+    {
+        RectTransform panel = MakePanel("Pause", 420f, 330f, out pauseRoot);
+
+        Text title = UiKit.MakeText("Title", panel, 28, UiKit.Ink, TextAnchor.UpperCenter);
+        title.fontStyle = FontStyle.Bold;
+        title.text = "หยุดเกมชั่วคราว";
+        Fill(title.rectTransform, 32f, 36f);
+
+        pauseInfo = UiKit.MakeText("Info", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
+        Fill(pauseInfo.rectTransform, 76f, 24f);
+
+        AddStackedButton(panel, 0, $"เล่นต่อ  ({pauseKey})", () => GameManager.Instance?.SetPaused(false));
+        AddStackedButton(panel, 1, "กลับเมนูหลัก (เลิกรันนี้)", () => GameManager.Instance?.ReturnToMainMenu());
+        AddStackedButton(panel, 2, "ออกจากเกม", QuitGame);
+    }
+
+    private void BuildRunOverScreen()
+    {
+        RectTransform panel = MakePanel("Run Over", 560f, 400f, out runOverRoot);
+
+        runOverTitle = UiKit.MakeText("Title", panel, 42, UiKit.Ink, TextAnchor.UpperCenter);
+        runOverTitle.fontStyle = FontStyle.Bold;
+        Fill(runOverTitle.rectTransform, 40f, 52f);
+
+        runOverSummary = UiKit.MakeText("Summary", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
+        Fill(runOverSummary.rectTransform, 100f, 26f);
+
+        runOverStats = UiKit.MakeText("Stats", panel, 20, UiKit.Ink, TextAnchor.UpperCenter);
+        runOverStats.horizontalOverflow = HorizontalWrapMode.Wrap;
+        Fill(runOverStats.rectTransform, 146f, 100f);
+
+        Button again = UiKit.MakeButton("Again", panel, 20, out Text againLabel);
+        againLabel.text = "เล่นใหม่";
+        UiKit.Place(again.GetComponent<RectTransform>(), new Vector2(70f, -300f), new Vector2(190f, 50f));
+        again.onClick.AddListener(() => GameManager.Instance?.ReturnToMainMenu());
+
+        Button quit = UiKit.MakeButton("Quit", panel, 20, out Text quitLabel);
+        quitLabel.text = $"ออกจากเกม  ({pauseKey})";
+        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2(300f, -300f), new Vector2(190f, 50f));
+        quit.onClick.AddListener(QuitGame);
+    }
+
+    private void BuildWaitingScreen()
+    {
+        RectTransform panel = MakePanel("Waiting", 520f, 120f, out waitingRoot);
+
+        waitingText = UiKit.MakeText("Text", panel, 21, UiKit.Ink, TextAnchor.MiddleCenter);
+        waitingText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        UiKit.Stretch(waitingText.rectTransform, 24f);
+    }
+
+    /// <summary>แผงกลางจอพร้อมเงา — โครงร่วมของทุกหน้าจอ</summary>
+    private RectTransform MakePanel(string name, float width, float height, out GameObject root)
+    {
+        RectTransform panel = UiKit.MakeCard(name, canvas.transform, UiKit.Card);
+        UiKit.Center(panel, new Vector2(width, height));
+
+        root = panel.gameObject;
+        root.SetActive(false);
+        return panel;
+    }
+
+    private void AddStackedButton(RectTransform panel, int index, string text, UnityEngine.Events.UnityAction action)
+    {
+        Button button = UiKit.MakeButton($"Button {index}", panel, 20, out Text label);
+        label.text = text;
+
+        UiKit.Place(button.GetComponent<RectTransform>(),
+            new Vector2((panel.sizeDelta.x - 280f) * 0.5f, -(120f + index * 62f)), new Vector2(280f, 50f));
+
+        button.onClick.AddListener(action);
+    }
+
+    // ---------- อัปเดตเนื้อหา ----------
+
+    private void LateUpdate()
     {
         GameManager game = GameManager.Instance;
         if (game == null) return;
 
-        // ค่าติดลบ = วาดทับของคนอื่น เมนูจึงอยู่หน้า HUD เสมอไม่ว่าสคริปต์ไหนจะรันก่อน
-        GUI.depth = -50;
+        bool paused = game.IsPaused;
+        bool mainMenu = !paused && game.Phase == GamePhase.MainMenu;
+        bool runOver = !paused && game.Phase == GamePhase.RunOver;
+        bool dayEnd = !paused && game.Phase == GamePhase.DayEnd;
 
-        EnsureStyles();
+        var offer = rewardSystem != null ? rewardSystem.CurrentOffer : null;
+        bool rewards = dayEnd && offer != null && offer.Count > 0;
 
-        // หยุดเกมอยู่ = วาดแค่เมนูหยุดเกม ไม่วาดหน้าจออื่นทับไว้ข้างหลัง
-        // เพราะ IMGUI ไม่ได้กันคลิกตามลำดับการวาด ปุ่มร้านค้าที่โผล่พ้นกรอบเมนูจะยังกดได้อยู่
-        if (game.IsPaused)
-        {
-            DrawPauseMenu(game);
-            return;
-        }
+        DayEndShop shop = DayEndShop.Instance;
+        bool shopOpen = dayEnd && !rewards && shop != null && shop.IsOpen;
+        bool waiting = dayEnd && !rewards && !shopOpen;
 
-        // แถบสถานะ/เกจ/บันทึกเหตุการณ์ ย้ายไปอยู่ที่ GameHudOverlay แล้ว
-        // ที่นี่เหลือแค่หน้าจอที่ต้องกดเลือก
-        switch (game.Phase)
-        {
-            case GamePhase.MainMenu: DrawMainMenu(game); break;
-            case GamePhase.DayEnd: DrawDayEnd(game); break;
-            case GamePhase.RunOver: DrawRunOver(game); break;
-        }
+        Show(mainMenuRoot, mainMenu);
+        Show(rewardRoot, rewards);
+        Show(shopRoot, shopOpen);
+        Show(pauseRoot, paused);
+        Show(runOverRoot, runOver);
+        Show(waitingRoot, waiting);
+        Show(dim, mainMenu || rewards || shopOpen || paused || runOver || waiting);
+
+        if (mainMenu) RefreshMainMenu(game);
+        if (rewards) RefreshRewards(game, offer);
+        if (shopOpen) RefreshShop(game, shop);
+        if (paused) pauseInfo.text = $"วันที่ {game.Day} / {game.TotalDays}   ·   เงิน {ReturnZone.TotalWallet}";
+        if (runOver) RefreshRunOver(game);
+        if (waiting) waitingText.text = rewardSystem == null
+            ? "จบวันแล้ว — แต่ไม่มี DayEndRewardSystem ในฉาก"
+            : "จบวันแล้ว — กำลังสรุปผล";
     }
 
-    // ---------- เมนูหลัก ----------
-
-    private void DrawMainMenu(GameManager game)
+    private void RefreshMainMenu(GameManager game)
     {
-        DrawFullScreenDim();
+        mainSubtitle.text = $"เลือกสัตว์ที่จะเปิดรับ — สถานีเริ่มต้นมาจากสิ่งที่สัตว์ตัวนั้นต้องการ   ·   อยู่ให้ครบ {game.TotalDays} วัน";
 
-        float panelWidth = Mathf.Min(Screen.width - 80f, selectableStarters != null && selectableStarters.Length > 0
-            ? selectableStarters.Length * (cardWidth + 14) + 60f
-            : 640f);
-
-        float panelHeight = cardHeight + 230f;
-        Rect panel = CenteredRect(panelWidth, panelHeight);
-
-        DrawBox(panel, PanelColor);
-
-        GUI.Label(new Rect(panel.x, panel.y + 26f, panel.width, 46f), gameTitle, titleStyle);
-        GUI.Label(new Rect(panel.x, panel.y + 74f, panel.width, 24f), "ร้านรับฝากดูแลสัตว์เลี้ยง", centeredStyle);
-        GUI.Label(new Rect(panel.x, panel.y + 104f, panel.width, 24f),
-            $"เลือกสัตว์ที่จะเปิดรับ — สถานีเริ่มต้นในร้านมาจากสิ่งที่สัตว์ตัวนั้นต้องการ  |  อยู่ให้ครบ {game.TotalDays} วัน",
-            centeredStyle);
-
-        if (selectableStarters == null || selectableStarters.Length == 0)
-        {
-            GUI.Label(new Rect(panel.x, panel.y + 150f, panel.width, 24f),
-                "ยังไม่ได้ใส่ Selectable Starters ใน Inspector", centeredStyle);
-            return;
-        }
-
-        float cardsWidth = selectableStarters.Length * cardWidth + (selectableStarters.Length - 1) * 14f;
-        float cardsLeft = panel.x + (panel.width - cardsWidth) * 0.5f;
-        float cardsTop = panel.y + 142f;
-
-        for (int i = 0; i < selectableStarters.Length; i++)
+        for (int i = 0; i < starterLabels.Count; i++)
         {
             PetSpecies species = selectableStarters[i];
-            if (species == null) continue;
-
-            Rect rect = new Rect(cardsLeft + i * (cardWidth + 14f), cardsTop, cardWidth, cardHeight);
-            string needs = string.Join(", ", System.Array.ConvertAll(species.requiredSteps, CareStepStyle.LabelOf));
-
-            string body = $"[{i + 1}]  {species.speciesName}\n\n" +
-                          $"ต้องการ: {needs}\n" +
-                          $"อดทน: {species.patienceSeconds:F0} วิ\n" +
-                          $"ค่าบริการ: {species.baseFee} + {species.feePerStep}/ขั้นตอน";
-
-            if (GUI.Button(rect, body))
+            if (species == null)
             {
-                StartRunWith(species, game);
+                starterButtons[i].gameObject.SetActive(false);
+                continue;
             }
-        }
 
-        float bottom = cardsTop + cardHeight + 22f;
-        GUI.Label(new Rect(panel.x, bottom, panel.width, 22f),
-            "WASD เดิน  |  E โต้ตอบ  |  G ยก/วางสถานี  |  Enter เปิดร้าน", centeredStyle);
-
-        Rect quit = new Rect(panel.x + (panel.width - 200f) * 0.5f, bottom + 28f, 200f, 34f);
-        if (GUI.Button(quit, $"ออกจากเกม  [{pauseKey}]"))
-        {
-            QuitGame();
+            string needs = string.Join(" · ", System.Array.ConvertAll(species.requiredSteps, CareStepStyle.LabelOf));
+            starterLabels[i].text = $"{species.speciesName}\n\n{needs}\n\nอดทน {species.patienceSeconds:F0} วิ\n" +
+                                    $"ค่าบริการ {species.baseFee} + {species.feePerStep}/ขั้น\n\n({i + 1})";
         }
     }
 
-    // ---------- หน้าจบเกม ----------
-
-    private void DrawRunOver(GameManager game)
+    private void RefreshRewards(GameManager game, IReadOnlyList<RewardOption> offer)
     {
-        DrawFullScreenDim();
+        rewardTitle.text = $"จบวันที่ {game.Day} — เลือกรางวัล";
 
-        Rect panel = CenteredRect(520f, 300f);
-        DrawBox(panel, PanelColor);
+        for (int i = 0; i < rewardButtons.Count; i++)
+        {
+            bool has = i < offer.Count;
+            if (rewardButtons[i].gameObject.activeSelf != has) rewardButtons[i].gameObject.SetActive(has);
+            if (!has) continue;
 
+            rewardLabels[i].text = $"{DescribeReward(offer[i])}\n\n({i + 1})";
+        }
+    }
+
+    private void RefreshShop(GameManager game, DayEndShop shop)
+    {
+        shopTitle.text = $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน";
+        shopMoney.text = shop.Money.ToString();
+        shopContinueLabel.text = $"ไปวันถัดไป  ({shop.ContinueKey})";
+
+        var offers = shop.CurrentOffers;
+
+        for (int i = 0; i < shopButtons.Count; i++)
+        {
+            bool has = i < offers.Count;
+            if (shopButtons[i].gameObject.activeSelf != has) shopButtons[i].gameObject.SetActive(has);
+            if (!has) continue;
+
+            DayEndShop.Offer item = offers[i];
+
+            string status = item.sold ? "ซื้อแล้ว"
+                : shop.Money >= item.price ? $"ราคา {item.price}"
+                : $"ราคา {item.price} — เงินไม่พอ";
+
+            shopLabels[i].text = $"{shop.GetTitle(item)}\n\n{shop.GetDetail(item)}\n\n{status}   ({i + 1})";
+            shopLabels[i].color = item.sold || shop.Money < item.price ? UiKit.InkSoft : UiKit.Ink;
+
+            // ปุ่มกดไม่ได้จะจางลงเอง (ColorBlock.disabledColor) แต่ยังอ่านราคาได้
+            shopButtons[i].interactable = shop.CanBuy(item);
+        }
+    }
+
+    private void RefreshRunOver(GameManager game)
+    {
         bool won = game.LastRunWon;
 
-        Color previous = GUI.color;
-        GUI.color = won ? WinColor : LoseColor;
-        GUI.Label(new Rect(panel.x, panel.y + 26f, panel.width, 46f), won ? "ร้านอยู่รอด!" : "ร้านเจ๊ง", titleStyle);
-        GUI.color = previous;
+        runOverTitle.text = won ? "ร้านอยู่รอด!" : "ร้านเจ๊ง";
+        runOverTitle.color = won ? UiKit.Good : UiKit.Danger;
 
-        string summary = won
+        runOverSummary.text = won
             ? $"อยู่ครบ {game.TotalDays} วันตามเป้า"
             : $"ร้องเรียนครบ {game.MaxComplaints} ครั้งในวันที่ {game.Day}";
 
-        GUI.Label(new Rect(panel.x, panel.y + 80f, panel.width, 24f), summary, centeredStyle);
-
-        GUI.Label(new Rect(panel.x, panel.y + 120f, panel.width, 24f),
-            $"ไปถึงวันที่ {game.Day} / {game.TotalDays}", centeredStyle);
-        GUI.Label(new Rect(panel.x, panel.y + 146f, panel.width, 24f),
-            $"เงินที่เหลือ {ReturnZone.TotalWallet}", centeredStyle);
-        GUI.Label(new Rect(panel.x, panel.y + 172f, panel.width, 24f),
-            $"ร้องเรียนสะสม {game.Complaints} / {game.MaxComplaints}", centeredStyle);
-
-        float buttonWidth = 200f;
-        float gap = 16f;
-        float left = panel.x + (panel.width - (buttonWidth * 2f + gap)) * 0.5f;
-        float top = panel.y + panel.height - 62f;
-
-        if (GUI.Button(new Rect(left, top, buttonWidth, 38f), "เล่นใหม่"))
-        {
-            game.ReturnToMainMenu();
-        }
-
-        if (GUI.Button(new Rect(left + buttonWidth + gap, top, buttonWidth, 38f), $"ออกจากเกม  [{pauseKey}]"))
-        {
-            QuitGame();
-        }
-    }
-
-    // ---------- เมนูหยุดเกม ----------
-
-    private void DrawPauseMenu(GameManager game)
-    {
-        DrawFullScreenDim();
-
-        Rect panel = CenteredRect(380f, 280f);
-        DrawBox(panel, PanelColor);
-
-        GUI.Label(new Rect(panel.x, panel.y + 24f, panel.width, 34f), "หยุดเกมชั่วคราว", headingStyle);
-        GUI.Label(new Rect(panel.x, panel.y + 64f, panel.width, 22f),
-            $"วันที่ {game.Day} / {game.TotalDays}   เงิน {ReturnZone.TotalWallet}", centeredStyle);
-
-        float buttonWidth = 260f;
-        float left = panel.x + (panel.width - buttonWidth) * 0.5f;
-        float top = panel.y + 104f;
-
-        if (GUI.Button(new Rect(left, top, buttonWidth, 38f), $"เล่นต่อ  [{pauseKey}]"))
-        {
-            game.SetPaused(false);
-        }
-
-        if (GUI.Button(new Rect(left, top + 48f, buttonWidth, 38f), "กลับเมนูหลัก (เลิกรันนี้)"))
-        {
-            game.ReturnToMainMenu();
-        }
-
-        if (GUI.Button(new Rect(left, top + 96f, buttonWidth, 38f), "ออกจากเกม"))
-        {
-            QuitGame();
-        }
-    }
-
-    // ---------- ท้ายวัน ----------
-
-    /// <summary>ท้ายวันมี 2 ขั้น: เลือกรางวัลฟรี (ถ้ามีในคลัง) → ร้านค้าท้ายวัน</summary>
-    private void DrawDayEnd(GameManager game)
-    {
-        if (rewardSystem == null)
-        {
-            DrawStatusBar("จบวันแล้ว — แต่ไม่มี DayEndRewardSystem ในฉาก");
-            return;
-        }
-
-        var offer = rewardSystem.CurrentOffer;
-        if (offer != null && offer.Count > 0)
-        {
-            DrawRewards(game, offer);
-            return;
-        }
-
-        DayEndShop shop = DayEndShop.Instance;
-        if (shop != null && shop.IsOpen)
-        {
-            DrawShop(game, shop);
-            return;
-        }
-
-        DrawStatusBar("จบวันแล้ว — กำลังรอรางวัล");
-    }
-
-    private void DrawRewards(GameManager game, System.Collections.Generic.IReadOnlyList<RewardOption> offer)
-    {
-        DrawFullScreenDim();
-        GUI.Label(new Rect(40, 40, 600, 30), $"จบวันที่ {game.Day} — เลือกรางวัล 1 อย่าง");
-
-        for (int i = 0; i < offer.Count; i++)
-        {
-            Rect rect = new Rect(40 + i * (cardWidth + 14), 90, cardWidth, cardHeight);
-            if (GUI.Button(rect, $"[{i + 1}]\n\n{DescribeReward(offer[i])}"))
-            {
-                rewardSystem.Choose(i);
-                return;
-            }
-        }
-    }
-
-    private void DrawShop(GameManager game, DayEndShop shop)
-    {
-        DrawFullScreenDim();
-
-        GUI.Label(new Rect(40, 40, 900, 26), $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน: ใช้เงินจากลูกค้าซื้อบัฟ / สถานีเพิ่ม / ลูกค้าชนิดใหม่ (ชิ้นละครั้งต่อวัน)");
-        GUI.Label(new Rect(40, 64, 900, 24), $"เงินที่มี: {shop.Money}");
-
-        var offers = shop.CurrentOffers;
-        int columns = Mathf.Max(1, (Screen.width - 80) / (cardWidth + 14));
-        const float top = 100f;
-
-        for (int i = 0; i < offers.Count; i++)
-        {
-            DayEndShop.Offer item = offers[i];
-            Rect rect = new Rect(
-                40 + (i % columns) * (cardWidth + 14),
-                top + (i / columns) * (cardHeight + 14),
-                cardWidth,
-                cardHeight);
-
-            // ปุ่มจางลงเมื่อซื้อไปแล้วหรือเงินไม่พอ แต่ยังอ่านราคาได้
-            GUI.enabled = shop.CanBuy(item);
-            if (GUI.Button(rect, DescribeOffer(shop, item, i)))
-            {
-                shop.TryBuy(i);
-            }
-            GUI.enabled = true;
-        }
-
-        int rows = Mathf.CeilToInt(offers.Count / (float)columns);
-        Rect continueRect = new Rect(40, top + rows * (cardHeight + 14) + 6, 260, 40);
-
-        if (GUI.Button(continueRect, $"ไปวันถัดไป  [{shop.ContinueKey}]"))
-        {
-            shop.Close();
-        }
-    }
-
-    private static string DescribeOffer(DayEndShop shop, DayEndShop.Offer offer, int index)
-    {
-        string status = offer.sold ? "✓ ซื้อแล้ว"
-            : shop.Money >= offer.price ? $"ราคา {offer.price}"
-            : $"ราคา {offer.price}  (เงินไม่พอ)";
-
-        return $"[{index + 1}] {shop.GetTitle(offer)}\n\n{shop.GetDetail(offer)}\n\n{status}";
+        runOverStats.text = $"ไปถึงวันที่ {game.Day} / {game.TotalDays}\n" +
+                            $"เงินที่เหลือ {ReturnZone.TotalWallet}\n" +
+                            $"ร้องเรียนสะสม {game.Complaints} / {game.MaxComplaints}";
     }
 
     private string DescribeReward(RewardOption option)
@@ -441,56 +545,18 @@ public class GameFlowDebugControls : MonoBehaviour
         };
     }
 
-    private void DrawStatusBar(string text)
+    private static void Show(GameObject target, bool visible)
     {
-        GUI.Label(new Rect(12, 10, 700, 70), text);
+        if (target != null && target.activeSelf != visible) target.SetActive(visible);
     }
 
-    // ---------- ตัวช่วยวาด ----------
-
-    /// <summary>สร้าง style ครั้งแรกที่ OnGUI ทำงาน — GUI.skin ยังไม่พร้อมตอน Awake</summary>
-    private void EnsureStyles()
+    /// <summary>ข้อความกว้างเต็มแผง วางห่างจากขอบบนตามที่กำหนด</summary>
+    private static void Fill(RectTransform rect, float topOffset, float height)
     {
-        if (titleStyle != null) return;
-
-        titleStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 34,
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
-
-        headingStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 20,
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
-
-        centeredStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            wordWrap = true
-        };
-    }
-
-    private Rect CenteredRect(float width, float height)
-    {
-        return new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
-    }
-
-    private void DrawFullScreenDim()
-    {
-        DrawBox(new Rect(0, 0, Screen.width, Screen.height), ScreenDim);
-    }
-
-    private void DrawBox(Rect rect, Color color)
-    {
-        if (pixel == null) return;
-
-        Color previous = GUI.color;
-        GUI.color = color;
-        GUI.DrawTexture(rect, pixel);
-        GUI.color = previous;
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.offsetMin = new Vector2(24f, -(topOffset + height));
+        rect.offsetMax = new Vector2(-24f, -topOffset);
     }
 }

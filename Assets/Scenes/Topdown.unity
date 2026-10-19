@@ -3844,8 +3844,8 @@ MonoBehaviour:
   gameTitle: PET CORNER
   openShopKey: 13
   pauseKey: 27
-  cardWidth: 240
-  cardHeight: 132
+  cardWidth: 260
+  cardHeight: 190
 --- !u!114 &1452615144
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4453,7 +4453,7 @@ MonoBehaviour:
   viewYaw: 0
   viewPitch: 25
   distanceScale: 2.2
-  backgroundColor: {r: 0.13, g: 0.16, b: 0.15, a: 1}
+  backgroundColor: {r: 0.9, g: 0.87, b: 0.82, a: 1}
   includeHoldingTables: 0
 --- !u!4 &1707794951
 Transform:

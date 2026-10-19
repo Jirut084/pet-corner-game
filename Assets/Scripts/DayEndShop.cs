@@ -212,14 +212,14 @@ public class DayEndShop : MonoBehaviour
 
         for (int i = 0; i < offers.Count && i < 9; i++)
         {
-            if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+            if (GameInput.DigitPressed(i + 1))
             {
                 TryBuy(i);
                 return;
             }
         }
 
-        if (Input.GetKeyDown(continueKey))
+        if (GameInput.Pressed(continueKey))
         {
             Close();
         }
