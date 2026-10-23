@@ -53,7 +53,14 @@ public class GameFlowDebugControls : MonoBehaviour
     private Canvas canvas;
     private GameObject dim;
 
-    // หน้าเมนูหลัก
+    // หน้าแรกสุดก่อนเข้าเกม
+    private GameObject titleRoot;
+    private Text titleTagline;
+
+    // กดเริ่มเกมจากหน้าแรกแล้วหรือยัง — เป็น false = อยู่หน้าแรก, true = หน้าเลือกสัตว์
+    private bool showStarterSelect;
+
+    // หน้าเลือกสัตว์
     private GameObject mainMenuRoot;
     private Text mainSubtitle;
     private readonly List<Button> starterButtons = new List<Button>();
@@ -113,6 +120,9 @@ public class GameFlowDebugControls : MonoBehaviour
         {
             setupEnteredFrame = Time.frameCount;
         }
+
+        // กลับมาหน้าเมนูเมื่อไหร่ (จบ run / เลิกกลางคัน) ให้เริ่มที่หน้าแรกเสมอ
+        if (phase == GamePhase.MainMenu) showStarterSelect = false;
     }
 
     // ---------- ปุ่มลัด ----------
@@ -133,6 +143,12 @@ public class GameFlowDebugControls : MonoBehaviour
 
         if (game.Phase == GamePhase.MainMenu)
         {
+            if (!showStarterSelect)
+            {
+                if (GameInput.Pressed(openShopKey)) showStarterSelect = true;
+                return;
+            }
+
             HandleStarterHotkeys(game);
             return;
         }
@@ -149,7 +165,15 @@ public class GameFlowDebugControls : MonoBehaviour
     /// </summary>
     private void HandlePauseKey(GameManager game)
     {
-        if (game.Phase == GamePhase.MainMenu || game.Phase == GamePhase.RunOver)
+        if (game.Phase == GamePhase.MainMenu)
+        {
+            // อยู่หน้าเลือกสัตว์ = ถอยกลับหน้าแรกก่อน ต้องกดซ้ำถึงจะออกเกมจริง
+            if (showStarterSelect) showStarterSelect = false;
+            else QuitGame();
+            return;
+        }
+
+        if (game.Phase == GamePhase.RunOver)
         {
             QuitGame();
             return;
@@ -210,12 +234,45 @@ public class GameFlowDebugControls : MonoBehaviour
         UiKit.Stretch(dimImage.rectTransform);
         dim = dimImage.gameObject;
 
+        BuildTitleScreen();
         BuildMainMenu();
         BuildRewardScreen();
         BuildShopScreen();
         BuildPauseMenu();
         BuildRunOverScreen();
         BuildWaitingScreen();
+    }
+
+    /// <summary>หน้าแรกสุด — ชื่อเกมกับปุ่มเริ่ม ไม่ยัดการเลือกสัตว์มาไว้หน้าเดียวกันให้รก</summary>
+    private void BuildTitleScreen()
+    {
+        RectTransform panel = MakePanel("Title Screen", 640f, 430f, out titleRoot);
+
+        Text title = UiKit.MakeText("Title", panel, 58, UiKit.Ink, TextAnchor.UpperCenter);
+        title.fontStyle = FontStyle.Bold;
+        title.text = gameTitle;
+        Fill(title.rectTransform, 62f, 70f);
+
+        Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
+        subtitle.text = "ร้านรับฝากดูแลสัตว์เลี้ยง";
+        Fill(subtitle.rectTransform, 136f, 28f);
+
+        titleTagline = UiKit.MakeText("Tagline", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
+        Fill(titleTagline.rectTransform, 168f, 26f);
+
+        Button start = UiKit.MakeButton("Start", panel, 22, out Text startLabel);
+        startLabel.text = $"เริ่มเกม  ({openShopKey})";
+        UiKit.Place(start.GetComponent<RectTransform>(), new Vector2((640f - 300f) * 0.5f, -232f), new Vector2(300f, 60f));
+        start.onClick.AddListener(() => showStarterSelect = true);
+
+        Button quit = UiKit.MakeButton("Quit", panel, 19, out Text quitLabel);
+        quitLabel.text = $"ออกจากเกม  ({pauseKey})";
+        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((640f - 300f) * 0.5f, -304f), new Vector2(300f, 52f));
+        quit.onClick.AddListener(QuitGame);
+
+        Text hint = UiKit.MakeText("Hint", panel, 18, UiKit.InkSoft, TextAnchor.UpperCenter);
+        hint.text = "WASD เดิน   ·   E ทำทุกอย่าง   ·   Enter เปิดร้าน   ·   Esc เมนู";
+        Fill(hint.rectTransform, 380f, 26f);
     }
 
     private void BuildMainMenu()
@@ -256,11 +313,11 @@ public class GameFlowDebugControls : MonoBehaviour
         hint.text = "WASD เดิน   ·   E ทำทุกอย่าง (ยก / วาง / ดูแล)   ·   Enter เปิดร้าน";
         Fill(hint.rectTransform, 174f + cardHeight + 26f, 24f);
 
-        Button quit = UiKit.MakeButton("Quit", panel, 19, out Text quitLabel);
-        quitLabel.text = $"ออกจากเกม  ({pauseKey})";
-        UiKit.Place(quit.GetComponent<RectTransform>(),
+        Button back = UiKit.MakeButton("Back", panel, 19, out Text backLabel);
+        backLabel.text = "ย้อนกลับ";
+        UiKit.Place(back.GetComponent<RectTransform>(),
             new Vector2((panel.sizeDelta.x - 220f) * 0.5f, -(174f + cardHeight + 62f)), new Vector2(220f, 46f));
-        quit.onClick.AddListener(QuitGame);
+        back.onClick.AddListener(() => showStarterSelect = false);
     }
 
     private void BuildRewardScreen()
@@ -425,7 +482,9 @@ public class GameFlowDebugControls : MonoBehaviour
         if (game == null) return;
 
         bool paused = game.IsPaused;
-        bool mainMenu = !paused && game.Phase == GamePhase.MainMenu;
+        bool atMenu = !paused && game.Phase == GamePhase.MainMenu;
+        bool title = atMenu && !showStarterSelect;
+        bool mainMenu = atMenu && showStarterSelect;
         bool runOver = !paused && game.Phase == GamePhase.RunOver;
         bool dayEnd = !paused && game.Phase == GamePhase.DayEnd;
 
@@ -436,14 +495,16 @@ public class GameFlowDebugControls : MonoBehaviour
         bool shopOpen = dayEnd && !rewards && shop != null && shop.IsOpen;
         bool waiting = dayEnd && !rewards && !shopOpen;
 
+        Show(titleRoot, title);
         Show(mainMenuRoot, mainMenu);
         Show(rewardRoot, rewards);
         Show(shopRoot, shopOpen);
         Show(pauseRoot, paused);
         Show(runOverRoot, runOver);
         Show(waitingRoot, waiting);
-        Show(dim, mainMenu || rewards || shopOpen || paused || runOver || waiting);
+        Show(dim, title || mainMenu || rewards || shopOpen || paused || runOver || waiting);
 
+        if (title) titleTagline.text = $"เปิดร้านให้รอดครบ {game.TotalDays} วัน";
         if (mainMenu) RefreshMainMenu(game);
         if (rewards) RefreshRewards(game, offer);
         if (shopOpen) RefreshShop(game, shop);

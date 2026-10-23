@@ -93,6 +93,7 @@ public class GameHudOverlay : MonoBehaviour
     private Text dayText;
     private RectTransform orderFill;
     private Text orderText;
+    private Text pressureText;
     private Text moneyText;
     private readonly List<Image> complaintDots = new List<Image>();
     private GameObject hintCard;
@@ -101,6 +102,7 @@ public class GameHudOverlay : MonoBehaviour
     // บันทึกเหตุการณ์
     private GameObject logPanel;
     private readonly List<Text> logRows = new List<Text>();
+    private readonly List<Outline> logOutlines = new List<Outline>();
 
     // ของที่ลอยตามตัวละคร
     private readonly List<Chip> chipPool = new List<Chip>();
@@ -181,7 +183,7 @@ public class GameHudOverlay : MonoBehaviour
         card.anchorMin = card.anchorMax = new Vector2(0f, 1f);
         card.pivot = new Vector2(0f, 1f);
         card.anchoredPosition = new Vector2(screenMargin, -screenMargin);
-        card.sizeDelta = new Vector2(230f, 112f);
+        card.sizeDelta = new Vector2(250f, 132f);
 
         dayText = UiKit.MakeText("Day", card, titleFontSize, Ink, TextAnchor.UpperLeft);
         dayText.fontStyle = FontStyle.Bold;
@@ -189,7 +191,7 @@ public class GameHudOverlay : MonoBehaviour
 
         // หลอดความคืบหน้าออเดอร์ของวัน
         RectTransform track = UiKit.MakeImage("Order Track", card, Track).rectTransform;
-        UiKit.Place(track, new Vector2(20f, -58f), new Vector2(190f, 8f));
+        UiKit.Place(track, new Vector2(20f, -58f), new Vector2(210f, 8f));
 
         orderFill = UiKit.MakeImage("Order Fill", track, Good).rectTransform;
         orderFill.anchorMin = new Vector2(0f, 0f);
@@ -198,14 +200,18 @@ public class GameHudOverlay : MonoBehaviour
         orderFill.anchoredPosition = Vector2.zero;
 
         orderText = UiKit.MakeText("Order Label", card, bodyFontSize - 2, InkSoft, TextAnchor.UpperLeft);
-        UiKit.Place(orderText.rectTransform, new Vector2(20f, -72f), new Vector2(190f, bodyFontSize * 1.4f));
+        UiKit.Place(orderText.rectTransform, new Vector2(20f, -72f), new Vector2(210f, bodyFontSize * 1.4f));
+
+        pressureText = UiKit.MakeText("Pressure", card, bodyFontSize - 2, Warn, TextAnchor.UpperLeft);
+        UiKit.Place(pressureText.rectTransform, new Vector2(20f, -98f), new Vector2(210f, bodyFontSize * 1.4f));
+        pressureText.gameObject.SetActive(false);
 
         // จุดร้องเรียน — เห็นปราดเดียวว่าเหลืออีกกี่ครั้งถึงแพ้ ไม่ต้องอ่านตัวเลข
         for (int i = 0; i < 5; i++)
         {
             Image dot = UiKit.MakeImage($"Complaint {i}", card, Track);
             dot.sprite = UiKit.Circle;
-            UiKit.Place(dot.rectTransform, new Vector2(150f + i * 15f, -22f), new Vector2(11f, 11f));
+            UiKit.Place(dot.rectTransform, new Vector2(168f + i * 15f, -24f), new Vector2(12f, 12f));
             complaintDots.Add(dot);
         }
     }
@@ -246,8 +252,9 @@ public class GameHudOverlay : MonoBehaviour
         float lineHeight = logFontSize * 1.6f;
         const float padding = 12f;
 
-        // การ์ดจางรองข้อความไว้ — ล็อกลอยบนพื้นร้านเฉยๆ จะอ่านไม่ออกเวลาข้อความไปทับพื้นสีใกล้กัน
-        RectTransform panel = UiKit.MakeCard("Event Log", canvas.transform, CardQuiet);
+        // ไม่มีพื้นหลัง — อ่านออกได้ด้วยขอบครีมรอบตัวอักษรแทน (ดู Outline ด้านล่าง)
+        // กล่องทึบจะค้างเป็นสี่เหลี่ยมเปล่าบนจอตลอดเวลาแม้ไม่มีข้อความ
+        RectTransform panel = UiKit.MakeRect("Event Log", canvas.transform);
         panel.anchorMin = panel.anchorMax = new Vector2(0f, 0f);
         panel.pivot = new Vector2(0f, 0f);
         panel.anchoredPosition = new Vector2(screenMargin, screenMargin);
@@ -258,6 +265,12 @@ public class GameHudOverlay : MonoBehaviour
         for (int i = 0; i < logMaxLines; i++)
         {
             Text row = UiKit.MakeText($"Line {i}", panel, logFontSize, Ink, TextAnchor.LowerLeft);
+
+            // ขอบครีมบางๆ รอบตัวอักษร ทำให้อ่านออกทั้งบนพื้นสว่างและพื้นมืดโดยไม่ต้องมีกล่อง
+            Outline outline = row.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0.99f, 0.97f, 0.93f, 0.9f);
+            outline.effectDistance = new Vector2(1.6f, -1.6f);
+            logOutlines.Add(outline);
             row.rectTransform.anchorMin = row.rectTransform.anchorMax = new Vector2(0f, 0f);
             row.rectTransform.pivot = new Vector2(0f, 0f);
             row.rectTransform.anchoredPosition = new Vector2(padding, padding + i * lineHeight);
@@ -340,6 +353,19 @@ public class GameHudOverlay : MonoBehaviour
             ? $"ออเดอร์ {game.OrdersCompleted}/{game.OrdersTarget}   ·   ดูแลอยู่ {game.ActiveOrderCount}/{game.ConcurrentOrderLimit}"
             : $"วันนี้ {game.OrdersTarget} ออเดอร์";
 
+        // ความกดดันร่วม: โชว์เฉพาะตอนที่มิเตอร์ถูกเร่งจริง ไม่งั้นเป็นข้อความรกจอเปล่าๆ
+        float pressure = CustomerManager.PatiencePressure;
+        bool underPressure = service && pressure > 1.05f;
+
+        if (pressureText.gameObject.activeSelf != underPressure) pressureText.gameObject.SetActive(underPressure);
+        if (underPressure)
+        {
+            pressureText.text = game.IsLateDay
+                ? $"ท้ายวัน · ลูกค้าใจร้อน ×{pressure:0.0}"
+                : $"ลูกค้าแน่นร้าน ×{pressure:0.0}";
+            pressureText.color = pressure >= 2f ? Danger : Warn;
+        }
+
         for (int i = 0; i < complaintDots.Count; i++)
         {
             bool used = i < game.Complaints;
@@ -392,6 +418,7 @@ public class GameHudOverlay : MonoBehaviour
             line.text = entry.text;
             Color readable = Color.Lerp(Ink, tone * 0.75f, 0.55f); // ผสมกับสีหมึกให้ยังแยกโทนออกแต่ไม่ซีด
             line.color = new Color(readable.r, readable.g, readable.b, alpha);
+            logOutlines[row].effectColor = new Color(0.99f, 0.97f, 0.93f, 0.9f * alpha);
         }
     }
 

@@ -89,6 +89,9 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
         if (pet.IsCarried) return false;
         if (!pet.IsPatienceRunning) return false; // ยังไม่รับออเดอร์ / จบออเดอร์ไปแล้ว
 
+        // ห้องรอข้างเคาน์เตอร์มีคนดูแล สัตว์ในนั้นจึงไม่หนี (โต๊ะพักกลางร้านไม่นับ)
+        if (GetComponentInParent<PetWaitingRoom>() != null) return false;
+
         CareStation station = GetComponentInParent<CareStation>();
         return station == null || station.State != CareStation.StationState.Working;
     }
@@ -261,7 +264,8 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
     {
         if (!IsEscaping)
         {
-            ParentStation?.Interact(interactor);
+            if (ParentStation != null) ParentStation.Interact(interactor);
+            else GetComponentInParent<PetWaitingRoom>()?.Interact(interactor);
             return;
         }
 

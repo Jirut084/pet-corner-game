@@ -35,6 +35,10 @@ public class GameManager : MonoBehaviour
     [Tooltip("ร้องเรียนสะสมถึงจำนวนนี้เมื่อไหร่ = แพ้ทันที")]
     [SerializeField] private int maxComplaints = 5;
 
+    [Tooltip("ออเดอร์ของวันออกไปแล้วกี่ส่วนถึงจะนับว่าเข้าช่วงท้ายวัน (ลูกค้าใจร้อนขึ้น เทียบได้กับกลางคืนของ PlateUp)")]
+    [Range(0.1f, 1f)]
+    [SerializeField] private float lateDayStart = 0.75f;
+
     [Header("Concurrent Orders")]
     [Tooltip("จำนวนออเดอร์ที่รับค้างไว้พร้อมกันได้ ไล่ตามวัน (วัน 1 = ช่องแรก) วันที่เกินลิสต์ใช้ค่าสุดท้าย")]
     [SerializeField] private int[] concurrentOrdersPerDay = new int[] { 1, 2, 3 };
@@ -58,6 +62,15 @@ public class GameManager : MonoBehaviour
 
     /// <summary>ร้องเรียนได้สูงสุดกี่ครั้งก่อนแพ้ — หน้าจอสรุปผลใช้แสดง</summary>
     public int MaxComplaints => maxComplaints;
+
+    /// <summary>
+    /// เข้าช่วงท้ายวันแล้วหรือยัง — ลูกค้าส่วนใหญ่ของวันเข้าร้านไปแล้ว
+    /// CustomerManager ใช้เร่งมิเตอร์ความอดทนทุกตัวในช่วงนี้ ให้ท้ายวันมีจังหวะพีค
+    /// </summary>
+    public bool IsLateDay =>
+        Phase == GamePhase.Service &&
+        OrdersTarget > 0 &&
+        OrdersIssued >= OrdersTarget * lateDayStart;
 
     /// <summary>ต้องอยู่ให้ครบกี่วันถึงชนะ</summary>
     public int TotalDays => totalDays;

@@ -313,6 +313,9 @@ public class Pet : MonoBehaviour, ICarryable
             ? PlayerProgress.Instance.PatienceDrainMultiplier
             : 1f;
 
+        // ความกดดันร่วมของร้าน: ลูกค้าค้างหลายคนพร้อมกัน / ช่วงท้ายวัน = ทุกมิเตอร์ลดเร็วขึ้นพร้อมกัน
+        drainRate *= CustomerManager.PatiencePressure;
+
         patienceRemaining -= Time.deltaTime * drainRate;
         OnPatienceChanged?.Invoke(this, PatienceNormalized);
 

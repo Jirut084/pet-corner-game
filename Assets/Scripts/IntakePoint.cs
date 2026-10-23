@@ -31,6 +31,59 @@ public class IntakePoint : MonoBehaviour, IInteractable
             ? customerStandPoint.position
             : transform.position + transform.rotation * customerStandOffset;
 
+    /// <summary>
+    /// ห้องรอของร้าน — ไม่มีในฉากจะสร้างให้อัตโนมัติข้างเคาน์เตอร์ฝั่งตรงข้ามกับลูกค้า
+    /// อยากได้โมเดลจริง/ตำแหน่งอื่น: ใส่ component "PetWaitingRoom" ลง GameObject ของตัวเองในฉาก
+    /// </summary>
+    private PetWaitingRoom WaitingRoom()
+    {
+        if (PetWaitingRoom.Instance != null) return PetWaitingRoom.Instance;
+
+        GameObject roomObject = new GameObject("Pet Waiting Room");
+        roomObject.transform.SetPositionAndRotation(
+            transform.position + transform.rotation * -customerStandOffset,
+            transform.rotation);
+
+        BoxCollider area = roomObject.AddComponent<BoxCollider>();
+        area.size = new Vector3(2.7f, 1f, 1f);
+        area.center = new Vector3(0f, 0.3f, 0f);
+
+        BuildRoomPlatform(roomObject.transform);
+
+        PetWaitingRoom room = roomObject.AddComponent<PetWaitingRoom>();
+        Debug.Log("[IntakePoint] ไม่พบห้องรอในฉาก สร้างให้อัตโนมัติข้างเคาน์เตอร์");
+        return room;
+    }
+
+    /// <summary>
+    /// แท่นวางของห้องรอที่สร้างเอง — ไม่มีก็เล่นได้แต่ผู้เล่นจะไม่รู้ว่าห้องรออยู่ตรงไหนจนกว่าจะมีสัตว์มายืน
+    /// ยืมวัสดุจากโมเดลเคาน์เตอร์มาใช้ ของที่สร้างใหม่จะได้กลมกลืนกับร้านโดยไม่ต้องเตรียม asset
+    /// </summary>
+    private void BuildRoomPlatform(Transform parent)
+    {
+        GameObject platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        platform.name = "Platform";
+        platform.transform.SetParent(parent, false);
+        platform.transform.localPosition = new Vector3(0f, -0.06f, 0f);
+        platform.transform.localScale = new Vector3(2.7f, 0.12f, 0.9f);
+
+        // collider ของห้องอยู่ที่ตัวแม่แล้ว อันนี้เอาออกกันเรย์ของผู้เล่นโดนสองชั้น
+        Destroy(platform.GetComponent<Collider>());
+
+        Renderer source = GetComponentInChildren<Renderer>();
+        Renderer renderer = platform.GetComponent<Renderer>();
+
+        if (source != null)
+        {
+            renderer.sharedMaterial = source.sharedMaterial;
+            return;
+        }
+
+        // ไม่มีโมเดลที่เคาน์เตอร์ให้ยืมวัสดุ — ทำวัสดุ URP สีไม้ขึ้นมาเอง ไม่งั้นจะขึ้นเป็นสีชมพู
+        Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+        if (lit != null) renderer.material = new Material(lit) { color = new Color(0.55f, 0.38f, 0.26f) };
+    }
+
     public void Interact(GameObject interactor)
     {
         if (spawnPoint == null)
@@ -79,9 +132,15 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        if (carrier.IsCarrying)
+        // มือไม่ว่างก็ยังรับออเดอร์ได้ ถ้าห้องรอข้างเคาน์เตอร์ยังมีที่ว่าง
+        PetWaitingRoom room = WaitingRoom();
+        bool useRoom = carrier.IsCarrying;
+
+        if (useRoom && (room == null || !room.HasSpace))
         {
-            GameLog.Push("มือไม่ว่าง วางของที่ถืออยู่ก่อน (โต๊ะพักรับได้)", LogTone.Warn);
+            GameLog.Push(room == null
+                ? "มือไม่ว่าง วางของที่ถืออยู่ก่อน (โต๊ะพักรับได้)"
+                : $"ห้องรอเต็มแล้ว ({room.Count}/{room.Capacity}) — พาสัตว์ไปดูแลก่อน", LogTone.Warn);
             return;
         }
 
@@ -116,9 +175,10 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        if (!carrier.Carry(petObj))
+        bool received = useRoom ? room.Accept(pet) : carrier.Carry(petObj);
+        if (!received)
         {
-            Debug.LogWarning("[IntakePoint] ยกสัตว์ขึ้นมาไม่สำเร็จ ยกเลิกการรับออเดอร์");
+            Debug.LogWarning("[IntakePoint] รับสัตว์ไม่สำเร็จ ยกเลิกการรับออเดอร์");
             Destroy(petObj);
             return;
         }
@@ -127,7 +187,8 @@ public class IntakePoint : MonoBehaviour, IInteractable
         pet.StartPatience();
         game?.NotifyOrderIssued(pet);
 
-        GameLog.Push($"รับออเดอร์ {pet.DisplayName} — ต้องทำ: {string.Join(", ", pet.RemainingSteps())} " +
+        string where = useRoom ? " — รออยู่ในห้องรอ" : string.Empty;
+        GameLog.Push($"รับออเดอร์ {pet.DisplayName}{where} — ต้องทำ: {string.Join(", ", pet.RemainingSteps())} " +
                      $"(อดทน {customer.RequestedSpecies.patienceSeconds:F0} วิ)", LogTone.Good);
     }
 

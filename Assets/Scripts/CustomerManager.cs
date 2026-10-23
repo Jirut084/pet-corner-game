@@ -44,6 +44,22 @@ public class CustomerManager : MonoBehaviour
     /// <summary>ลูกค้าที่รอสั่งจนหมดความอดทนต้องร้องเรียนไหม</summary>
     public bool ComplainOnCounterTimeout => complainOnCounterTimeout;
 
+    [Header("Pressure")]
+    [Tooltip("ลูกค้าที่รออยู่พร้อมกันแต่ละคนทำให้ทุกมิเตอร์ลดเร็วขึ้นกี่เท่า (ทบต้น) — 1 = ปิดระบบนี้")]
+    [SerializeField] private float crowdPressurePerCustomer = 1.12f;
+
+    [Tooltip("เพดานของความกดดันจากจำนวนลูกค้า กันกรณีคิวยาวจนมิเตอร์หมดในพริบตา")]
+    [SerializeField] private float maxCrowdPressure = 2.5f;
+
+    [Tooltip("ตัวคูณช่วงท้ายวัน (เทียบได้กับกลางคืนของ PlateUp)")]
+    [SerializeField] private float lateDayPressure = 1.5f;
+
+    /// <summary>
+    /// ตัวคูณความเร็วที่มิเตอร์ความอดทนทุกตัวใช้ร่วมกัน (1 = ปกติ)
+    /// อ่านได้จาก Pet / Customer / HUD — คำนวณใหม่ทุกเฟรมในช่วงเปิดร้าน
+    /// </summary>
+    public static float PatiencePressure { get; private set; } = 1f;
+
     [Header("Spawn Pacing")]
     [Tooltip("ระยะห่างระหว่างลูกค้าในวันแรก (วินาที)")]
     [SerializeField] private float spawnGapFirstDay = 6f;
@@ -116,10 +132,15 @@ public class CustomerManager : MonoBehaviour
     private void Update()
     {
         GameManager game = GameManager.Instance;
-        if (game == null || game.Phase != GamePhase.Service) return;
+        if (game == null || game.Phase != GamePhase.Service)
+        {
+            PatiencePressure = 1f;
+            return;
+        }
 
         customers.RemoveAll(c => c == null);
         RefreshCounterQueue();
+        UpdatePatiencePressure(game);
 
         if (!ShouldSpawnMore(game)) return;
 
@@ -128,6 +149,29 @@ public class CustomerManager : MonoBehaviour
 
         SpawnCustomer();
         spawnTimer = SpawnGapForDay(game.Day);
+    }
+
+    /// <summary>
+    /// ความกดดันร่วมของร้าน ณ ตอนนี้ — ตัวคูณที่ไปเร่งทุกมิเตอร์ความอดทนพร้อมกัน
+    ///
+    /// อิง PlateUp: ลูกค้าทุกกลุ่มที่รออยู่ใช้ "ความกดดัน" ร่วมกัน ยิ่งรอหลายคนยิ่งลดเร็วแบบทบต้น
+    /// และช่วงท้ายวัน (กลางคืนของ PlateUp) ลดเร็วขึ้นอีกชั้น
+    ///
+    /// ความยากจึงมาจากการปล่อยให้งานค้างพร้อมกันหลายอย่าง ไม่ใช่จากการตั้งเวลาให้สั้นจนไม่มีใครทัน
+    /// </summary>
+    private void UpdatePatiencePressure(GameManager game)
+    {
+        int waiting = 0;
+        foreach (Customer customer in customers)
+        {
+            if (customer == null) continue;
+            if (customer.ShowGauge || customer.ShowCounterGauge) waiting++;
+        }
+
+        // คนแรกไม่คิดโทษ คนที่สองเป็นต้นไปถึงจะเริ่มเร่ง
+        float crowd = Mathf.Min(Mathf.Pow(crowdPressurePerCustomer, Mathf.Max(0, waiting - 1)), maxCrowdPressure);
+
+        PatiencePressure = crowd * (game.IsLateDay ? lateDayPressure : 1f);
     }
 
     private bool ShouldSpawnMore(GameManager game)

@@ -234,6 +234,9 @@ public class Customer : MonoBehaviour
             ? PlayerProgress.Instance.PatienceDrainMultiplier
             : 1f;
 
+        // คิวหน้าเคาน์เตอร์โดนความกดดันร่วมเหมือนกัน — ปล่อยคิวยาวแล้วทุกคนใจร้อนขึ้นพร้อมกัน
+        drainRate *= CustomerManager.PatiencePressure;
+
         counterPatienceRemaining -= Time.deltaTime * drainRate;
         if (counterPatienceRemaining > 0f) return;
 
