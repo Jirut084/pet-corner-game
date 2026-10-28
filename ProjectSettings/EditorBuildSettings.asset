@@ -5,15 +5,18 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: c83333b7374400c48aef863858ccf516
+  - enabled: 1
+    path: Assets/Scenes/Shop.unity
+    guid: cf4a52388c29ccf4fa84f7741d77ceab
   - enabled: 0
     path: Assets/Scenes/Thirdperson.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 1
     path: Assets/Scenes/Topdown.unity
     guid: 5cf2cf257d22daf4e818035155abc807
-  - enabled: 1
-    path: Assets/Scenes/Shop.unity
-    guid: cf4a52388c29ccf4fa84f7741d77ceab
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

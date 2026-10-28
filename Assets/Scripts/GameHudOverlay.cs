@@ -444,6 +444,14 @@ public class GameHudOverlay : MonoBehaviour
                 : "รอสั่ง";
 
             ShowRing(point, fill, label, orderGauge);
+
+            // ลูกค้าที่สั่งสินค้าเพิ่มขึ้นป้ายใต้วงแหวน ผู้เล่นจะได้เห็นว่ามีเงินรออยู่ตรงไหน
+            if (customer.WantsGood)
+            {
+                chipBuffer.Clear();
+                chipBuffer.Add(($"อยากได้ {customer.WantedGood.label}  +{customer.WantedGood.bonusPay}", Money, false));
+                ShowChipRow(point + new Vector2(0f, -ringSize * 0.55f), chipBuffer);
+            }
         }
     }
 

@@ -187,6 +187,14 @@ public class IntakePoint : MonoBehaviour, IInteractable
         pet.StartPatience();
         game?.NotifyOrderIssued(pet);
 
+        // ลูกค้าบางคนสั่งสินค้าเพิ่ม (ต้องมีตู้สินค้าในร้านก่อน) — ผู้เล่นเลือกเองว่าจะไปหยิบมาส่งไหม
+        GoodsItem demand = GoodsShelf.Instance != null ? GoodsShelf.Instance.RollDemand() : null;
+        if (demand != null)
+        {
+            customer.RequestGood(demand);
+            GameLog.Push($"ลูกค้าสั่ง {demand.label} เพิ่ม (+{demand.bonusPay} ถ้าส่งทัน)");
+        }
+
         string where = useRoom ? " — รออยู่ในห้องรอ" : string.Empty;
         GameLog.Push($"รับออเดอร์ {pet.DisplayName}{where} — ต้องทำ: {string.Join(", ", pet.RemainingSteps())} " +
                      $"(อดทน {customer.RequestedSpecies.patienceSeconds:F0} วิ)", LogTone.Good);

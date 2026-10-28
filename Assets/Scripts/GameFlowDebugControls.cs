@@ -3,9 +3,9 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// หน้าจอเมนูทั้งหมดของเกม สร้างเป็น Canvas ด้วยโค้ดตอน Awake (ชิ้นส่วนมาจาก UiKit ชุดเดียวกับ HUD)
+/// หน้าจอเมนูในฉากร้าน สร้างเป็น Canvas ด้วยโค้ดตอน Awake (ชิ้นส่วนมาจาก UiKit ชุดเดียวกับ HUD)
+/// หน้าแรก/เลือกสัตว์อยู่อีกฉาก (MainMenu.unity ดู MainMenu.cs)
 ///
-///   เมนูหลัก      — คลิกการ์ดสัตว์ (หรือกด 1..9) เพื่อเริ่มเล่น / Esc ออกเกม
 ///   ช่วงจัดร้าน    — กด Enter เปิดร้าน (ไม่มีหน้าจอ มีแค่ป้ายบอกใน HUD)
 ///   ท้ายวัน       — เลือกรางวัล 1 ใบ แล้วต่อด้วยร้านค้าท้ายวัน
 ///   จบเกม        — สรุปผล + ปุ่มเล่นใหม่ / ออกเกม
@@ -19,17 +19,10 @@ using UnityEngine.UI;
 /// </summary>
 public class GameFlowDebugControls : MonoBehaviour
 {
-    [Header("Main Menu")]
-    [Tooltip("สัตว์ที่ให้เลือกเป็นตัวเริ่มต้น — สถานีเริ่มต้นจะมาจาก need ของตัวที่เลือก")]
-    [SerializeField] private PetSpecies[] selectableStarters;
-
-    [Tooltip("ชื่อเกมบนหน้าเมนู")]
-    [SerializeField] private string gameTitle = "PET CORNER";
-
     [Header("Keys")]
     [SerializeField] private KeyCode openShopKey = KeyCode.Return;
 
-    [Tooltip("ปุ่มเปิดเมนูหยุดเกมระหว่างเล่น และออกเกมเมื่ออยู่หน้าเมนูหลัก")]
+    [Tooltip("ปุ่มเปิดเมนูหยุดเกมระหว่างเล่น และออกเกมเมื่ออยู่หน้าจบเกม")]
     [SerializeField] private KeyCode pauseKey = KeyCode.Escape;
 
     [Header("Layout")]
@@ -41,9 +34,6 @@ public class GameFlowDebugControls : MonoBehaviour
     [Tooltip("จำนวนช่องสินค้าสูงสุดที่เตรียมไว้ในหน้าร้านค้า")]
     [SerializeField] private int maxShopSlots = 8;
 
-    /// <summary>สัตว์ทั้งหมดที่ให้เลือกในหน้าเมนู — ร้านค้าท้ายวันใช้เป็นรายการสัตว์ที่ขายได้ ถ้าไม่ได้ตั้งรายการของตัวเอง</summary>
-    public PetSpecies[] SelectableStarters => selectableStarters;
-
     private DayEndRewardSystem rewardSystem;
 
     // เฟรมที่เพิ่งเข้าช่วงจัดร้าน — Enter ที่ใช้ปิดร้านค้าท้ายวันยังนับเป็น GetKeyDown อยู่ในเฟรมนั้น
@@ -52,19 +42,6 @@ public class GameFlowDebugControls : MonoBehaviour
 
     private Canvas canvas;
     private GameObject dim;
-
-    // หน้าแรกสุดก่อนเข้าเกม
-    private GameObject titleRoot;
-    private Text titleTagline;
-
-    // กดเริ่มเกมจากหน้าแรกแล้วหรือยัง — เป็น false = อยู่หน้าแรก, true = หน้าเลือกสัตว์
-    private bool showStarterSelect;
-
-    // หน้าเลือกสัตว์
-    private GameObject mainMenuRoot;
-    private Text mainSubtitle;
-    private readonly List<Button> starterButtons = new List<Button>();
-    private readonly List<Text> starterLabels = new List<Text>();
 
     // หน้าเลือกรางวัล
     private GameObject rewardRoot;
@@ -120,9 +97,6 @@ public class GameFlowDebugControls : MonoBehaviour
         {
             setupEnteredFrame = Time.frameCount;
         }
-
-        // กลับมาหน้าเมนูเมื่อไหร่ (จบ run / เลิกกลางคัน) ให้เริ่มที่หน้าแรกเสมอ
-        if (phase == GamePhase.MainMenu) showStarterSelect = false;
     }
 
     // ---------- ปุ่มลัด ----------
@@ -141,18 +115,6 @@ public class GameFlowDebugControls : MonoBehaviour
         // เมนูหยุดเกมเปิดอยู่ = ไม่รับปุ่มอื่นเลย
         if (game.IsPaused) return;
 
-        if (game.Phase == GamePhase.MainMenu)
-        {
-            if (!showStarterSelect)
-            {
-                if (GameInput.Pressed(openShopKey)) showStarterSelect = true;
-                return;
-            }
-
-            HandleStarterHotkeys(game);
-            return;
-        }
-
         if (game.Phase == GamePhase.Setup && Time.frameCount != setupEnteredFrame && GameInput.Pressed(openShopKey))
         {
             game.BeginServicePhase();
@@ -161,18 +123,10 @@ public class GameFlowDebugControls : MonoBehaviour
 
     /// <summary>
     /// Esc ทำหน้าที่ต่างกันตามหน้าจอ:
-    /// เมนูหลัก/จบเกม = ออกเกมเลย (ไม่มีอะไรให้เสีย) ระหว่างเล่น = สลับเปิด/ปิดเมนูหยุดเกม
+    /// จบเกม = ออกเกมเลย (ไม่มีอะไรให้เสีย) ระหว่างเล่น = สลับเปิด/ปิดเมนูหยุดเกม
     /// </summary>
     private void HandlePauseKey(GameManager game)
     {
-        if (game.Phase == GamePhase.MainMenu)
-        {
-            // อยู่หน้าเลือกสัตว์ = ถอยกลับหน้าแรกก่อน ต้องกดซ้ำถึงจะออกเกมจริง
-            if (showStarterSelect) showStarterSelect = false;
-            else QuitGame();
-            return;
-        }
-
         if (game.Phase == GamePhase.RunOver)
         {
             QuitGame();
@@ -182,36 +136,10 @@ public class GameFlowDebugControls : MonoBehaviour
         game.SetPaused(!game.IsPaused);
     }
 
-    private void HandleStarterHotkeys(GameManager game)
-    {
-        if (selectableStarters == null) return;
-
-        for (int i = 0; i < selectableStarters.Length && i < 9; i++)
-        {
-            if (GameInput.DigitPressed(i + 1))
-            {
-                StartRunWith(selectableStarters[i], game);
-                return;
-            }
-        }
-    }
-
-    private void StartRunWith(PetSpecies starter, GameManager game)
-    {
-        if (starter == null || game == null) return;
-
-        // ต้อง ResetForNewRun ก่อน StartNewRun เสมอ เพราะ StartNewRun จะเข้า Setup ทันที
-        // แล้ว LevelInitializer จะอ่านสถานีที่ปลดล็อกไปวางในจังหวะนั้นเลย
-        PlayerProgress.Instance?.ResetForNewRun(starter);
-        game.StartNewRun();
-
-        Debug.Log($"[GameFlow] เริ่ม run ด้วย {starter.speciesName}");
-    }
-
     /// <summary>
     /// ปิดเกม — ในโหมด Play ของ Editor ปิดโปรแกรมไม่ได้ จึงสั่งหยุดเล่นแทนเพื่อให้เทสปุ่มนี้ได้จริง
     /// </summary>
-    private static void QuitGame()
+    internal static void QuitGame()
     {
         Debug.Log("[GameFlow] ออกจากเกม");
 
@@ -234,90 +162,11 @@ public class GameFlowDebugControls : MonoBehaviour
         UiKit.Stretch(dimImage.rectTransform);
         dim = dimImage.gameObject;
 
-        BuildTitleScreen();
-        BuildMainMenu();
         BuildRewardScreen();
         BuildShopScreen();
         BuildPauseMenu();
         BuildRunOverScreen();
         BuildWaitingScreen();
-    }
-
-    /// <summary>หน้าแรกสุด — ชื่อเกมกับปุ่มเริ่ม ไม่ยัดการเลือกสัตว์มาไว้หน้าเดียวกันให้รก</summary>
-    private void BuildTitleScreen()
-    {
-        RectTransform panel = MakePanel("Title Screen", 640f, 430f, out titleRoot);
-
-        Text title = UiKit.MakeText("Title", panel, 58, UiKit.Ink, TextAnchor.UpperCenter);
-        title.fontStyle = FontStyle.Bold;
-        title.text = gameTitle;
-        Fill(title.rectTransform, 62f, 70f);
-
-        Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
-        subtitle.text = "ร้านรับฝากดูแลสัตว์เลี้ยง";
-        Fill(subtitle.rectTransform, 136f, 28f);
-
-        titleTagline = UiKit.MakeText("Tagline", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
-        Fill(titleTagline.rectTransform, 168f, 26f);
-
-        Button start = UiKit.MakeButton("Start", panel, 22, out Text startLabel);
-        startLabel.text = $"เริ่มเกม  ({openShopKey})";
-        UiKit.Place(start.GetComponent<RectTransform>(), new Vector2((640f - 300f) * 0.5f, -232f), new Vector2(300f, 60f));
-        start.onClick.AddListener(() => showStarterSelect = true);
-
-        Button quit = UiKit.MakeButton("Quit", panel, 19, out Text quitLabel);
-        quitLabel.text = $"ออกจากเกม  ({pauseKey})";
-        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((640f - 300f) * 0.5f, -304f), new Vector2(300f, 52f));
-        quit.onClick.AddListener(QuitGame);
-
-        Text hint = UiKit.MakeText("Hint", panel, 18, UiKit.InkSoft, TextAnchor.UpperCenter);
-        hint.text = "WASD เดิน   ·   E ทำทุกอย่าง   ·   Enter เปิดร้าน   ·   Esc เมนู";
-        Fill(hint.rectTransform, 380f, 26f);
-    }
-
-    private void BuildMainMenu()
-    {
-        int count = selectableStarters != null ? selectableStarters.Length : 0;
-        float cardsWidth = count > 0 ? count * cardWidth + (count - 1) * 16f : 520f;
-
-        RectTransform panel = MakePanel("Main Menu", Mathf.Max(760f, cardsWidth + 120f), cardHeight + 330f, out mainMenuRoot);
-
-        Text title = UiKit.MakeText("Title", panel, 46, UiKit.Ink, TextAnchor.UpperCenter);
-        title.fontStyle = FontStyle.Bold;
-        title.text = gameTitle;
-        Fill(title.rectTransform, 40f, 56f);
-
-        Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
-        subtitle.text = "ร้านรับฝากดูแลสัตว์เลี้ยง";
-        Fill(subtitle.rectTransform, 98f, 26f);
-
-        mainSubtitle = UiKit.MakeText("Brief", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
-        Fill(mainSubtitle.rectTransform, 128f, 26f);
-
-        float cardsLeft = (panel.sizeDelta.x - cardsWidth) * 0.5f;
-
-        for (int i = 0; i < count; i++)
-        {
-            int index = i;
-            Button button = UiKit.MakeButton($"Starter {i}", panel, 20, out Text label);
-            UiKit.Place(button.GetComponent<RectTransform>(),
-                new Vector2(cardsLeft + i * (cardWidth + 16f), -174f), new Vector2(cardWidth, cardHeight));
-
-            button.onClick.AddListener(() => StartRunWith(selectableStarters[index], GameManager.Instance));
-
-            starterButtons.Add(button);
-            starterLabels.Add(label);
-        }
-
-        Text hint = UiKit.MakeText("Hint", panel, 18, UiKit.InkSoft, TextAnchor.UpperCenter);
-        hint.text = "WASD เดิน   ·   E ทำทุกอย่าง (ยก / วาง / ดูแล)   ·   Enter เปิดร้าน";
-        Fill(hint.rectTransform, 174f + cardHeight + 26f, 24f);
-
-        Button back = UiKit.MakeButton("Back", panel, 19, out Text backLabel);
-        backLabel.text = "ย้อนกลับ";
-        UiKit.Place(back.GetComponent<RectTransform>(),
-            new Vector2((panel.sizeDelta.x - 220f) * 0.5f, -(174f + cardHeight + 62f)), new Vector2(220f, 46f));
-        back.onClick.AddListener(() => showStarterSelect = false);
     }
 
     private void BuildRewardScreen()
@@ -419,7 +268,7 @@ public class GameFlowDebugControls : MonoBehaviour
 
     private void BuildRunOverScreen()
     {
-        RectTransform panel = MakePanel("Run Over", 560f, 400f, out runOverRoot);
+        RectTransform panel = MakePanel("Run Over", 620f, 470f, out runOverRoot);
 
         runOverTitle = UiKit.MakeText("Title", panel, 42, UiKit.Ink, TextAnchor.UpperCenter);
         runOverTitle.fontStyle = FontStyle.Bold;
@@ -430,16 +279,16 @@ public class GameFlowDebugControls : MonoBehaviour
 
         runOverStats = UiKit.MakeText("Stats", panel, 20, UiKit.Ink, TextAnchor.UpperCenter);
         runOverStats.horizontalOverflow = HorizontalWrapMode.Wrap;
-        Fill(runOverStats.rectTransform, 146f, 100f);
+        Fill(runOverStats.rectTransform, 146f, 190f);
 
         Button again = UiKit.MakeButton("Again", panel, 20, out Text againLabel);
         againLabel.text = "เล่นใหม่";
-        UiKit.Place(again.GetComponent<RectTransform>(), new Vector2(70f, -300f), new Vector2(190f, 50f));
+        UiKit.Place(again.GetComponent<RectTransform>(), new Vector2(100f, -370f), new Vector2(190f, 50f));
         again.onClick.AddListener(() => GameManager.Instance?.ReturnToMainMenu());
 
         Button quit = UiKit.MakeButton("Quit", panel, 20, out Text quitLabel);
         quitLabel.text = $"ออกจากเกม  ({pauseKey})";
-        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2(300f, -300f), new Vector2(190f, 50f));
+        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2(330f, -370f), new Vector2(190f, 50f));
         quit.onClick.AddListener(QuitGame);
     }
 
@@ -482,9 +331,6 @@ public class GameFlowDebugControls : MonoBehaviour
         if (game == null) return;
 
         bool paused = game.IsPaused;
-        bool atMenu = !paused && game.Phase == GamePhase.MainMenu;
-        bool title = atMenu && !showStarterSelect;
-        bool mainMenu = atMenu && showStarterSelect;
         bool runOver = !paused && game.Phase == GamePhase.RunOver;
         bool dayEnd = !paused && game.Phase == GamePhase.DayEnd;
 
@@ -495,17 +341,13 @@ public class GameFlowDebugControls : MonoBehaviour
         bool shopOpen = dayEnd && !rewards && shop != null && shop.IsOpen;
         bool waiting = dayEnd && !rewards && !shopOpen;
 
-        Show(titleRoot, title);
-        Show(mainMenuRoot, mainMenu);
         Show(rewardRoot, rewards);
         Show(shopRoot, shopOpen);
         Show(pauseRoot, paused);
         Show(runOverRoot, runOver);
         Show(waitingRoot, waiting);
-        Show(dim, title || mainMenu || rewards || shopOpen || paused || runOver || waiting);
+        Show(dim, rewards || shopOpen || paused || runOver || waiting);
 
-        if (title) titleTagline.text = $"เปิดร้านให้รอดครบ {game.TotalDays} วัน";
-        if (mainMenu) RefreshMainMenu(game);
         if (rewards) RefreshRewards(game, offer);
         if (shopOpen) RefreshShop(game, shop);
         if (paused) pauseInfo.text = $"วันที่ {game.Day} / {game.TotalDays}   ·   เงิน {ReturnZone.TotalWallet}";
@@ -513,25 +355,6 @@ public class GameFlowDebugControls : MonoBehaviour
         if (waiting) waitingText.text = rewardSystem == null
             ? "จบวันแล้ว — แต่ไม่มี DayEndRewardSystem ในฉาก"
             : "จบวันแล้ว — กำลังสรุปผล";
-    }
-
-    private void RefreshMainMenu(GameManager game)
-    {
-        mainSubtitle.text = $"เลือกสัตว์ที่จะเปิดรับ — สถานีเริ่มต้นมาจากสิ่งที่สัตว์ตัวนั้นต้องการ   ·   อยู่ให้ครบ {game.TotalDays} วัน";
-
-        for (int i = 0; i < starterLabels.Count; i++)
-        {
-            PetSpecies species = selectableStarters[i];
-            if (species == null)
-            {
-                starterButtons[i].gameObject.SetActive(false);
-                continue;
-            }
-
-            string needs = string.Join(" · ", System.Array.ConvertAll(species.requiredSteps, CareStepStyle.LabelOf));
-            starterLabels[i].text = $"{species.speciesName}\n\n{needs}\n\nอดทน {species.patienceSeconds:F0} วิ\n" +
-                                    $"ค่าบริการ {species.baseFee} + {species.feePerStep}/ขั้น\n\n({i + 1})";
-        }
     }
 
     private void RefreshRewards(GameManager game, IReadOnlyList<RewardOption> offer)
@@ -587,9 +410,27 @@ public class GameFlowDebugControls : MonoBehaviour
             ? $"อยู่ครบ {game.TotalDays} วันตามเป้า"
             : $"ร้องเรียนครบ {game.MaxComplaints} ครั้งในวันที่ {game.Day}";
 
-        runOverStats.text = $"ไปถึงวันที่ {game.Day} / {game.TotalDays}\n" +
-                            $"เงินที่เหลือ {ReturnZone.TotalWallet}\n" +
-                            $"ร้องเรียนสะสม {game.Complaints} / {game.MaxComplaints}";
+        string goods = RunStats.GoodsDelivered > 0
+            ? $"   ·   สินค้า {RunStats.GoodsDelivered} ชิ้น (+{RunStats.GoodsEarned})"
+            : string.Empty;
+
+        string escapes = RunStats.Escapes > 0
+            ? $"สัตว์หนี {RunStats.Escapes} ครั้ง · จับคืนได้ {RunStats.Catches}\n"
+            : string.Empty;
+
+        // บรรทัดนี้สำคัญที่สุดของหน้าสรุป: บอกว่าแพ้เพราะอะไร คนเทสจะได้รู้ว่าต้องแก้อะไรรอบหน้า
+        string cause = !won && !string.IsNullOrEmpty(RunStats.LastComplaint)
+            ? $"\nฟางเส้นสุดท้าย: {RunStats.LastComplaint}"
+            : string.Empty;
+
+        runOverStats.text =
+            $"ไปถึงวันที่ {game.Day} / {game.TotalDays}\n" +
+            $"ส่งคืนสำเร็จ {RunStats.OrdersReturned} ตัว (ครบทุกขั้นตอน {RunStats.OrdersComplete}){goods}\n" +
+            $"รายได้รวม {RunStats.TotalEarned}  (ค่าบริการ {RunStats.FeesEarned} · ทิป {RunStats.TipsEarned})\n" +
+            $"เงินที่เหลือ {ReturnZone.TotalWallet}\n" +
+            escapes +
+            $"ร้องเรียน {game.Complaints} / {game.MaxComplaints}" +
+            cause;
     }
 
     private string DescribeReward(RewardOption option)
@@ -612,7 +453,7 @@ public class GameFlowDebugControls : MonoBehaviour
     }
 
     /// <summary>ข้อความกว้างเต็มแผง วางห่างจากขอบบนตามที่กำหนด</summary>
-    private static void Fill(RectTransform rect, float topOffset, float height)
+    internal static void Fill(RectTransform rect, float topOffset, float height)
     {
         rect.anchorMin = new Vector2(0f, 1f);
         rect.anchorMax = new Vector2(1f, 1f);

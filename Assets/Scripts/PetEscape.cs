@@ -122,6 +122,7 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
             body.constraints = RigidbodyConstraints.FreezeRotation; // กันตัวสัตว์ล้มกลิ้งตอนชนของ
         }
 
+        RunStats.NoteEscape();
         GameLog.Push($"{pet.DisplayName} หนีแล้ว! วิ่งไปไล่จับแล้วกด E", LogTone.Warn);
     }
 
@@ -282,6 +283,7 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
 
         if (carrier.Carry(gameObject))
         {
+            RunStats.NoteCatch();
             GameLog.Push($"จับ {pet.DisplayName} กลับมาได้แล้ว", LogTone.Good);
         }
     }

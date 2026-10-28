@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -13,6 +14,11 @@ public class TileGrid : MonoBehaviour
     [SerializeField] private int width = 10;
     [SerializeField] private int height = 10;
     [SerializeField] private float cellSize = 1f;
+
+    [Header("Blocked Cells")]
+    [Tooltip("ช่องที่มีกำแพง/เสา/ของตกแต่งทับอยู่ — อยู่ในกรอบกริดแต่วางอุปกรณ์ไม่ได้ " +
+             "จำเป็นสำหรับห้องที่ไม่ใช่สี่เหลี่ยมเต็มผืน (ห้องตัว L, มีเกาะกลาง) ดูกรอบสีแดงใน Scene view")]
+    [SerializeField] private List<Vector2Int> blockedCells = new List<Vector2Int>();
 
     // อุปกรณ์ที่อยู่ในแต่ละช่อง (null = ช่องว่าง) index = y * width + x
     // เก็บเป็น reference ของ GameObject ตรงๆ แทน bool เพื่อให้ "ถอดของในช่องนี้" ทำได้
@@ -69,11 +75,35 @@ public class TileGrid : MonoBehaviour
         return cell.x >= 0 && cell.x < width && cell.y >= 0 && cell.y < height;
     }
 
-    /// <summary>ช่องนอกขอบเขตกริดถือว่า "ถูกใช้งาน" เสมอ เพื่อกันการวางอุปกรณ์หลุดกริด</summary>
+    /// <summary>
+    /// ช่องนี้ถูกกำแพง/ของตกแต่งทับอยู่หรือไม่ — วางอุปกรณ์ไม่ได้ถาวรตลอดด่าน
+    /// ต่างจาก IsOccupied ตรงที่ช่องที่ถูกบล็อกจะไม่มีวันว่าง ส่วนช่องที่มีอุปกรณ์อยู่แค่ยกออกก็ว่างแล้ว
+    /// </summary>
+    public bool IsBlocked(Vector2Int cell)
+    {
+        return blockedCells.Contains(cell);
+    }
+
+    /// <summary>ช่องนอกขอบเขตกริดและช่องที่ถูกบล็อกถือว่า "ถูกใช้งาน" เสมอ เพื่อกันการวางอุปกรณ์ทับกำแพง</summary>
     public bool IsOccupied(Vector2Int cell)
     {
         if (!IsInBounds(cell)) return true;
+        if (IsBlocked(cell)) return true;
         return GetOccupant(cell) != null;
+    }
+
+    /// <summary>ปิด/เปิดช่องตอน runtime — ระบบออกแบบผังร้านกับระบบสิ่งกีดขวางจะเรียกตัวนี้</summary>
+    public void SetBlocked(Vector2Int cell, bool blocked)
+    {
+        if (!IsInBounds(cell)) return;
+
+        if (blocked)
+        {
+            if (!blockedCells.Contains(cell)) blockedCells.Add(cell);
+            return;
+        }
+
+        blockedCells.Remove(cell);
     }
 
     /// <summary>คืนอุปกรณ์ที่อยู่ในช่องที่ระบุ (null ถ้าช่องว่างหรืออยู่นอกกริด)</summary>
@@ -169,6 +199,14 @@ public class TileGrid : MonoBehaviour
             Vector3 from = transform.position + new Vector3(0f, 0f, z * cellSize);
             Vector3 to = transform.position + new Vector3(width * cellSize, 0f, z * cellSize);
             Gizmos.DrawLine(from, to);
+        }
+
+        // ช่องที่ถูกบล็อกเห็นได้ตลอด ไม่ต้องกด Play — จะได้วางกำแพงกับช่องห้ามวางให้ตรงกันตอนออกแบบผัง
+        Gizmos.color = new Color(0.8f, 0.2f, 0.2f, 0.45f);
+        foreach (Vector2Int blocked in blockedCells)
+        {
+            if (!IsInBounds(blocked)) continue;
+            Gizmos.DrawCube(CellToWorld(blocked) + Vector3.up * 0.03f, new Vector3(cellSize * 0.92f, 0.05f, cellSize * 0.92f));
         }
 
         if (!Application.isPlaying || occupants == null) return;

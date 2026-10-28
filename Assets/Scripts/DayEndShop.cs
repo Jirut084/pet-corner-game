@@ -103,7 +103,7 @@ public class DayEndShop : MonoBehaviour
     [Tooltip("ขายสัตว์ชนิดใหม่ (ได้สถานีที่ยังไม่มีมาด้วย)")]
     [SerializeField] private bool sellNewSpecies = true;
 
-    [Tooltip("สัตว์ที่ขายในร้าน — ปล่อยว่างจะใช้รายการสัตว์เริ่มต้น (Selectable Starters) ของ GameFlowDebugControls")]
+    [Tooltip("สัตว์ที่ขายในร้าน (ตัวที่ปลดล็อกแล้วจะไม่ขายซ้ำ)")]
     [SerializeField] private List<PetSpecies> speciesForSale = new List<PetSpecies>();
 
     [Tooltip("ราคาพื้นฐานของสัตว์ชนิดใหม่")]
@@ -553,15 +553,10 @@ public class DayEndShop : MonoBehaviour
 
     // ---------- ตัวช่วย ----------
 
-    /// <summary>สัตว์ที่ขายได้ — ใช้ speciesForSale ถ้าใส่ไว้ ไม่งั้นใช้รายการสัตว์เริ่มต้นจากหน้าเมนู</summary>
+    /// <summary>สัตว์ที่ขายได้ — เมนูหลักอยู่คนละฉากแล้ว จึงต้องใส่รายการใน speciesForSale เอง</summary>
     private IEnumerable<PetSpecies> SpeciesPool()
     {
-        if (speciesForSale != null && speciesForSale.Count > 0) return speciesForSale;
-
-        GameFlowDebugControls menu = FindAnyObjectByType<GameFlowDebugControls>();
-        return menu != null && menu.SelectableStarters != null
-            ? menu.SelectableStarters
-            : (IEnumerable<PetSpecies>)Array.Empty<PetSpecies>();
+        return speciesForSale;
     }
 
     /// <summary>ขั้นตอนที่สัตว์ชนิดนี้ต้องใช้ แต่ร้านยังไม่มีสถานีรองรับ (ไม่ซ้ำ)</summary>

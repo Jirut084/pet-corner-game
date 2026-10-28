@@ -1,11 +1,13 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>ช่วงเวลาของเกม — ทุกระบบอ่านค่านี้เพื่อรู้ว่าตอนนี้ทำอะไรได้บ้าง</summary>
 public enum GamePhase
 {
-    MainMenu, // หน้าเมนู เลือกสัตว์เริ่มต้น
+    MainMenu, // ฉากร้านเพิ่งโหลด ยังไม่เริ่ม run (หน้าเมนูจริงอยู่ฉาก MainMenu.unity)
     Setup,    // จัดร้าน ย้าย/วางสถานีได้อิสระ เวลาไม่เดิน
     Service,  // เปิดร้าน รับออเดอร์ จัดสถานีไม่ได้
     DayEnd,   // จบวัน เลือกรางวัล + ร้านค้าท้ายวัน
@@ -43,11 +45,12 @@ public class GameManager : MonoBehaviour
     [Tooltip("จำนวนออเดอร์ที่รับค้างไว้พร้อมกันได้ ไล่ตามวัน (วัน 1 = ช่องแรก) วันที่เกินลิสต์ใช้ค่าสุดท้าย")]
     [SerializeField] private int[] concurrentOrdersPerDay = new int[] { 1, 2, 3 };
 
-    [Header("Debug")]
-    [Tooltip("ข้ามหน้าเมนูแล้วเริ่มที่ Setup เลย สะดวกตอนเทสใน Editor")]
-    [SerializeField] private bool skipMainMenu = false;
+    [Header("Scenes")]
+    [Tooltip("ชื่อฉากเมนูหลัก ต้องอยู่ใน Build Profiles / Scene List ด้วย")]
+    [SerializeField] private string mainMenuScene = "MainMenu";
 
-    [Tooltip("สัตว์เริ่มต้นที่ใช้ตอน skipMainMenu — ต้องใส่ ไม่งั้นจะไม่มีสถานีใดถูกปลดล็อกเลย")]
+    [Header("Debug")]
+    [Tooltip("สัตว์เริ่มต้นตอนกด Play ที่ฉากร้านตรงๆ (ไม่ผ่านเมนู) — ปล่อยว่าง = เด้งไปฉากเมนูหลัก")]
     [SerializeField] private PetSpecies debugStarterSpecies;
 
     public GamePhase Phase { get; private set; } = GamePhase.MainMenu;
@@ -134,23 +137,21 @@ public class GameManager : MonoBehaviour
         Instance = this;
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
-        if (skipMainMenu)
+        PetSpecies starter = MainMenu.ChosenStarter != null ? MainMenu.ChosenStarter : debugStarterSpecies;
+        if (starter == null)
         {
-            // ต้องปลดล็อกสัตว์/สถานีก่อนเข้า Setup ไม่งั้น LevelInitializer จะไม่มีอะไรให้วาง
-            if (debugStarterSpecies == null)
-            {
-                Debug.LogWarning("[GameManager] skipMainMenu เปิดอยู่แต่ไม่ได้ใส่ debugStarterSpecies — ร้านจะไม่มีสถานีเลย");
-            }
+            SceneManager.LoadScene(mainMenuScene);
+            yield break;
+        }
 
-            PlayerProgress.Instance?.ResetForNewRun(debugStarterSpecies);
-            StartNewRun();
-        }
-        else
-        {
-            SetPhase(GamePhase.MainMenu);
-        }
+        // รอ 1 เฟรมให้ทุกระบบ Start/subscribe event ครบก่อน — เหมือนตอนเมนูอยู่ฉากเดียวกันที่ run เริ่มหลังทุกอย่างพร้อมแล้ว
+        yield return null;
+
+        // ต้องปลดล็อกสัตว์/สถานีก่อนเข้า Setup ไม่งั้น LevelInitializer จะไม่มีอะไรให้วาง
+        PlayerProgress.Instance?.ResetForNewRun(starter);
+        StartNewRun();
     }
 
     private void OnDestroy()
@@ -173,58 +174,26 @@ public class GameManager : MonoBehaviour
     /// <summary>
     /// เลิกรันปัจจุบันแล้วกลับหน้าเมนูหลัก — ใช้ทั้งปุ่ม "เล่นใหม่" ตอนจบเกม และ "กลับเมนูหลัก" ในเมนู Esc
     ///
-    /// ต้องเก็บกวาดของที่ค้างจากรันเดิมให้หมดก่อน ไม่งั้นรันถัดไปจะเริ่มด้วยร้านที่ยังมีสถานีเก่าเต็มไปหมด
-    /// สัตว์เก็บที่นี่ ส่วนสถานี/กล่องอุปกรณ์ LevelInitializer เก็บเองตอนเห็น phase เปลี่ยนเป็น MainMenu
+    /// โหลดฉากเมนูใหม่ทั้งฉาก ของในร้าน (สัตว์/สถานี/ลูกค้า) หายไปกับฉากเอง ไม่ต้องเก็บกวาดทีละชิ้น
+    /// เหลือแค่ค่า static ที่ StartNewRun ล้างให้ตอนเริ่ม run ถัดไป
     /// </summary>
     public void ReturnToMainMenu()
     {
         SetPaused(false);
-
-        ClearActivePets();
-
-        Day = 0;
-        OrdersCompleted = 0;
-        OrdersIssued = 0;
-        OrdersTarget = 0;
-        Complaints = 0;
-        activeOrders.Clear();
-
-        OnOrderProgressChanged?.Invoke(OrdersCompleted, OrdersTarget);
-        OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
-
-        SetPhase(GamePhase.MainMenu);
+        SceneManager.LoadScene(mainMenuScene);
     }
 
-    /// <summary>ทำลายสัตว์ที่ยังค้างอยู่ในฉากทั้งหมด (บนสถานี ในมือผู้เล่น หรือวางอยู่กับพื้น)</summary>
-    private static void ClearActivePets()
-    {
-        // Pet.All เป็นทะเบียนสดที่หดลงทุกครั้งที่สัตว์ถูกทำลาย วนตรงๆ ไม่ได้ ต้องคัดลอกออกมาก่อน
-        List<Pet> pets = new List<Pet>(Pet.All);
-
-        foreach (Pet pet in pets)
-        {
-            if (pet == null) continue;
-
-            // อยู่ในมือผู้เล่น ต้องเอาออกจากมือก่อน ไม่งั้นมือจะค้างว่าถืออะไรอยู่ทั้งที่ของหายไปแล้ว
-            PlayerCarrier holder = pet.GetComponentInParent<PlayerCarrier>();
-            if (holder != null && holder.HeldObject == pet.gameObject)
-            {
-                holder.Consume();
-            }
-
-            Destroy(pet.gameObject);
-        }
-    }
-
-    /// <summary>เริ่ม run ใหม่ — เรียกจากหน้าเมนูหลังผู้เล่นเลือกสัตว์เริ่มต้นแล้ว</summary>
-    public void StartNewRun()
+    /// <summary>เริ่ม run ใหม่ — Start เรียกให้เองหลังฉากร้านโหลด โดยใช้สัตว์ที่เลือกจากฉากเมนู</summary>
+    private void StartNewRun()
     {
         Day = 0;
         Complaints = 0;
         OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
 
-        // เงินเป็นตัวแปร static จึงค้างข้าม run ต้องล้างเองทุกครั้งที่เริ่มใหม่
+        // ค่า static ค้างข้ามฉาก/ข้าม run ต้องล้างเองทุกครั้งที่เริ่มใหม่
         ReturnZone.ResetWallet();
+        RunStats.Reset();
+        GameLog.Clear();
         OnRunStarted?.Invoke();
 
         AdvanceToNextDay();
@@ -327,6 +296,7 @@ public class GameManager : MonoBehaviour
     {
         Complaints++;
         OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
+        RunStats.NoteComplaint(reason); // ครั้งสุดท้าย = สาเหตุที่แพ้ เอาไปโชว์หน้าสรุป
 
         GameLog.Push($"ร้องเรียน! ({reason}) สะสม {Complaints}/{maxComplaints}", LogTone.Bad);
 

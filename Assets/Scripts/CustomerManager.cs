@@ -174,6 +174,31 @@ public class CustomerManager : MonoBehaviour
         PatiencePressure = crowd * (game.IsLateDay ? lateDayPressure : 1f);
     }
 
+    /// <summary>
+    /// ลูกค้าที่สั่งสินค้าค้างอยู่และมิเตอร์เหลือน้อยที่สุด — ตู้สินค้าใช้เลือกว่าจะหยิบอะไรให้ผู้เล่น
+    /// ส่ง item มาด้วย = หาเฉพาะคนที่สั่งของชนิดนั้น (จุดคืนใช้ตอนผู้เล่นเอาของมาส่ง)
+    /// คืน null ถ้าไม่มีใครสั่งอะไรค้างไว้
+    /// </summary>
+    public Customer MostUrgentGoodsRequest(GoodsItem item = null)
+    {
+        Customer best = null;
+        float lowest = float.MaxValue;
+
+        foreach (Customer customer in customers)
+        {
+            if (customer == null || !customer.WantsGood) continue;
+            if (item != null && customer.WantedGood != item) continue;
+
+            float remaining = customer.PatienceNormalized;
+            if (remaining >= lowest) continue;
+
+            lowest = remaining;
+            best = customer;
+        }
+
+        return best;
+    }
+
     private bool ShouldSpawnMore(GameManager game)
     {
         if (customerPrefab == null || doorPoint == null) return false;

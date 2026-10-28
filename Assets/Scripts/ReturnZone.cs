@@ -52,6 +52,14 @@ public class ReturnZone : MonoBehaviour, IInteractable
             return;
         }
 
+        // ถือสินค้ามาส่ง = คนละเส้นทางกับการส่งสัตว์คืน จัดการให้จบตรงนี้เลย
+        CarriedGood good = carrier.GetHeld<CarriedGood>();
+        if (good != null)
+        {
+            DeliverGood(carrier, good);
+            return;
+        }
+
         // ตอนนี้ผู้เล่นถือได้ทั้งสัตว์และกล่องอุปกรณ์ จึงต้องเช็คว่าของในมือเป็นสัตว์จริงๆ
         Pet pet = carrier.GetHeld<Pet>();
         if (pet == null)
@@ -85,8 +93,8 @@ public class ReturnZone : MonoBehaviour, IInteractable
         // ทิปที่สะสมไว้ระหว่างทางไม่โดนหัก penalty และไม่โดนคูณบัฟ เป็นค่าคงที่ตรงๆ
         earned += pet.CollectedTip;
 
-        TotalWallet += earned;
-        OnWalletChanged?.Invoke(TotalWallet);
+        AddMoney(earned);
+        RunStats.NotePetReturned(earned, pet.CollectedTip, pet.IsComplete);
         AudioManager.Instance?.PlayGetMoney();
 
         pet.StopPatience();
@@ -113,6 +121,40 @@ public class ReturnZone : MonoBehaviour, IInteractable
         {
             Destroy(releasedPet);
         }
+    }
+
+    /// <summary>ส่งสินค้าให้ลูกค้าที่สั่งไว้ — ได้เงินทันที ไม่กระทบออเดอร์สัตว์ที่ยังค้างอยู่</summary>
+    private void DeliverGood(PlayerCarrier carrier, CarriedGood good)
+    {
+        Customer customer = CustomerManager.Instance != null
+            ? CustomerManager.Instance.MostUrgentGoodsRequest(good.Item)
+            : null;
+
+        if (customer == null)
+        {
+            GameLog.Push($"ไม่มีลูกค้าที่รอ {good.Item.label} อยู่แล้ว — เอาไปเก็บคืนที่ตู้สินค้า", LogTone.Warn);
+            return;
+        }
+
+        customer.ReceiveGood();
+
+        GameObject box = carrier.Consume();
+        if (box != null) Destroy(box);
+
+        AddMoney(good.Item.bonusPay);
+        RunStats.NoteGoodsDelivered(good.Item.bonusPay);
+        AudioManager.Instance?.PlayGetMoney();
+
+        GameLog.Push($"ส่ง {good.Item.label} ให้ลูกค้า → ได้เพิ่ม {good.Item.bonusPay} | เงินรวม {TotalWallet}", LogTone.Good);
+    }
+
+    /// <summary>ทางเข้าเงินทางเดียวของเกม — ระบบอื่นเพิ่มเงินผ่านตรงนี้เท่านั้น</summary>
+    public static void AddMoney(int amount)
+    {
+        if (amount == 0) return;
+
+        TotalWallet += amount;
+        OnWalletChanged?.Invoke(TotalWallet);
     }
 
     // แสดง wire sphere ใน Scene view เพื่อ debug ตำแหน่ง/รัศมีจุดส่งคืน

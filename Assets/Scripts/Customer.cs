@@ -88,6 +88,24 @@ public class Customer : MonoBehaviour
     /// <summary>ควรวาดเกจรอสั่งไหม — เฉพาะตอนต่อแถวอยู่และเกจกำลังเดิน</summary>
     public bool ShowCounterGauge => counterPatienceRunning && IsWaitingInLine;
 
+    /// <summary>สินค้าที่ลูกค้าคนนี้สั่งเพิ่มไว้ (null = ไม่ได้สั่ง หรือส่งให้แล้ว)</summary>
+    public GoodsItem WantedGood { get; private set; }
+
+    /// <summary>ยังรอสินค้าอยู่ไหม — ต้องนั่งรออยู่ในร้านเท่านั้น คนที่เดินออกไปแล้วไม่นับ</summary>
+    public bool WantsGood => WantedGood != null && State != CustomerState.Leaving;
+
+    /// <summary>IntakePoint เรียกตอนรับออเดอร์ ถ้าตู้สินค้าสุ่มได้ว่าคนนี้สั่งของเพิ่ม</summary>
+    public void RequestGood(GoodsItem item)
+    {
+        WantedGood = item;
+    }
+
+    /// <summary>ส่งสินค้าให้แล้ว — เคลียร์คำสั่งซื้อทิ้ง</summary>
+    public void ReceiveGood()
+    {
+        WantedGood = null;
+    }
+
     private Vector3 targetPosition;
     private CustomerManager manager;
 
@@ -312,8 +330,12 @@ public class Customer : MonoBehaviour
     /// </summary>
     private void SnapToGround()
     {
-        Collider self = GetComponent<Collider>();
-        float feet = self != null ? self.bounds.min.y : transform.position.y;
+        // คำนวณเท้าจากขนาด capsule เอง ห้ามใช้ collider.bounds — เฟรมแรกหลัง Instantiate ค่า bounds ยังเป็นจุดเดียวตรง root
+        // (ยังไม่ได้ลงทะเบียนกับ physics) ทำให้คิดว่าเท้าอยู่ที่ root แล้วกดตัวจมพื้นลงไปครึ่งตัว
+        CapsuleCollider self = GetComponent<CapsuleCollider>();
+        float feet = self != null
+            ? transform.TransformPoint(self.center + Vector3.down * (self.height * 0.5f)).y
+            : transform.position.y;
 
         // RaycastAll เพราะเรย์ออกจากในตัวลูกค้าเอง ต้องข้าม collider ตัวเองก่อนถึงจะเจอพื้นจริง
         RaycastHit[] hits = Physics.RaycastAll(transform.position + Vector3.up * 2f, Vector3.down, 20f);
