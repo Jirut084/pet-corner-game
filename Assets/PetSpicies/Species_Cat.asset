@@ -18,4 +18,4 @@ MonoBehaviour:
   patienceSeconds: 75
   baseFee: 15
   feePerStep: 8
-  counterPatienceSeconds: 45
+  counterPatienceSeconds: 35

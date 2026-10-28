@@ -44,6 +44,29 @@ public class CustomerManager : MonoBehaviour
     /// <summary>ลูกค้าที่รอสั่งจนหมดความอดทนต้องร้องเรียนไหม</summary>
     public bool ComplainOnCounterTimeout => complainOnCounterTimeout;
 
+    [Header("Outside Queue")]
+    [Tooltip("ร้านเต็ม (ดูแลครบจำนวนพร้อมกัน/ที่นั่งเต็ม) แล้วลูกค้ายังมาตามจังหวะ — ยืนต่อคิวนอกร้านได้สูงสุดกี่คน (0 = ปิดระบบ)")]
+    [Min(0)]
+    [SerializeField] private int maxOutsideQueue = 3;
+
+    [Tooltip("เกจรอสั่งของคนนอกร้านลดเร็วกว่าในร้านกี่เท่า (ใช้เกจเดียวกัน เข้าร้านแล้วกลับมาลดปกติ ไม่รีเซ็ต)")]
+    [Min(1f)]
+    [SerializeField] private float outsideDrainMultiplier = 1.5f;
+
+    [Tooltip("ทิศจากประตูออกไปนอกร้าน (แถวทอดยาวไปทางนี้) — เลือก CustomerManager แล้วดูจุดสีแดงใน Scene view")]
+    [SerializeField] private Vector3 outsideQueueDirection = Vector3.forward;
+
+    [Tooltip("ระยะจากประตูถึงคนแรกในคิวนอกร้าน")]
+    [SerializeField] private float outsideQueueOffset = 1.2f;
+
+    [SerializeField] private float outsideQueueSpacing = 1.0f;
+
+    /// <summary>เกจรอสั่งตอนยืนนอกร้านลดเร็วกว่าในร้านกี่เท่า</summary>
+    public float OutsideDrainMultiplier => outsideDrainMultiplier;
+
+    /// <summary>จุดที่คนนอกร้านเดินจากไปเมื่อหมดความอดทน (ปลายคิวออกไปอีก)</summary>
+    public Vector3 OutsideLeavePosition => OutsideSlotPosition(maxOutsideQueue + 3);
+
     [Header("Pressure")]
     [Tooltip("ลูกค้าที่รออยู่พร้อมกันแต่ละคนทำให้ทุกมิเตอร์ลดเร็วขึ้นกี่เท่า (ทบต้น) — 1 = ปิดระบบนี้")]
     [SerializeField] private float crowdPressurePerCustomer = 1.12f;
@@ -80,6 +103,9 @@ public class CustomerManager : MonoBehaviour
 
     // แถวหน้าเคาน์เตอร์ เรียงตามลำดับมาก่อน-หลัง index 0 คือคนที่ผู้เล่นกดรับได้
     private readonly List<Customer> counterQueue = new List<Customer>();
+
+    // คิวนอกร้าน index 0 = คนที่จะได้เข้าร้านก่อน
+    private readonly List<Customer> outsideQueue = new List<Customer>();
 
     private readonly Dictionary<int, Customer> seatOwners = new Dictionary<int, Customer>();
     private float spawnTimer;
@@ -139,7 +165,9 @@ public class CustomerManager : MonoBehaviour
         }
 
         customers.RemoveAll(c => c == null);
+        AdmitFromOutside(game);
         RefreshCounterQueue();
+        RefreshOutsideQueue();
         UpdatePatiencePressure(game);
 
         if (!ShouldSpawnMore(game)) return;
@@ -147,8 +175,51 @@ public class CustomerManager : MonoBehaviour
         spawnTimer -= Time.deltaTime;
         if (spawnTimer > 0f) return;
 
-        SpawnCustomer();
+        // มีคนต่อคิวนอกร้านอยู่แล้ว คนใหม่ต้องต่อท้าย ห้ามแซงเข้าร้านไปก่อน
+        bool inside = outsideQueue.Count == 0 && HasRoomInside(game);
+        SpawnCustomer(inside);
         spawnTimer = SpawnGapForDay(game.Day);
+    }
+
+    /// <summary>ร้านมีที่ว่างให้ลูกค้าเข้ามาต่อแถวหน้าเคาน์เตอร์อีกคนไหม (ดูแลไม่เต็ม + มีที่นั่งรอว่าง)</summary>
+    private bool HasRoomInside(GameManager game)
+    {
+        return game.ActiveOrderCount + CountIncoming() < game.ConcurrentOrderLimit && FreeSeatIndex() >= 0;
+    }
+
+    /// <summary>ร้านว่างเมื่อไหร่ ให้หัวคิวนอกร้านเดินเข้ามาต่อแถวหน้าเคาน์เตอร์ (ทีละคนต่อเฟรม)</summary>
+    private void AdmitFromOutside(GameManager game)
+    {
+        outsideQueue.RemoveAll(c => c == null || !c.IsOutside);
+        if (outsideQueue.Count == 0 || !HasRoomInside(game)) return;
+
+        Customer next = outsideQueue[0];
+        outsideQueue.RemoveAt(0);
+
+        next.EnterShop();
+        int slot = counterQueue.Count;
+        next.SetQueueSlot(slot, QueueSlotPosition(slot));
+        counterQueue.Add(next);
+    }
+
+    private void RefreshOutsideQueue()
+    {
+        outsideQueue.RemoveAll(c => c == null || !c.IsOutside);
+
+        for (int i = 0; i < outsideQueue.Count; i++)
+        {
+            outsideQueue[i].SetOutsideSlot(OutsideSlotPosition(i));
+        }
+    }
+
+    /// <summary>ตำแหน่งช่องที่ n ในคิวนอกร้าน (0 = ติดประตู)</summary>
+    private Vector3 OutsideSlotPosition(int index)
+    {
+        Vector3 direction = outsideQueueDirection;
+        direction.y = 0f;
+        direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
+
+        return ExitPosition + direction * (outsideQueueOffset + index * outsideQueueSpacing);
     }
 
     /// <summary>
@@ -204,15 +275,12 @@ public class CustomerManager : MonoBehaviour
         if (customerPrefab == null || doorPoint == null) return false;
         if (!TryGetCounterPosition(out _)) return false;
 
-        // คนที่เข้ามาแล้วแต่ยังไม่ได้ส่งออเดอร์ ก็ถือว่ากินโควตาไปแล้ว
-        int incoming = CountIncoming();
-        int busy = game.ActiveOrderCount + incoming;
-
+        // คนที่เข้ามาแล้ว/ยืนคิวนอกร้านแต่ยังไม่ได้ส่งออเดอร์ ก็ถือว่ากินโควตาไปแล้ว
+        int busy = game.ActiveOrderCount + CountIncoming() + outsideQueue.Count;
         if (game.OrdersCompleted + busy >= game.OrdersTarget) return false;
-        if (busy >= game.ConcurrentOrderLimit) return false;
 
-        // ต้องมีจุดรอว่างรองรับด้วย ไม่งั้นรับออเดอร์แล้วลูกค้าไม่มีที่ไป
-        return FreeSeatIndex() >= 0;
+        // ร้านเต็ม (ดูแลครบจำนวน / ที่นั่งเต็ม) ลูกค้ายังมาตามจังหวะ แต่ต้องไปยืนรอนอกร้าน
+        return (outsideQueue.Count == 0 && HasRoomInside(game)) || outsideQueue.Count < maxOutsideQueue;
     }
 
     private int CountIncoming()
@@ -355,7 +423,7 @@ public class CustomerManager : MonoBehaviour
         return stand + QueueDirection() * (index * queueSpacing);
     }
 
-    private void SpawnCustomer()
+    private void SpawnCustomer(bool inside)
     {
         if (!TryGetCounterPosition(out Vector3 counterPosition)) return;
 
@@ -377,6 +445,14 @@ public class CustomerManager : MonoBehaviour
         }
 
         obj.name = $"Customer ({species.speciesName})";
+        customers.Add(customer);
+
+        if (!inside)
+        {
+            customer.InitializeOutside(this, species, OutsideSlotPosition(outsideQueue.Count));
+            outsideQueue.Add(customer);
+            return;
+        }
 
         // ต่อท้ายแถวทันที ไม่งั้นทุกคนจะเดินไปจุดเดียวกันแล้วยืนซ้อนกันหน้าเคาน์เตอร์
         int slot = counterQueue.Count;
@@ -386,7 +462,6 @@ public class CustomerManager : MonoBehaviour
         customer.SetQueueSlot(slot, slotPosition);
 
         counterQueue.Add(customer);
-        customers.Add(customer);
     }
 
     private PetSpecies PickSpecies()
@@ -480,6 +555,7 @@ public class CustomerManager : MonoBehaviour
 
         customers.Clear();
         counterQueue.Clear();
+        outsideQueue.Clear();
         seatOwners.Clear();
     }
 
@@ -519,6 +595,13 @@ public class CustomerManager : MonoBehaviour
         }
 
         DrawQueueGizmo();
+
+        // จุดแดง = ช่องยืนของคิวนอกร้าน ควรอยู่นอกกำแพงฝั่งประตู
+        if (doorPoint != null)
+        {
+            Gizmos.color = new Color(0.9f, 0.25f, 0.25f);
+            for (int i = 0; i < maxOutsideQueue; i++) Gizmos.DrawWireSphere(OutsideSlotPosition(i), 0.3f);
+        }
 
         if (waitSeats == null) return;
 

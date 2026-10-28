@@ -351,7 +351,7 @@ public class GameHudOverlay : MonoBehaviour
         orderFill.sizeDelta = new Vector2(190f * progress, 0f);
         orderText.text = service
             ? $"ออเดอร์ {game.OrdersCompleted}/{game.OrdersTarget}   ·   ดูแลอยู่ {game.ActiveOrderCount}/{game.ConcurrentOrderLimit}"
-            : $"วันนี้ {game.OrdersTarget} ออเดอร์";
+            : $"วันนี้ {game.OrdersTarget} ออเดอร์   ·   ชื่อเสียง {game.Reputation}";
 
         // ความกดดันร่วม: โชว์เฉพาะตอนที่มิเตอร์ถูกเร่งจริง ไม่งั้นเป็นข้อความรกจอเปล่าๆ
         float pressure = CustomerManager.PatiencePressure;
@@ -441,7 +441,7 @@ public class GameHudOverlay : MonoBehaviour
             float fill = Mathf.Clamp01(orderGauge ? customer.PatienceNormalized : customer.CounterPatienceNormalized);
             string label = orderGauge
                 ? (customer.AssignedPet != null ? customer.AssignedPet.DisplayName : string.Empty)
-                : "รอสั่ง";
+                : customer.IsOutside ? "รอนอกร้าน" : "รอสั่ง";
 
             ShowRing(point, fill, label, orderGauge);
 

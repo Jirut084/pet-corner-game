@@ -4,7 +4,7 @@ using UnityEngine;
 /// ลูกค้า 1 คน — เดินเข้าร้านมาส่งออเดอร์ที่เคาน์เตอร์ แล้วไปนั่งรอที่จุดรอ
 /// จนกว่าผู้เล่นจะดูแลสัตว์เสร็จและเอามาส่งคืน
 ///
-/// สถานะ: WalkingToCounter → AtCounter (รอผู้เล่นกดรับออเดอร์)
+/// สถานะ: (WaitingOutside — ร้านเต็ม ต่อคิวนอกร้าน) → WalkingToCounter → AtCounter (รอผู้เล่นกดรับออเดอร์)
 ///        → WalkingToSeat → Waiting (มิเตอร์เดิน) → Leaving → ทำลายตัวเอง
 ///
 /// มิเตอร์ความอดทนอยู่ที่ Pet (แหล่งข้อมูลเดียว) ลูกค้าแค่อ่านมาโชว์เป็นเกจ
@@ -18,6 +18,7 @@ public class Customer : MonoBehaviour
 {
     public enum CustomerState
     {
+        WaitingOutside,
         WalkingToCounter,
         AtCounter,
         WalkingToSeat,
@@ -85,8 +86,11 @@ public class Customer : MonoBehaviour
         }
     }
 
-    /// <summary>ควรวาดเกจรอสั่งไหม — เฉพาะตอนต่อแถวอยู่และเกจกำลังเดิน</summary>
-    public bool ShowCounterGauge => counterPatienceRunning && IsWaitingInLine;
+    /// <summary>ยืนต่อคิวอยู่นอกร้าน (ร้านเต็ม) — เกจรอสั่งลดเร็วกว่าในร้าน</summary>
+    public bool IsOutside => State == CustomerState.WaitingOutside;
+
+    /// <summary>ควรวาดเกจรอสั่งไหม — เฉพาะตอนต่อแถว (ในหรือนอกร้าน) และเกจกำลังเดิน</summary>
+    public bool ShowCounterGauge => counterPatienceRunning && (IsWaitingInLine || IsOutside);
 
     /// <summary>สินค้าที่ลูกค้าคนนี้สั่งเพิ่มไว้ (null = ไม่ได้สั่ง หรือส่งให้แล้ว)</summary>
     public GoodsItem WantedGood { get; private set; }
@@ -127,12 +131,55 @@ public class Customer : MonoBehaviour
         GameLog.Push($"ลูกค้า {species.speciesName} เดินเข้าร้านแล้ว กำลังไปที่เคาน์เตอร์");
     }
 
+    /// <summary>
+    /// ร้านเต็ม — ต่อคิวนอกร้านแทน เกจรอสั่งเริ่มทันทีและลดเร็วกว่าในร้าน (CustomerManager.OutsideDrainMultiplier)
+    /// เกิดที่ประตูก่อนเพื่อให้ SnapToGround เจอพื้นในร้าน แล้วค่อยย้ายไปยืนที่ช่องคิว (นอกร้านอาจไม่มีพื้นให้ยิงเรย์)
+    /// </summary>
+    public void InitializeOutside(CustomerManager owner, PetSpecies species, Vector3 outsidePosition)
+    {
+        manager = owner;
+        RequestedSpecies = species;
+
+        SnapToGround();
+        transform.position = new Vector3(outsidePosition.x, transform.position.y, outsidePosition.z);
+
+        SetTarget(outsidePosition);
+        State = CustomerState.WaitingOutside;
+        idleFacing = FacingTowardDoor();
+
+        hasJoinedLine = true;
+        StartCounterPatience();
+
+        GameLog.Push($"ร้านเต็ม! ลูกค้า {species.speciesName} ต่อคิวรอนอกร้าน", LogTone.Warn);
+    }
+
+    /// <summary>ย้ายไปช่องที่ระบุในคิวนอกร้าน — คนหน้าเข้าร้านไปเมื่อไหร่ทุกคนขยับขึ้นมาเอง</summary>
+    public void SetOutsideSlot(Vector3 position)
+    {
+        if (IsOutside) SetTarget(position);
+    }
+
+    /// <summary>ร้านมีที่ว่างแล้ว — เดินเข้าไปต่อแถวหน้าเคาน์เตอร์ เกจรอสั่งนับต่อจากเดิม (ไม่รีเซ็ต)</summary>
+    public void EnterShop()
+    {
+        if (!IsOutside) return;
+
+        State = CustomerState.WalkingToCounter;
+        idleFacing = null;
+        GameLog.Push($"ลูกค้า {RequestedSpecies.speciesName} เข้าร้านมาต่อแถวแล้ว");
+    }
+
     private void Update()
     {
         TickCounterPatience();
 
         switch (State)
         {
+            case CustomerState.WaitingOutside:
+                if (!ReachedTarget()) MoveTowardTarget();
+                else TurnTowardIdleFacing();
+                break;
+
             case CustomerState.WalkingToCounter:
                 if (MoveTowardTarget())
                 {
@@ -241,7 +288,7 @@ public class Customer : MonoBehaviour
     {
         if (!counterPatienceRunning) return;
 
-        if (!IsWaitingInLine)
+        if (!IsWaitingInLine && !IsOutside)
         {
             counterPatienceRunning = false;
             return;
@@ -251,6 +298,9 @@ public class Customer : MonoBehaviour
         float drainRate = PlayerProgress.Instance != null
             ? PlayerProgress.Instance.PatienceDrainMultiplier
             : 1f;
+
+        // ยืนตากแดดนอกร้านใจร้อนกว่ายืนในร้าน
+        if (IsOutside && manager != null) drainRate *= manager.OutsideDrainMultiplier;
 
         // คิวหน้าเคาน์เตอร์โดนความกดดันร่วมเหมือนกัน — ปล่อยคิวยาวแล้วทุกคนใจร้อนขึ้นพร้อมกัน
         drainRate *= CustomerManager.PatiencePressure;
@@ -268,14 +318,22 @@ public class Customer : MonoBehaviour
         counterPatienceRunning = false;
 
         string speciesName = RequestedSpecies != null ? RequestedSpecies.speciesName : name;
-        GameLog.Push($"ลูกค้า {speciesName} รอสั่งนานเกินไป เดินออกจากร้าน!", LogTone.Bad);
+        bool outside = IsOutside;
+        GameLog.Push(outside
+            ? $"ลูกค้า {speciesName} รอคิวนอกร้านนานเกินไป เดินกลับไปแล้ว!"
+            : $"ลูกค้า {speciesName} รอสั่งนานเกินไป เดินออกจากร้าน!", LogTone.Bad);
 
         if (manager == null || manager.ComplainOnCounterTimeout)
         {
-            GameManager.Instance?.AddComplaint($"ลูกค้า {speciesName} รอหน้าเคาน์เตอร์นานเกินไป");
+            GameManager.Instance?.AddComplaint(outside
+                ? $"ลูกค้า {speciesName} รอคิวนอกร้านนานเกินไป"
+                : $"ลูกค้า {speciesName} รอหน้าเคาน์เตอร์นานเกินไป");
         }
 
         LeaveShop();
+
+        // คนนอกร้านเดินจากไปทางถนน ไม่ต้องเดินผ่านประตูเข้าร้านก่อนหายไป
+        if (outside && manager != null) SetTarget(manager.OutsideLeavePosition);
     }
 
     private void HandlePatienceExpired(Pet pet)
@@ -396,6 +454,17 @@ public class Customer : MonoBehaviour
         if (manager == null || !manager.TryGetCounterLookPoint(out Vector3 lookPoint)) return null;
 
         Vector3 direction = lookPoint - transform.position;
+        direction.y = 0f;
+
+        return direction.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(direction, Vector3.up) : (Quaternion?)null;
+    }
+
+    /// <summary>คนต่อคิวนอกร้านหันหน้าเข้าหาประตู</summary>
+    private Quaternion? FacingTowardDoor()
+    {
+        if (manager == null) return null;
+
+        Vector3 direction = manager.ExitPosition - transform.position;
         direction.y = 0f;
 
         return direction.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(direction, Vector3.up) : (Quaternion?)null;

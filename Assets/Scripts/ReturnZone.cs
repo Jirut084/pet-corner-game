@@ -107,10 +107,14 @@ public class ReturnZone : MonoBehaviour, IInteractable
         GameLog.Push($"ส่งคืน {species.speciesName} ({status}) → ได้ {earned}{tipText} | เงินรวม {TotalWallet}",
             pet.IsComplete ? LogTone.Good : LogTone.Warn);
 
-        // ส่งคืนทั้งที่ทำขั้นตอนไม่ครบ = ร้องเรียน 1 ครั้ง (ไม่ block การส่งคืน)
+        // ส่งคืนทั้งที่ทำขั้นตอนไม่ครบ = ร้องเรียน 1 ครั้ง (ไม่ block การส่งคืน) ครบ = ชื่อเสียง +1
         if (!pet.IsComplete)
         {
             GameManager.Instance?.AddComplaint($"{species.speciesName} ดูแลไม่ครบขั้นตอน");
+        }
+        else
+        {
+            GameManager.Instance?.AddReputation(1);
         }
 
         GameManager.Instance?.CompleteOrder(pet);
@@ -143,12 +147,13 @@ public class ReturnZone : MonoBehaviour, IInteractable
 
         AddMoney(good.Item.bonusPay);
         RunStats.NoteGoodsDelivered(good.Item.bonusPay);
+        GameManager.Instance?.AddReputation(1);
         AudioManager.Instance?.PlayGetMoney();
 
         GameLog.Push($"ส่ง {good.Item.label} ให้ลูกค้า → ได้เพิ่ม {good.Item.bonusPay} | เงินรวม {TotalWallet}", LogTone.Good);
     }
 
-    /// <summary>ทางเข้าเงินทางเดียวของเกม — ระบบอื่นเพิ่มเงินผ่านตรงนี้เท่านั้น</summary>
+    /// <summary>ทางเข้า-ออกของเงินทางเดียวของเกม — ระบบอื่นเพิ่ม/หักเงินผ่านตรงนี้เท่านั้น (ค่าติดลบ = หัก)</summary>
     public static void AddMoney(int amount)
     {
         if (amount == 0) return;

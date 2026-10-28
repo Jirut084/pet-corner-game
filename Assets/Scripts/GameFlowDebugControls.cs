@@ -350,7 +350,7 @@ public class GameFlowDebugControls : MonoBehaviour
 
         if (rewards) RefreshRewards(game, offer);
         if (shopOpen) RefreshShop(game, shop);
-        if (paused) pauseInfo.text = $"วันที่ {game.Day} / {game.TotalDays}   ·   เงิน {ReturnZone.TotalWallet}";
+        if (paused) pauseInfo.text = $"วันที่ {game.Day} / {game.TotalDays}   ·   เงิน {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}";
         if (runOver) RefreshRunOver(game);
         if (waiting) waitingText.text = rewardSystem == null
             ? "จบวันแล้ว — แต่ไม่มี DayEndRewardSystem ในฉาก"
@@ -373,7 +373,9 @@ public class GameFlowDebugControls : MonoBehaviour
 
     private void RefreshShop(GameManager game, DayEndShop shop)
     {
-        shopTitle.text = $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน";
+        shopTitle.text = game.LastDayCost > 0
+            ? $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน (หักค่าเช่าแล้ว {game.LastDayCost})"
+            : $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน";
         shopMoney.text = shop.Money.ToString();
         shopContinueLabel.text = $"ไปวันถัดไป  ({shop.ContinueKey})";
 
@@ -426,8 +428,8 @@ public class GameFlowDebugControls : MonoBehaviour
         runOverStats.text =
             $"ไปถึงวันที่ {game.Day} / {game.TotalDays}\n" +
             $"ส่งคืนสำเร็จ {RunStats.OrdersReturned} ตัว (ครบทุกขั้นตอน {RunStats.OrdersComplete}){goods}\n" +
-            $"รายได้รวม {RunStats.TotalEarned}  (ค่าบริการ {RunStats.FeesEarned} · ทิป {RunStats.TipsEarned})\n" +
-            $"เงินที่เหลือ {ReturnZone.TotalWallet}\n" +
+            $"รายได้รวม {RunStats.TotalEarned}  (ค่าบริการ {RunStats.FeesEarned} · ทิป {RunStats.TipsEarned})  ·  ค่าเช่ารวม −{RunStats.CostsPaid}\n" +
+            $"เงินที่เหลือ {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}\n" +
             escapes +
             $"ร้องเรียน {game.Complaints} / {game.MaxComplaints}" +
             cause;

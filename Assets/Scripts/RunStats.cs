@@ -21,6 +21,9 @@ public static class RunStats
     public static int GoodsDelivered { get; private set; }
     public static int GoodsEarned { get; private set; }
 
+    /// <summary>ค่าเช่า + ค่าดูแลสถานีที่จ่ายไปทั้ง run</summary>
+    public static int CostsPaid { get; private set; }
+
     public static int Escapes { get; private set; }
     public static int Catches { get; private set; }
 
@@ -37,6 +40,7 @@ public static class RunStats
         TipsEarned = 0;
         GoodsDelivered = 0;
         GoodsEarned = 0;
+        CostsPaid = 0;
         Escapes = 0;
         Catches = 0;
         LastComplaint = null;
@@ -57,6 +61,8 @@ public static class RunStats
         GoodsDelivered++;
         GoodsEarned += bonus;
     }
+
+    public static void NoteCostsPaid(int amount) => CostsPaid += amount;
 
     public static void NoteEscape() => Escapes++;
 

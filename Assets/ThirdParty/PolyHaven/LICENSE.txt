@@ -1,0 +1,6 @@
+Textures from Poly Haven (https://polyhaven.com) — CC0 1.0 (public domain), no attribution required.
+Downloaded 2026-10-28, 1K JPG (diffuse / normal OpenGL / roughness):
+
+- floor_tiles_08     https://polyhaven.com/a/floor_tiles_08     beige square ceramic tiles (shop floor)
+- laminate_floor_02  https://polyhaven.com/a/laminate_floor_02  light wood laminate (alt. floor / counters)
+- clay_plaster       https://polyhaven.com/a/clay_plaster       warm plaster (walls)

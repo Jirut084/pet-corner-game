@@ -143,6 +143,8 @@ public class ModelSwapTool : EditorWindow
         AddStation("Assets/Prefabs/Food.prefab", "feed bowl colored 2", "feeding bowl");
         AddStation("Assets/Prefabs/Bath.prefab", "Bath-Colored");
         AddStation("Assets/Prefabs/IntakePoint.prefab", "cashier colored", "Cashier Machine");
+        AddStation("Assets/Prefabs/HoldingTable.prefab", "tableCoffeeSquare");
+        AddStation("Assets/Prefabs/EquipmentParcel.prefab", "cardboardBoxClosed");
 
         basePetPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Object/PetProto.prefab");
 
@@ -191,7 +193,8 @@ public class ModelSwapTool : EditorWindow
 
     private static GameObject FindModel(string fileName)
     {
-        foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Models" }))
+        // ThirdParty = ชุดโมเดล CC0 ที่โหลดมา (Kenney Furniture Kit ตั้ง Scale Factor 0.25 ไว้แล้วให้พอดีกริด)
+        foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Models", "Assets/ThirdParty" }))
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
             if (Path.GetFileNameWithoutExtension(path).Equals(fileName, StringComparison.OrdinalIgnoreCase))
@@ -290,8 +293,8 @@ public class ModelSwapTool : EditorWindow
         return succeeded;
     }
 
-    /// <summary>สลับหน้าตาของ prefab ไฟล์เดียว คืน true ถ้าบันทึกสำเร็จ</summary>
-    private bool SwapVisual(string prefabPath, GameObject model, float minColliderHeight)
+    /// <summary>สลับหน้าตาของ prefab ไฟล์เดียว คืน true ถ้าบันทึกสำเร็จ (public ให้สคริปต์ editor อื่นเรียกได้โดยไม่ต้องเปิดหน้าต่าง)</summary>
+    public bool SwapVisual(string prefabPath, GameObject model, float minColliderHeight)
     {
         GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
 

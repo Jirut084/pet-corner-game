@@ -41,6 +41,25 @@ public class GameManager : MonoBehaviour
     [Range(0.1f, 1f)]
     [SerializeField] private float lateDayStart = 0.75f;
 
+    [Header("Reputation")]
+    [Tooltip("ชื่อเสียงทุกๆ กี่แต้ม = ออเดอร์วันถัดไป ±1 (ติดลบก็ลดออเดอร์ได้) " +
+             "ได้แต้มจาก: ส่งคืนครบทุกขั้น +1 · ส่งสินค้า +1 · ร้องเรียน −2")]
+    [Min(1)]
+    [SerializeField] private int reputationPerOrder = 3;
+
+    [Header("Daily Costs")]
+    [Tooltip("ค่าเช่าที่หักตอนจบวันแรก — ทางออกของเงินที่โตตามรายได้ กันเงินล้นจนของในร้านค้าไม่มีความหมาย")]
+    [Min(0)]
+    [SerializeField] private int rentFirstDay = 30;
+
+    [Tooltip("ค่าเช่าที่เพิ่มขึ้นต่อวัน (วัน 1/2/3 = 30/50/70)")]
+    [Min(0)]
+    [SerializeField] private int rentIncreasePerDay = 20;
+
+    [Tooltip("ค่าดูแลต่อสถานี 1 ชิ้นต่อวัน — ซื้อสถานีเพิ่มจึงมีต้นทุนต่อเนื่อง ไม่ใช่ซื้อครั้งเดียวจบ")]
+    [Min(0)]
+    [SerializeField] private int upkeepPerStation = 5;
+
     [Header("Concurrent Orders")]
     [Tooltip("จำนวนออเดอร์ที่รับค้างไว้พร้อมกันได้ ไล่ตามวัน (วัน 1 = ช่องแรก) วันที่เกินลิสต์ใช้ค่าสุดท้าย")]
     [SerializeField] private int[] concurrentOrdersPerDay = new int[] { 1, 2, 3 };
@@ -65,6 +84,18 @@ public class GameManager : MonoBehaviour
 
     /// <summary>ร้องเรียนได้สูงสุดกี่ครั้งก่อนแพ้ — หน้าจอสรุปผลใช้แสดง</summary>
     public int MaxComplaints => maxComplaints;
+
+    /// <summary>
+    /// ชื่อเสียงของร้าน แยกจากเงิน — ทำงานดีลูกค้าวันถัดไปเยอะขึ้น (เงินเยอะแต่ยากขึ้น) ทำพังลูกค้าน้อยลง
+    /// ให้แกนตัดสินใจที่สอง: รีบคืนทั้งที่ไม่ครบเพื่อเคลียร์คิว vs ทำให้ครบเพื่อชื่อเสียง
+    /// </summary>
+    public int Reputation { get; private set; }
+
+    /// <summary>ออเดอร์ที่บวก/ลบจากชื่อเสียง คิดตอนเริ่มวันถัดไป (ปัดเข้าหาศูนย์ −2 แต้มยังไม่ลด)</summary>
+    public int ReputationOrders => Reputation / reputationPerOrder;
+
+    /// <summary>ค่าเช่า + ค่าดูแลสถานีที่หักไปตอนจบวันล่าสุด — หน้าร้านค้าท้ายวันเอาไปโชว์</summary>
+    public int LastDayCost { get; private set; }
 
     /// <summary>
     /// เข้าช่วงท้ายวันแล้วหรือยัง — ลูกค้าส่วนใหญ่ของวันเข้าร้านไปแล้ว
@@ -188,6 +219,7 @@ public class GameManager : MonoBehaviour
     {
         Day = 0;
         Complaints = 0;
+        Reputation = 0;
         OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
 
         // ค่า static ค้างข้ามฉาก/ข้าม run ต้องล้างเองทุกครั้งที่เริ่มใหม่
@@ -223,12 +255,13 @@ public class GameManager : MonoBehaviour
         activeOrders.Clear();
         // การ์ดรางวัลบางใบแลกพลังมาด้วยลูกค้าที่มากขึ้น จึงบวกโควตาเพิ่มจาก PlayerProgress ด้วย
         int extraOrders = PlayerProgress.Instance != null ? PlayerProgress.Instance.ExtraOrdersPerDay : 0;
-        OrdersTarget = ordersOnFirstDay + (ordersAddedPerDay * (Day - 1)) + extraOrders;
+        OrdersTarget = Mathf.Max(1, ordersOnFirstDay + (ordersAddedPerDay * (Day - 1)) + extraOrders + ReputationOrders);
 
         OnOrderProgressChanged?.Invoke(OrdersCompleted, OrdersTarget);
         SetPhase(GamePhase.Setup);
 
-        GameLog.Push($"เริ่มวันที่ {Day}/{totalDays} — จัดร้านให้เรียบร้อยแล้วกดเปิดร้าน (ออเดอร์วันนี้ {OrdersTarget})");
+        string fromReputation = ReputationOrders != 0 ? $" — ชื่อเสียง {ReputationOrders:+0;-0} ออเดอร์" : string.Empty;
+        GameLog.Push($"เริ่มวันที่ {Day}/{totalDays} — จัดร้านให้เรียบร้อยแล้วกดเปิดร้าน (ออเดอร์วันนี้ {OrdersTarget}{fromReputation})");
     }
 
     /// <summary>เปิดร้าน — ผู้เล่นกดปุ่มเรียกเมื่อจัดสถานีเสร็จแล้ว</summary>
@@ -291,10 +324,20 @@ public class GameManager : MonoBehaviour
         AddComplaint(reason);
     }
 
-    /// <summary>เพิ่มการร้องเรียน 1 ครั้ง (มิเตอร์หมด หรือส่งคืนทั้งที่ทำขั้นตอนไม่ครบ)</summary>
+    /// <summary>ชื่อเสียง +/− — ReturnZone เรียกตอนส่งคืนครบ/ส่งสินค้า ส่วนร้องเรียนหักใน AddComplaint เอง</summary>
+    public void AddReputation(int amount)
+    {
+        Reputation += amount;
+    }
+
+    /// <summary>
+    /// เพิ่มการร้องเรียน 1 ครั้ง (มิเตอร์หมด หรือส่งคืนทั้งที่ทำขั้นตอนไม่ครบ) — หักชื่อเสียง 2 ด้วย
+    /// ส่งคืนไม่ครบจึงโดนแค่ −2 จากตรงนี้ ไม่หักซ้ำอีกชั้น
+    /// </summary>
     public void AddComplaint(string reason)
     {
         Complaints++;
+        Reputation -= 2;
         OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
         RunStats.NoteComplaint(reason); // ครั้งสุดท้าย = สาเหตุที่แพ้ เอาไปโชว์หน้าสรุป
 
@@ -319,10 +362,34 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        // จ่ายไม่ครบ = ร้องเรียน ซึ่งอาจทำให้แพ้ตรงนี้เลย ถ้าจบ run แล้วไม่ต้องเข้าช่วงท้ายวัน
+        PayDailyCosts();
+        if (Phase == GamePhase.RunOver) return;
+
         SetPhase(GamePhase.DayEnd);
         GameLog.Push($"จบวันที่ {Day} — เลือกรางวัลได้", LogTone.Good);
 
         OnDayEnded?.Invoke(Day);
+    }
+
+    /// <summary>
+    /// หักค่าเช่า + ค่าดูแลสถานีตอนจบวัน (ไม่หักวันสุดท้าย เพราะ run จบแล้วเงินไม่มีที่ใช้)
+    /// ค่าเช่าโตตามวัน เงินที่ได้มากขึ้นในวันหลังๆ จึงถูกดูดออกตามไปด้วย ไม่สะสมจนล้น
+    /// </summary>
+    private void PayDailyCosts()
+    {
+        int stations = FindObjectsByType<CareStation>().Length;
+        int bill = rentFirstDay + rentIncreasePerDay * (Day - 1) + upkeepPerStation * stations;
+        int paid = Mathf.Min(bill, ReturnZone.TotalWallet);
+
+        ReturnZone.AddMoney(-paid);
+        RunStats.NoteCostsPaid(paid);
+        LastDayCost = paid;
+
+        GameLog.Push($"จ่ายค่าเช่า {rentFirstDay + rentIncreasePerDay * (Day - 1)} + ค่าดูแลสถานี {stations} ชิ้น = {bill} | เหลือ {ReturnZone.TotalWallet}",
+            paid < bill ? LogTone.Bad : LogTone.Warn);
+
+        if (paid < bill) AddComplaint($"ค้างค่าเช่า {bill - paid}");
     }
 
     private void EndRun(bool won)
