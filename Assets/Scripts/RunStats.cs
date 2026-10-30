@@ -27,6 +27,9 @@ public static class RunStats
     public static int Escapes { get; private set; }
     public static int Catches { get; private set; }
 
+    /// <summary>ทำขั้นตอนต่อเนื่องตามลำดับได้กี่ครั้ง (ทิปคอมโบนับรวมใน TipsEarned แล้ว)</summary>
+    public static int Combos { get; private set; }
+
     /// <summary>เหตุผลของการร้องเรียนครั้งล่าสุด = สาเหตุที่แพ้ ถ้า run จบเพราะร้องเรียนเต็ม</summary>
     public static string LastComplaint { get; private set; }
 
@@ -43,6 +46,7 @@ public static class RunStats
         CostsPaid = 0;
         Escapes = 0;
         Catches = 0;
+        Combos = 0;
         LastComplaint = null;
     }
 
@@ -67,6 +71,8 @@ public static class RunStats
     public static void NoteEscape() => Escapes++;
 
     public static void NoteCatch() => Catches++;
+
+    public static void NoteCombo() => Combos++;
 
     public static void NoteComplaint(string reason)
     {

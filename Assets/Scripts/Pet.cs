@@ -298,7 +298,21 @@ public class Pet : MonoBehaviour, ICarryable
     {
         if (!NeedsStep(step)) return false;
 
+        bool combo = completedSteps.Count > 0 && species.comboTip > 0
+                     && FlowRank(step) > FlowRank(lastStep)
+                     && (species.comboWindowSeconds <= 0f || Time.time - lastStepTime <= species.comboWindowSeconds);
+
         completedSteps.Add(step);
+        lastStep = step;
+        lastStepTime = Time.time;
+
+        if (combo)
+        {
+            CollectedTip += species.comboTip;
+            RunStats.NoteCombo();
+            GameLog.Push($"คอมโบ! {DisplayName} ทำต่อเนื่องตามลำดับ → ทิป +{species.comboTip}", LogTone.Good);
+        }
+
         OnStepCompleted?.Invoke(this);
 
         if (IsComplete)

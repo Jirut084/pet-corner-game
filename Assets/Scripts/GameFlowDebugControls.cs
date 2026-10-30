@@ -429,7 +429,7 @@ public class GameFlowDebugControls : MonoBehaviour
         runOverStats.text =
             $"ไปถึงวันที่ {game.Day} / {game.TotalDays}\n" +
             $"ส่งคืนสำเร็จ {RunStats.OrdersReturned} ตัว (ครบทุกขั้นตอน {RunStats.OrdersComplete}){goods}\n" +
-            $"รายได้รวม {RunStats.TotalEarned}  (ค่าบริการ {RunStats.FeesEarned} · ทิป {RunStats.TipsEarned})  ·  ค่าเช่ารวม −{RunStats.CostsPaid}\n" +
+            $"รายได้รวม {RunStats.TotalEarned}  (ค่าบริการ {RunStats.FeesEarned} · ทิป {RunStats.TipsEarned} · คอมโบ {RunStats.Combos} ครั้ง)  ·  ค่าเช่ารวม −{RunStats.CostsPaid}\n" +
             $"เงินที่เหลือ {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}\n" +
             escapes +
             $"ร้องเรียน {game.Complaints} / {game.MaxComplaints}" +
