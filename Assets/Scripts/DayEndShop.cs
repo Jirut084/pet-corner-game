@@ -263,6 +263,13 @@ public class DayEndShop : MonoBehaviour
             return false;
         }
 
+        string locked = LockedReason(offer);
+        if (locked != null)
+        {
+            GameLog.Push($"ยังซื้อ {title} ไม่ได้ — {locked}", LogTone.Warn);
+            return false;
+        }
+
         if (Money < offer.price)
         {
             GameLog.Push($"เงินไม่พอซื้อ {title} — ต้องใช้ {offer.price} มีอยู่ {Money}", LogTone.Warn);
@@ -323,7 +330,20 @@ public class DayEndShop : MonoBehaviour
     /// <summary>กดซื้อได้ไหม — ใช้เปิด/ปิดปุ่มบน UI</summary>
     public bool CanBuy(Offer offer)
     {
-        return IsOpen && offer != null && !offer.sold && Money >= offer.price;
+        return IsOpen && offer != null && !offer.sold && Money >= offer.price && LockedReason(offer) == null;
+    }
+
+    /// <summary>
+    /// เหตุผลที่ยังซื้อไม่ได้ทั้งที่เงินพอ (null = ซื้อได้) — ตอนนี้มีแค่สัตว์พรีเมียมที่ต้องมีชื่อเสียงถึงเกณฑ์
+    /// ชื่อเสียงไม่ถูกหักตอนซื้อ เป็นแค่เกณฑ์ปลดล็อก (หักไปจะทำให้ออเดอร์วันถัดไปลดลงโดยไม่ตั้งใจ)
+    /// </summary>
+    public string LockedReason(Offer offer)
+    {
+        if (offer == null || offer.kind != OfferKind.NewSpecies || offer.species == null) return null;
+
+        int need = offer.species.reputationToUnlock;
+        int have = GameManager.Instance != null ? GameManager.Instance.Reputation : 0;
+        return need > 0 && have < need ? $"ต้องมีชื่อเสียง {need} (มี {have})" : null;
     }
 
     /// <summary>ชื่อบนการ์ด</summary>
@@ -374,7 +394,8 @@ public class DayEndShop : MonoBehaviour
                 string bonus = missing.Count > 0
                     ? $"ได้สถานีใหม่: {string.Join(", ", missing.ConvertAll(CareStepStyle.LabelOf))}"
                     : "มีสถานีครบแล้ว";
-                return $"ต้องการ: {needs}\n{bonus}";
+                string locked = LockedReason(offer);
+                return locked != null ? $"ต้องการ: {needs}\n{bonus}\n{locked}" : $"ต้องการ: {needs}\n{bonus}";
             }
 
             default:
@@ -456,12 +477,17 @@ public class DayEndShop : MonoBehaviour
         List<Offer> stations = BuildStationOffers();
         List<Offer> buffs = BuildBuffOffers();
 
+        // สัตว์พรีเมียมที่ชื่อเสียงยังไม่ถึงไม่ได้ช่องการันตี (ซื้อไม่ได้ เสียช่องเปล่า) แต่ยังสุ่มโผล่เป็นเป้าให้เห็นได้
+        List<Offer> lockedSpecies = species.FindAll(o => LockedReason(o) != null);
+        species.RemoveAll(o => LockedReason(o) != null);
+
         // การันตีหมวดละ 1 ก่อน ผู้เล่นจะได้เห็นทางเลือกครบทุกแบบ แล้วค่อยสุ่มเติมจากที่เหลือทุกหมวด
         TakeRandom(species, 1);
         TakeRandom(stations, 1);
 
         List<Offer> rest = new List<Offer>();
         rest.AddRange(species);
+        rest.AddRange(lockedSpecies);
         rest.AddRange(stations);
         rest.AddRange(buffs);
         TakeRandom(rest, itemsPerDay);

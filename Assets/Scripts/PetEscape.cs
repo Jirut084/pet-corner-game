@@ -21,6 +21,10 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
     [Tooltip("ถูกทิ้งไว้โดยไม่มีใครดูแลนานกี่วินาทีแล้วหนี")]
     [SerializeField] private float neglectSeconds = 12f;
 
+    [Tooltip("สัตว์บุคลิกขี้ตกใจ (Pet → Trait = Skittish) ถูกทิ้งแล้วหนีเร็วกว่าปกติกี่เท่า (0.6 = หนีไวขึ้น 40%)")]
+    [Range(0.1f, 1f)]
+    [SerializeField] private float skittishNeglectMultiplier = 0.6f;
+
     [Header("Chase")]
     [Tooltip("ความเร็วตอนหนี ต้องน้อยกว่า moveSpeed ของผู้เล่น (5) ไม่งั้นไล่ไม่ทัน")]
     [SerializeField] private float fleeSpeed = 2.6f;
@@ -80,7 +84,9 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
         }
 
         neglectTimer += deltaTime;
-        if (neglectTimer >= neglectSeconds) BeginEscape();
+
+        float limit = pet.Trait == PetTrait.Skittish ? neglectSeconds * skittishNeglectMultiplier : neglectSeconds;
+        if (neglectTimer >= limit) BeginEscape();
     }
 
     /// <summary>ถูกทิ้งอยู่ไหม — ไม่ได้ถูกอุ้ม ออเดอร์ยังเดินอยู่ และไม่มีสถานีไหนกำลังดูแล</summary>

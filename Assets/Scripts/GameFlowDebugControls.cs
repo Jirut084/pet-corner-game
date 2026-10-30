@@ -390,11 +390,12 @@ public class GameFlowDebugControls : MonoBehaviour
             DayEndShop.Offer item = offers[i];
 
             string status = item.sold ? "ซื้อแล้ว"
+                : shop.LockedReason(item) != null ? $"ราคา {item.price} — ชื่อเสียงไม่พอ"
                 : shop.Money >= item.price ? $"ราคา {item.price}"
                 : $"ราคา {item.price} — เงินไม่พอ";
 
             shopLabels[i].text = $"{shop.GetTitle(item)}\n\n{shop.GetDetail(item)}\n\n{status}   ({i + 1})";
-            shopLabels[i].color = item.sold || shop.Money < item.price ? UiKit.InkSoft : UiKit.Ink;
+            shopLabels[i].color = shop.CanBuy(item) ? UiKit.Ink : UiKit.InkSoft;
 
             // ปุ่มกดไม่ได้จะจางลงเอง (ColorBlock.disabledColor) แต่ยังอ่านราคาได้
             shopButtons[i].interactable = shop.CanBuy(item);

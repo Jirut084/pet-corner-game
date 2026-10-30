@@ -478,6 +478,8 @@ public class GameHudOverlay : MonoBehaviour
                 chipBuffer.Add((escape.IsCornered ? "กด E จับ" : "หนีแล้ว!", Danger, false));
             }
 
+            if (pet.TraitLabel != null) chipBuffer.Add((pet.TraitLabel, Ink, false));
+
             if (pet.IsComplete)
             {
                 string tip = pet.CollectedTip > 0 ? $"ส่งคืนได้  +{pet.CollectedTip}" : "ส่งคืนได้";

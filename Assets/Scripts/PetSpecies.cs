@@ -32,6 +32,10 @@ public class PetSpecies : ScriptableObject
     [Tooltip("Prefab หน้าตาของสัตว์ชนิดนี้ (ต้องมี component Pet) — ปล่อยว่างจะใช้ petPrefab สำรองของ IntakePoint")]
     public GameObject petPrefab;
 
+    [Tooltip("ทรงต่างๆ ของสัตว์ชนิดนี้ (ลูกบาศก์ / ทรงกลม / พีระมิด) สุ่มทีละตัวตอนรับออเดอร์ " +
+             "บุคลิกตั้งที่ช่อง Trait ของ component Pet ในแต่ละ prefab — ว่าง = ใช้ petPrefab อย่างเดียว")]
+    public GameObject[] shapeVariants;
+
     [Header("Order")]
     [Tooltip("รายการขั้นตอนที่ต้องทำให้ครบ — เป็น checklist ไม่มีลำดับ ทำอันไหนก่อนก็ได้")]
     public CareStep[] requiredSteps = new CareStep[] { CareStep.Feed };
@@ -59,6 +63,30 @@ public class PetSpecies : ScriptableObject
 
     [Tooltip("ค่าบริการที่ได้เพิ่มต่อ 1 ขั้นตอนที่ทำสำเร็จ")]
     public int feePerStep = 8;
+
+    [Tooltip("ชื่อเสียงขั้นต่ำก่อนซื้อสัตว์ชนิดนี้ในร้านค้าท้ายวันได้ — ใช้กับสัตว์พรีเมียมที่จ่ายแพงแต่ขั้นตอนเยอะ " +
+             "ยังไม่ถึงเกณฑ์จะเห็นการ์ดแต่กดซื้อไม่ได้ (0 = ไม่ต้องใช้ชื่อเสียง)")]
+    [Min(0)]
+    public int reputationToUnlock = 0;
+
+    [Tooltip("ทิปคอมโบ — ทำขั้นตอนถัดไปตามลำดับที่สมเหตุสมผล (อาบน้ำ/เล่น → แต่งขน/ให้อาหาร → พักผ่อน) " +
+             "ภายในเวลา Combo Window Seconds นับจากขั้นตอนก่อนหน้า (0 = ปิดคอมโบ)")]
+    [Min(0)]
+    public int comboTip = 6;
+
+    [Tooltip("ขั้นตอนถัดไปต้องเสร็จภายในกี่วินาทีหลังขั้นตอนก่อนหน้าถึงนับคอมโบ — สถานีที่วางใกล้กันจึงได้เปรียบ " +
+             "(0 = ไม่จำกัดเวลา ดูแค่ลำดับ)")]
+    [Min(0f)]
+    public float comboWindowSeconds = 12f;
+
+    /// <summary>สุ่ม prefab ตอนรับออเดอร์ — มีทรงให้สุ่มก็สุ่ม ไม่มี (หรือช่องที่สุ่มได้ว่าง) ใช้ petPrefab</summary>
+    public GameObject PickPrefab()
+    {
+        if (shapeVariants == null || shapeVariants.Length == 0) return petPrefab;
+
+        GameObject pick = shapeVariants[Random.Range(0, shapeVariants.Length)];
+        return pick != null ? pick : petPrefab;
+    }
 
     /// <summary>จำนวนขั้นตอนทั้งหมดของสัตว์ชนิดนี้</summary>
     public int StepCount => requiredSteps != null ? requiredSteps.Length : 0;

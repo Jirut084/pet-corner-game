@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -144,9 +145,10 @@ public class IntakePoint : MonoBehaviour, IInteractable
             return;
         }
 
-        // ใช้หน้าตาของชนิดที่ลูกค้าสั่งมาก่อน ถ้ายังไม่ได้ใส่ค่อยใช้ prefab สำรอง
+        // ใช้หน้าตาของชนิดที่ลูกค้าสั่งมาก่อน (สุ่มทรงถ้ามีหลายทรง) ถ้ายังไม่ได้ใส่ค่อยใช้ prefab สำรอง
         PetSpecies requested = customer.RequestedSpecies;
-        GameObject prefabToSpawn = requested != null && requested.petPrefab != null ? requested.petPrefab : petPrefab;
+        GameObject speciesPrefab = requested != null ? requested.PickPrefab() : null;
+        GameObject prefabToSpawn = speciesPrefab != null ? speciesPrefab : petPrefab;
 
         if (prefabToSpawn == null)
         {
@@ -195,8 +197,13 @@ public class IntakePoint : MonoBehaviour, IInteractable
             GameLog.Push($"ลูกค้าสั่ง {demand.label} เพิ่ม (+{demand.bonusPay} ถ้าส่งทัน)");
         }
 
+        // ขั้นตอนเรียงตามลำดับคอมโบ ทำตามนี้ต่อเนื่องกันได้ทิปเพิ่ม
         string where = useRoom ? " — รออยู่ในห้องรอ" : string.Empty;
-        GameLog.Push($"รับออเดอร์ {pet.DisplayName}{where} — ต้องทำ: {string.Join(", ", pet.RemainingSteps())} " +
+        string trait = pet.TraitLabel != null ? $" [{pet.TraitLabel}]" : string.Empty;
+        List<string> steps = new List<string>();
+        foreach (CareStep step in pet.OrderedSteps) steps.Add(CareStepStyle.LabelOf(step));
+
+        GameLog.Push($"รับออเดอร์ {pet.DisplayName}{trait}{where} — ต้องทำ: {string.Join(" → ", steps)} " +
                      $"(อดทน {customer.RequestedSpecies.patienceSeconds:F0} วิ)", LogTone.Good);
     }
 
