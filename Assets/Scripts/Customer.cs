@@ -5,7 +5,8 @@ using UnityEngine;
 /// จนกว่าผู้เล่นจะดูแลสัตว์เสร็จและเอามาส่งคืน
 ///
 /// สถานะ: (WaitingOutside — ร้านเต็ม ต่อคิวนอกร้าน) → WalkingToCounter → AtCounter (รอผู้เล่นกดรับออเดอร์)
-///        → WalkingToSeat → Waiting (มิเตอร์เดิน) → Leaving → ทำลายตัวเอง
+///        → WalkingToSeat → Waiting (มิเตอร์เดิน) → (AwaitingPickup — ดูแลครบ ลุกมายืนรอรับที่จุดส่งคืน)
+///        → Leaving → ทำลายตัวเอง
 ///
 /// มิเตอร์ความอดทนอยู่ที่ Pet (แหล่งข้อมูลเดียว) ลูกค้าแค่อ่านมาโชว์เป็นเกจ
 /// ตามที่ตกลงไว้: มิเตอร์เริ่มนับตอนผู้เล่นรับออเดอร์ ไม่ใช่ตอนลูกค้าเดินเข้าร้าน
@@ -16,6 +17,18 @@ using UnityEngine;
 /// </summary>
 public class Customer : MonoBehaviour
 {
+    /// <summary>อารมณ์ที่โชว์เป็นอีโมตเหนือหัว (GameHudOverlay อ่าน Mood แล้วเลือกรูป emote_happy/wait/impatient/angry)</summary>
+    public enum CustomerMood
+    {
+        Wait,       // รออยู่ เกจยังเหลือเยอะ
+        Impatient,  // เกจเหลือน้อยกว่า ImpatientThreshold
+        Happy,      // ได้สัตว์คืนครบทุกขั้นตอน กำลังเดินออก
+        Angry       // ร้องเรียนแล้วเดินออก (รอนานเกิน / ได้คืนไม่ครบ)
+    }
+
+    /// <summary>เกจเหลือน้อยกว่านี้ = Impatient (ตรงกับที่ T2-5 ตกลงไว้ 30%)</summary>
+    public const float ImpatientThreshold = 0.3f;
+
     public enum CustomerState
     {
         WaitingOutside,
@@ -23,6 +36,7 @@ public class Customer : MonoBehaviour
         AtCounter,
         WalkingToSeat,
         Waiting,
+        AwaitingPickup,
         Leaving
     }
 
@@ -61,6 +75,33 @@ public class Customer : MonoBehaviour
         State == CustomerState.WalkingToCounter || State == CustomerState.AtCounter;
 
     public float GaugeHeight => gaugeHeight;
+
+    // อารมณ์ตอนเดินออก ตั้งครั้งเดียวตอนเริ่มเดินออก (Wait = ยังไม่ออก)
+    private CustomerMood leaveMood = CustomerMood.Wait;
+
+    /// <summary>
+    /// อารมณ์ตอนนี้ — เดินออกแล้วใช้อารมณ์ตอนออก ไม่งั้นดูเกจที่กำลังเดินอยู่ (รอสั่ง / มิเตอร์สัตว์ / รอรับ)
+    /// อ่านอย่างเดียว ไม่เปลี่ยนพฤติกรรมของลูกค้า
+    /// </summary>
+    public CustomerMood Mood
+    {
+        get
+        {
+            if (State == CustomerState.Leaving) return leaveMood;
+
+            float fill = ShowGauge ? PatienceNormalized : ShowCounterGauge ? CounterPatienceNormalized : 1f;
+            return fill < ImpatientThreshold ? CustomerMood.Impatient : CustomerMood.Wait;
+        }
+    }
+
+    /// <summary>เดินออกอย่างพอใจ (ได้สัตว์คืนครบ)</summary>
+    public bool IsLeavingHappy => State == CustomerState.Leaving && leaveMood == CustomerMood.Happy;
+
+    /// <summary>เดินออกแบบร้องเรียน</summary>
+    public bool IsLeavingAngry => State == CustomerState.Leaving && leaveMood == CustomerMood.Angry;
+
+    /// <summary>ลุกจากที่นั่งมายืนรอรับสัตว์ที่ดูแลครบแล้ว (กำลังเดินไป หรือยืนรออยู่แล้ว)</summary>
+    public bool IsAwaitingPickup => State == CustomerState.AwaitingPickup;
 
     /// <summary>มิเตอร์เหลือกี่ส่วน 0–1 (คืน 1 ถ้ายังไม่ได้รับออเดอร์)</summary>
     public float PatienceNormalized => AssignedPet != null ? AssignedPet.PatienceNormalized : 1f;
@@ -215,6 +256,11 @@ public class Customer : MonoBehaviour
                 TurnTowardIdleFacing();
                 break;
 
+            case CustomerState.AwaitingPickup:
+                if (!ReachedTarget()) MoveTowardTarget();
+                else TurnTowardIdleFacing();
+                break;
+
             case CustomerState.Leaving:
                 if (MoveTowardTarget())
                 {
@@ -257,15 +303,46 @@ public class Customer : MonoBehaviour
 
         // ลูกค้าเป็นคนเฝ้ามิเตอร์ของตัวเอง เพราะเป็นคนที่ต้องเดินออกเมื่อหมดอดทน
         pet.OnPatienceExpired += HandlePatienceExpired;
+        pet.OnAllStepsCompleted += HandlePetReady;
 
         SetTarget(seatPosition);
         idleFacing = null;
         State = CustomerState.WalkingToSeat;
     }
 
+    /// <summary>
+    /// สัตว์ดูแลครบแล้ว — ถ้าเปิดเฟสรอรับ (pet.IsAwaitingPickup) เจ้าของลุกจากที่นั่งมายืนรอที่จุดส่งคืน
+    /// คืนที่นั่งทันทีให้ลูกค้าคนใหม่ใช้ ส่วนตำแหน่งในแถวรอรับ CustomerManager จัดให้ทุกเฟรม
+    /// </summary>
+    private void HandlePetReady(Pet pet)
+    {
+        if (!pet.IsAwaitingPickup || State == CustomerState.Leaving) return;
+
+        if (manager != null) manager.ReleaseSeat(this);
+        SeatIndex = -1;
+
+        idleFacing = null;
+        State = CustomerState.AwaitingPickup;
+        GameLog.Push($"เจ้าของ {pet.DisplayName} มารอรับที่จุดส่งคืนแล้ว — ส่งคืนภายใน {pet.PatienceRemaining:F0} วิ", LogTone.Warn);
+    }
+
+    /// <summary>CustomerManager เรียกทุกเฟรม — ย้ายไปช่องที่ระบุในแถวรอรับ แล้วหันหน้าเข้าหาจุดส่งคืน</summary>
+    public void SetPickupSlot(Vector3 position, Vector3 lookPoint)
+    {
+        if (!IsAwaitingPickup) return;
+
+        SetTarget(position);
+
+        Vector3 direction = lookPoint - position;
+        direction.y = 0f;
+        idleFacing = direction.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(direction, Vector3.up) : (Quaternion?)null;
+    }
+
     /// <summary>ส่งคืนสัตว์สำเร็จ — ลูกค้าพอใจแล้วเดินออก</summary>
     public void OnOrderDelivered()
     {
+        // ส่งคืนไม่ครบ ReturnZone นับเป็นร้องเรียน ลูกค้าจึงเดินออกแบบไม่พอใจ
+        leaveMood = AssignedPet != null && AssignedPet.IsComplete ? CustomerMood.Happy : CustomerMood.Angry;
         UnsubscribeFromPet();
         AssignedPet = null;
         LeaveShop();
@@ -316,6 +393,7 @@ public class Customer : MonoBehaviour
     private void HandleCounterPatienceExpired()
     {
         counterPatienceRunning = false;
+        leaveMood = CustomerMood.Angry;
 
         string speciesName = RequestedSpecies != null ? RequestedSpecies.speciesName : name;
         bool outside = IsOutside;
@@ -338,10 +416,16 @@ public class Customer : MonoBehaviour
 
     private void HandlePatienceExpired(Pet pet)
     {
+        leaveMood = CustomerMood.Angry;
         UnsubscribeFromPet();
 
-        GameLog.Push($"{pet.DisplayName} รอนานเกินไป เจ้าของเดินออกจากร้าน!", LogTone.Bad);
-        GameManager.Instance?.FailOrder(pet, $"{pet.DisplayName} รอนานเกินไป");
+        // หมดเวลาตอนรอรับ = ดูแลเสร็จแล้วแต่ส่งคืนไม่ทัน แยกข้อความให้คนเทสรู้ว่าแพ้ตรงจุดไหน
+        string reason = pet.IsAwaitingPickup
+            ? $"เจ้าของรอรับ {pet.DisplayName} นานเกินไป"
+            : $"{pet.DisplayName} รอนานเกินไป";
+
+        GameLog.Push($"{reason} เจ้าของเดินออกจากร้าน!", LogTone.Bad);
+        GameManager.Instance?.FailOrder(pet, reason);
 
         AssignedPet = null;
         Destroy(pet.gameObject);
@@ -368,6 +452,7 @@ public class Customer : MonoBehaviour
         if (AssignedPet != null)
         {
             AssignedPet.OnPatienceExpired -= HandlePatienceExpired;
+            AssignedPet.OnAllStepsCompleted -= HandlePetReady;
         }
     }
 

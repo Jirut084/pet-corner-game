@@ -110,8 +110,12 @@ public class CustomerManager : MonoBehaviour
     private readonly Dictionary<int, Customer> seatOwners = new Dictionary<int, Customer>();
     private float spawnTimer;
 
+    // แถวรอรับคืนที่จุดส่งคืน เรียงตามลำดับที่มาถึง index 0 = ยืนใกล้จุดส่งคืนที่สุด
+    private readonly List<Customer> pickupLine = new List<Customer>();
+
     // หาเมื่อต้องใช้ครั้งแรก — IntakePoint อาจถูก LevelInitializer สร้างหลัง Start ของเรา
     private IntakePoint intake;
+    private ReturnZone returnZone;
 
     private void Awake()
     {
@@ -168,6 +172,7 @@ public class CustomerManager : MonoBehaviour
         AdmitFromOutside(game);
         RefreshCounterQueue();
         RefreshOutsideQueue();
+        RefreshPickupLine();
         UpdatePatiencePressure(game);
 
         if (!ShouldSpawnMore(game)) return;
@@ -209,6 +214,34 @@ public class CustomerManager : MonoBehaviour
         for (int i = 0; i < outsideQueue.Count; i++)
         {
             outsideQueue[i].SetOutsideSlot(OutsideSlotPosition(i));
+        }
+    }
+
+    /// <summary>
+    /// จัดแถวเจ้าของที่ยืนรอรับคืน — เช็คจาก State ทุกเฟรมเหมือนแถวหน้าเคาน์เตอร์
+    /// คนที่เพิ่งลุกมาต่อท้าย ส่งคืนคนไหนไปแล้วคนข้างหลังขยับเข้ามาแทน
+    /// </summary>
+    private void RefreshPickupLine()
+    {
+        pickupLine.RemoveAll(c => c == null || !c.IsAwaitingPickup);
+
+        foreach (Customer customer in customers)
+        {
+            if (customer != null && customer.IsAwaitingPickup && !pickupLine.Contains(customer)) pickupLine.Add(customer);
+        }
+
+        if (pickupLine.Count == 0) return;
+        if (returnZone == null) returnZone = FindAnyObjectByType<ReturnZone>();
+        if (returnZone == null) return; // ไม่มีจุดส่งคืนในฉาก เจ้าของยืนรอที่เดิม
+
+        Vector3 stand = returnZone.OwnerStandPosition;
+        Vector3 away = stand - returnZone.transform.position;
+        away.y = 0f;
+        away = away.sqrMagnitude > 0.0001f ? away.normalized : Vector3.forward;
+
+        for (int i = 0; i < pickupLine.Count; i++)
+        {
+            pickupLine[i].SetPickupSlot(stand + away * (i * queueSpacing), returnZone.transform.position);
         }
     }
 
@@ -556,6 +589,7 @@ public class CustomerManager : MonoBehaviour
         customers.Clear();
         counterQueue.Clear();
         outsideQueue.Clear();
+        pickupLine.Clear();
         seatOwners.Clear();
     }
 

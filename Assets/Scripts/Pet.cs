@@ -1,6 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+
+/// <summary>บุคลิกของสัตว์ ผูกกับทรงของโมเดล (ตั้งใน prefab แต่ละทรง) ผู้เล่นดูทรงแล้วรู้วิธีรับมือ</summary>
+public enum PetTrait
+{
+    Normal,   // ทรงกลม — ปกติ
+    Clingy,   // ลูกบาศก์ — ติดคน อยู่ในมือแล้วมิเตอร์ลดช้า
+    Skittish  // พีระมิด — ขี้ตกใจ ทิ้งไว้แป๊บเดียวก็หนี
+}
 
 /// <summary>
 /// แทนสัตว์เลี้ยง 1 ตัวในโลกเกม
@@ -16,6 +25,15 @@ public class Pet : MonoBehaviour, ICarryable
     [Header("Data")]
     [Tooltip("ชนิดของสัตว์ตัวนี้ ปกติถูกกำหนดตอน Spawn จาก IntakePoint")]
     [SerializeField] private PetSpecies species;
+
+    [Header("Personality")]
+    [Tooltip("บุคลิกของทรงนี้ — ลูกบาศก์ = Clingy, ทรงกลม = Normal, พีระมิด = Skittish " +
+             "(ความไวในการหนีของ Skittish ตั้งที่ PetEscape)")]
+    [SerializeField] private PetTrait trait = PetTrait.Normal;
+
+    [Tooltip("Clingy: ตอนอยู่ในมือผู้เล่น มิเตอร์ลดเหลือกี่เท่าของปกติ (0.5 = ช้าลงครึ่งหนึ่ง)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float clingyCarriedDrain = 0.5f;
 
     [Header("Visual")]
     [Tooltip("Renderer ของโมเดล ใช้หาขอบเขตตัวสัตว์ ปล่อยว่างจะเก็บทุกชิ้นข้างใต้ให้อัตโนมัติ")]
@@ -46,7 +64,30 @@ public class Pet : MonoBehaviour, ICarryable
     private readonly HashSet<CareStep> completedSteps = new HashSet<CareStep>();
     private readonly HashSet<CareStep> tippedSteps = new HashSet<CareStep>();
 
+    // ขั้นตอนล่าสุดที่ทำเสร็จ ใช้เช็คคอมโบกับขั้นตอนถัดไป
+    private CareStep lastStep;
+    private float lastStepTime;
+
     public PetSpecies Species => species;
+
+    public PetTrait Trait => trait;
+
+    /// <summary>ชื่อบุคลิกไว้โชว์บนป้าย (null = ปกติ ไม่ต้องโชว์)</summary>
+    public string TraitLabel => trait switch
+    {
+        PetTrait.Clingy => "ติดคน",
+        PetTrait.Skittish => "ขี้ตกใจ",
+        _ => null
+    };
+
+    /// <summary>
+    /// checklist ของตัวนี้ เรียงตามลำดับคอมโบ — ป้ายเหนือหัวเรียงตามนี้ ผู้เล่นทำซ้ายไปขวาก็ได้คอมโบ
+    /// = requiredSteps ของชนิด + ขั้นตอนที่เหตุการณ์ประจำวันเพิ่มให้ (เช่นวันฝนตกต้องอาบน้ำ)
+    /// </summary>
+    public IReadOnlyList<CareStep> OrderedSteps { get; private set; } = Array.Empty<CareStep>();
+
+    /// <summary>ดูแลครบแล้ว เจ้าของยืนรอรับอยู่ — มิเตอร์ตอนนี้คือเวลารอรับ</summary>
+    public bool IsAwaitingPickup { get; private set; }
 
     /// <summary>ชื่อไว้แสดงใน log — ปลอดภัยแม้ยังไม่ได้ Initialize (species เป็น null)</summary>
     public string DisplayName => species != null ? species.speciesName : name;
@@ -72,13 +113,14 @@ public class Pet : MonoBehaviour, ICarryable
     private bool patienceRunning;
     private float patienceRemaining;
 
+    // ความยาวเต็มของมิเตอร์รอบนี้ — ช่วงดูแลใช้ patienceSeconds, ช่วงรอรับใช้ pickupPatienceSeconds
+    private float patienceTotal;
+
     public float PatienceRemaining => patienceRemaining;
     public bool IsPatienceRunning => patienceRunning;
 
     public float PatienceNormalized =>
-        (species != null && species.patienceSeconds > 0f)
-            ? Mathf.Clamp01(patienceRemaining / species.patienceSeconds)
-            : 0f;
+        patienceTotal > 0f ? Mathf.Clamp01(patienceRemaining / patienceTotal) : 0f;
 
     // ตอนอยู่ใน Edit mode (วาด gizmo ใน prefab) Awake ยังไม่ทำงาน จึงดึง renderer สดๆ เมื่อยังว่าง
     private Renderer[] Renderers =>
@@ -208,6 +250,7 @@ public class Pet : MonoBehaviour, ICarryable
         tippedSteps.Clear();
         CollectedTip = 0;
         patienceRunning = false;
+        IsAwaitingPickup = false;
 
         if (species == null)
         {
@@ -260,10 +303,32 @@ public class Pet : MonoBehaviour, ICarryable
 
         if (IsComplete)
         {
+            BeginPickupWait();
             OnAllStepsCompleted?.Invoke(this);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// ลำดับที่ "สมเหตุสมผล" ของการดูแล: อาบน้ำ/เล่น (0) → แต่งขน/ให้อาหาร (1) → พักผ่อน (2)
+    /// ขั้นตอนถัดไปอยู่ระดับสูงกว่าขั้นตอนก่อนหน้า = คอมโบ (ระดับเท่ากันไม่นับ)
+    /// </summary>
+    private static int FlowRank(CareStep step) => step switch
+    {
+        CareStep.Bath or CareStep.Play => 0,
+        CareStep.Groom or CareStep.Feed => 1,
+        _ => 2
+    };
+
+    /// <summary>ครบทุกขั้นตอนแล้ว — เปลี่ยนมิเตอร์เป็นเวลารอรับของเจ้าของ (ปิดได้ด้วย pickupPatienceSeconds = 0)</summary>
+    private void BeginPickupWait()
+    {
+        if (!patienceRunning || species.pickupPatienceSeconds <= 0f) return;
+
+        IsAwaitingPickup = true;
+        patienceTotal = species.pickupPatienceSeconds;
+        patienceRemaining = patienceTotal;
     }
 
     /// <summary>
@@ -295,7 +360,8 @@ public class Pet : MonoBehaviour, ICarryable
             return;
         }
 
-        patienceRemaining = species.patienceSeconds;
+        patienceTotal = species.patienceSeconds;
+        patienceRemaining = patienceTotal;
         patienceRunning = true;
     }
 
@@ -314,7 +380,11 @@ public class Pet : MonoBehaviour, ICarryable
             : 1f;
 
         // ความกดดันร่วมของร้าน: ลูกค้าค้างหลายคนพร้อมกัน / ช่วงท้ายวัน = ทุกมิเตอร์ลดเร็วขึ้นพร้อมกัน
-        drainRate *= CustomerManager.PatiencePressure;
+        // ยกเว้นช่วงรอรับ — เวลารอรับคือ "20 วิ" ที่บอกผู้เล่นไว้ตรงๆ ถ้าโดนตัวคูณด้วย ท้ายวันที่คนแน่น (×4–5) จะเหลือไม่ถึง 5 วิ
+        if (!IsAwaitingPickup) drainRate *= CustomerManager.PatiencePressure;
+
+        // ติดคน: อุ้มไว้แล้วใจเย็นลง
+        if (trait == PetTrait.Clingy && IsCarried) drainRate *= clingyCarriedDrain;
 
         patienceRemaining -= Time.deltaTime * drainRate;
         OnPatienceChanged?.Invoke(this, PatienceNormalized);

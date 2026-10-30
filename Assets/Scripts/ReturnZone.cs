@@ -10,6 +10,15 @@ public class ReturnZone : MonoBehaviour, IInteractable
     [Tooltip("รัศมีตรวจจับ (ใช้ประกอบการ debug/อนาคตถ้าต้องการเช็คระยะเพิ่มเติม)")]
     [SerializeField] private float detectionRadius = 2f;
 
+    [Header("Owner Pickup")]
+    [Tooltip("จุดที่เจ้าของมายืนรอรับสัตว์ที่ดูแลครบแล้ว หมุนตามทิศของ ReturnZone — " +
+             "เลือก ReturnZone แล้วดูเส้นสีเขียวใน Scene view ให้จุดอยู่ฝั่งลูกค้า ไม่จมในเคาน์เตอร์/กำแพง " +
+             "(คนต่อมายืนเรียงออกไปตามแนวเส้นนี้)")]
+    [SerializeField] private Vector3 ownerStandOffset = new Vector3(0f, 0f, 1.5f);
+
+    /// <summary>จุดยืนรอรับของเจ้าของคนแรก — CustomerManager ใช้เรียงแถวรอรับ</summary>
+    public Vector3 OwnerStandPosition => transform.position + transform.rotation * ownerStandOffset;
+
     [Header("Payout Settings")]
     [Tooltip("ตัวคูณค่าบริการเมื่อส่งคืนทั้งที่ยังทำขั้นตอนไม่ครบ (0.5 = ได้ครึ่งเดียว)")]
     [Range(0f, 1f)]
@@ -167,5 +176,9 @@ public class ReturnZone : MonoBehaviour, IInteractable
     {
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position, detectionRadius);
+
+        Vector3 stand = OwnerStandPosition;
+        Gizmos.DrawLine(transform.position, stand);
+        Gizmos.DrawWireSphere(stand, 0.4f);
     }
 }

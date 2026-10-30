@@ -440,7 +440,9 @@ public class GameHudOverlay : MonoBehaviour
 
             float fill = Mathf.Clamp01(orderGauge ? customer.PatienceNormalized : customer.CounterPatienceNormalized);
             string label = orderGauge
-                ? (customer.AssignedPet != null ? customer.AssignedPet.DisplayName : string.Empty)
+                ? (customer.AssignedPet == null ? string.Empty
+                    : customer.IsAwaitingPickup ? $"รอรับ {customer.AssignedPet.DisplayName}"
+                    : customer.AssignedPet.DisplayName)
                 : customer.IsOutside ? "รอนอกร้าน" : "รอสั่ง";
 
             ShowRing(point, fill, label, orderGauge);
