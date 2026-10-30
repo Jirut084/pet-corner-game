@@ -73,8 +73,13 @@ public class PlayerCarrier : MonoBehaviour
             cachedIsKinematic = heldRigidbody.isKinematic;
             cachedUseGravity = heldRigidbody.useGravity;
 
-            heldRigidbody.linearVelocity = Vector3.zero; // Unity 6 ใช้ linearVelocity แทน velocity เดิม
-            heldRigidbody.angularVelocity = Vector3.zero;
+            // ตั้งความเร็วได้เฉพาะตัวที่ยังไม่ kinematic — ตั้งกับตัวที่ kinematic อยู่แล้ว (สัตว์บนสถานี) Unity เตือนทุกครั้งที่อุ้ม
+            if (!heldRigidbody.isKinematic)
+            {
+                heldRigidbody.linearVelocity = Vector3.zero; // Unity 6 ใช้ linearVelocity แทน velocity เดิม
+                heldRigidbody.angularVelocity = Vector3.zero;
+            }
+
             heldRigidbody.isKinematic = true;
             heldRigidbody.useGravity = false;
         }
