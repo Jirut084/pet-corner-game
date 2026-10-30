@@ -64,6 +64,18 @@ public class GameManager : MonoBehaviour
     [Tooltip("จำนวนออเดอร์ที่รับค้างไว้พร้อมกันได้ ไล่ตามวัน (วัน 1 = ช่องแรก) วันที่เกินลิสต์ใช้ค่าสุดท้าย")]
     [SerializeField] private int[] concurrentOrdersPerDay = new int[] { 1, 2, 3 };
 
+    [Header("Layout")]
+    [Tooltip("กดเปิดร้านแล้วตรวจผังก่อน ถ้ามีสถานี/เคาน์เตอร์ที่เดินไปไม่ถึงจะไม่ให้เปิด (ปิดไว้ถ้าตัวตรวจฟ้องผิดกับห้องจริง)")]
+    [SerializeField] private bool requireReachableLayout = true;
+
+    [Header("Day Events")]
+    [Tooltip("เหตุการณ์ประจำวันเริ่มสุ่มตั้งแต่วันที่เท่าไหร่ (วันแรกให้ผู้เล่นคุ้นมือก่อน) — 0 = ปิดระบบ")]
+    [Min(0)]
+    [SerializeField] private int firstEventDay = 2;
+
+    [Tooltip("คลังเหตุการณ์ที่สุ่มได้ ไม่ซ้ำกับวันก่อนหน้า — ปล่อยว่างจะใช้ชุดเริ่มต้นใน DayEvent.BuildDefaultPool")]
+    [SerializeField] private List<DayEvent> dayEvents = new List<DayEvent>();
+
     [Header("Scenes")]
     [Tooltip("ชื่อฉากเมนูหลัก ต้องอยู่ใน Build Profiles / Scene List ด้วย")]
     [SerializeField] private string mainMenuScene = "MainMenu";
@@ -93,6 +105,9 @@ public class GameManager : MonoBehaviour
 
     /// <summary>ออเดอร์ที่บวก/ลบจากชื่อเสียง คิดตอนเริ่มวันถัดไป (ปัดเข้าหาศูนย์ −2 แต้มยังไม่ลด)</summary>
     public int ReputationOrders => Reputation / reputationPerOrder;
+
+    /// <summary>เหตุการณ์ของวันนี้ (null = วันปกติ) — สุ่มตอนเริ่มวัน คงอยู่จนจบวัน</summary>
+    public DayEvent CurrentEvent { get; private set; }
 
     /// <summary>ค่าเช่า + ค่าดูแลสถานีที่หักไปตอนจบวันล่าสุด — หน้าร้านค้าท้ายวันเอาไปโชว์</summary>
     public int LastDayCost { get; private set; }
@@ -220,6 +235,7 @@ public class GameManager : MonoBehaviour
         Day = 0;
         Complaints = 0;
         Reputation = 0;
+        CurrentEvent = null;
         OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
 
         // ค่า static ค้างข้ามฉาก/ข้าม run ต้องล้างเองทุกครั้งที่เริ่มใหม่
@@ -255,6 +271,10 @@ public class GameManager : MonoBehaviour
         activeOrders.Clear();
         // การ์ดรางวัลบางใบแลกพลังมาด้วยลูกค้าที่มากขึ้น จึงบวกโควตาเพิ่มจาก PlayerProgress ด้วย
         int extraOrders = PlayerProgress.Instance != null ? PlayerProgress.Instance.ExtraOrdersPerDay : 0;
+
+        CurrentEvent = RollDayEvent();
+        if (CurrentEvent != null) extraOrders += CurrentEvent.extraOrders;
+
         OrdersTarget = Mathf.Max(1, ordersOnFirstDay + (ordersAddedPerDay * (Day - 1)) + extraOrders + ReputationOrders);
 
         OnOrderProgressChanged?.Invoke(OrdersCompleted, OrdersTarget);
@@ -262,6 +282,57 @@ public class GameManager : MonoBehaviour
 
         string fromReputation = ReputationOrders != 0 ? $" — ชื่อเสียง {ReputationOrders:+0;-0} ออเดอร์" : string.Empty;
         GameLog.Push($"เริ่มวันที่ {Day}/{totalDays} — จัดร้านให้เรียบร้อยแล้วกดเปิดร้าน (ออเดอร์วันนี้ {OrdersTarget}{fromReputation})");
+
+        if (CurrentEvent != null)
+        {
+            GameLog.Push($"เหตุการณ์วันนี้: {CurrentEvent.label} — {CurrentEvent.description}", LogTone.Warn);
+        }
+    }
+
+    /// <summary>
+    /// ตรวจผังก่อนเปิดร้าน — มีของที่เดินไปไม่ถึงให้แจ้งชื่อแล้วไม่เปิด ผู้เล่นจะได้ย้ายก่อนลูกค้ามา
+    /// ตรวจไม่ได้ (ไม่มีกริด/ผู้เล่นยืนนอกกริด) ปล่อยผ่าน ไม่ล็อกเกม
+    /// </summary>
+    private bool LayoutIsReachable()
+    {
+        TileGrid grid = FindAnyObjectByType<TileGrid>();
+        PlayerController player = FindAnyObjectByType<PlayerController>();
+        if (grid == null || player == null) return true;
+
+        List<GameObject> unreachable = LayoutValidator.FindUnreachable(grid, player.transform.position);
+        if (unreachable == null)
+        {
+            Debug.LogWarning("[GameManager] ผู้เล่นยืนนอกกริดหรือทับของอยู่ ข้ามการตรวจผัง");
+            return true;
+        }
+
+        if (unreachable.Count == 0) return true;
+
+        List<string> names = unreachable.ConvertAll(o =>
+        {
+            CareStation station = o.GetComponentInChildren<CareStation>();
+            return station != null ? station.DisplayLabel : o.name;
+        });
+
+        GameLog.Push($"เปิดร้านไม่ได้ — เดินไปไม่ถึง: {string.Join(", ", names)} ย้ายของที่ล้อมอยู่ออกก่อน", LogTone.Bad);
+        return false;
+    }
+
+    /// <summary>
+    /// สุ่มเหตุการณ์ของวัน ไม่ซ้ำกับเมื่อวาน และข้ามเหตุการณ์ที่เพิ่มขั้นตอนซึ่งร้านยังไม่มีสถานีรองรับ
+    /// (ไม่งั้นทุกออเดอร์จะทำไม่ครบตลอดวัน = ร้องเรียนรัวๆ โดยแก้อะไรไม่ได้)
+    /// </summary>
+    private DayEvent RollDayEvent()
+    {
+        if (firstEventDay <= 0 || Day < firstEventDay) return null;
+        if (dayEvents.Count == 0) dayEvents = DayEvent.BuildDefaultPool();
+
+        PlayerProgress progress = PlayerProgress.Instance;
+        List<DayEvent> candidates = dayEvents.FindAll(e =>
+            e != null && e != CurrentEvent &&
+            (!e.addStep || (progress != null && progress.HasStationFor(e.extraStep))));
+
+        return candidates.Count > 0 ? candidates[UnityEngine.Random.Range(0, candidates.Count)] : null;
     }
 
     /// <summary>เปิดร้าน — ผู้เล่นกดปุ่มเรียกเมื่อจัดสถานีเสร็จแล้ว</summary>
@@ -272,6 +343,8 @@ public class GameManager : MonoBehaviour
             Debug.LogWarning($"[GameManager] เปิดร้านได้เฉพาะตอนอยู่ในช่วง Setup (ตอนนี้ {Phase})");
             return;
         }
+
+        if (requireReachableLayout && !LayoutIsReachable()) return;
 
         SetPhase(GamePhase.Service);
         OnDayStarted?.Invoke(Day);

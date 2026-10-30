@@ -183,7 +183,7 @@ public class CustomerManager : MonoBehaviour
         // มีคนต่อคิวนอกร้านอยู่แล้ว คนใหม่ต้องต่อท้าย ห้ามแซงเข้าร้านไปก่อน
         bool inside = outsideQueue.Count == 0 && HasRoomInside(game);
         SpawnCustomer(inside);
-        spawnTimer = SpawnGapForDay(game.Day);
+        spawnTimer = SpawnGapForDay(game.Day) * (game.CurrentEvent != null ? game.CurrentEvent.spawnGapMultiplier : 1f);
     }
 
     /// <summary>ร้านมีที่ว่างให้ลูกค้าเข้ามาต่อแถวหน้าเคาน์เตอร์อีกคนไหม (ดูแลไม่เต็ม + มีที่นั่งรอว่าง)</summary>
@@ -275,7 +275,10 @@ public class CustomerManager : MonoBehaviour
         // คนแรกไม่คิดโทษ คนที่สองเป็นต้นไปถึงจะเริ่มเร่ง
         float crowd = Mathf.Min(Mathf.Pow(crowdPressurePerCustomer, Mathf.Max(0, waiting - 1)), maxCrowdPressure);
 
-        PatiencePressure = crowd * (game.IsLateDay ? lateDayPressure : 1f);
+        // เหตุการณ์ประจำวัน (เช่นลูกค้า VIP ใจร้อน) คูณเข้าไปอีกชั้น
+        float dayEvent = game.CurrentEvent != null ? game.CurrentEvent.patienceDrainMultiplier : 1f;
+
+        PatiencePressure = crowd * (game.IsLateDay ? lateDayPressure : 1f) * dayEvent;
     }
 
     /// <summary>

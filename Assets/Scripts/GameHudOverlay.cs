@@ -354,15 +354,21 @@ public class GameHudOverlay : MonoBehaviour
             : $"วันนี้ {game.OrdersTarget} ออเดอร์   ·   ชื่อเสียง {game.Reputation}";
 
         // ความกดดันร่วม: โชว์เฉพาะตอนที่มิเตอร์ถูกเร่งจริง ไม่งั้นเป็นข้อความรกจอเปล่าๆ
+        // มีเหตุการณ์ประจำวันก็โชว์ชื่อไว้ตลอดวัน (รวมช่วงจัดร้าน) ผู้เล่นจะได้วางแผนก่อนเปิดร้าน
         float pressure = CustomerManager.PatiencePressure;
         bool underPressure = service && pressure > 1.05f;
+        string eventLabel = game.CurrentEvent != null ? game.CurrentEvent.label : null;
+        bool showLine = underPressure || eventLabel != null;
 
-        if (pressureText.gameObject.activeSelf != underPressure) pressureText.gameObject.SetActive(underPressure);
-        if (underPressure)
+        if (pressureText.gameObject.activeSelf != showLine) pressureText.gameObject.SetActive(showLine);
+        if (showLine)
         {
-            pressureText.text = game.IsLateDay
-                ? $"ท้ายวัน · ลูกค้าใจร้อน ×{pressure:0.0}"
-                : $"ลูกค้าแน่นร้าน ×{pressure:0.0}";
+            string crowd = underPressure
+                ? (game.IsLateDay ? $"ใจร้อน ×{pressure:0.0}" : $"แน่นร้าน ×{pressure:0.0}")
+                : null;
+
+            pressureText.text = eventLabel != null && crowd != null ? $"{eventLabel} · {crowd}"
+                : eventLabel ?? (game.IsLateDay ? $"ท้ายวัน · ลูกค้าใจร้อน ×{pressure:0.0}" : $"ลูกค้าแน่นร้าน ×{pressure:0.0}");
             pressureText.color = pressure >= 2f ? Danger : Warn;
         }
 
@@ -487,7 +493,8 @@ public class GameHudOverlay : MonoBehaviour
             }
             else
             {
-                foreach (CareStep step in pet.Species.requiredSteps)
+                // เรียงตามลำดับคอมโบ ทำจากซ้ายไปขวาต่อเนื่องกันได้ทิปเพิ่ม
+                foreach (CareStep step in pet.OrderedSteps)
                 {
                     bool done = pet.HasCompleted(step);
                     chipBuffer.Add((CareStepStyle.LabelOf(step), CareStepStyle.ColorOf(step), done));

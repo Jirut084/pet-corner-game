@@ -92,9 +92,9 @@ public class Pet : MonoBehaviour, ICarryable
     /// <summary>ชื่อไว้แสดงใน log — ปลอดภัยแม้ยังไม่ได้ Initialize (species เป็น null)</summary>
     public string DisplayName => species != null ? species.speciesName : name;
 
-    public bool IsComplete => species == null || completedSteps.Count >= species.StepCount;
+    public bool IsComplete => species == null || completedSteps.Count >= OrderedSteps.Count;
     public int StepsCompleted => completedSteps.Count;
-    public int TotalSteps => species != null ? species.StepCount : 0;
+    public int TotalSteps => OrderedSteps.Count;
 
     /// <summary>สัตว์กำลังถูกอุ้มอยู่หรือไม่</summary>
     public bool IsCarried { get; private set; }
@@ -258,7 +258,15 @@ public class Pet : MonoBehaviour, ICarryable
             return;
         }
 
-        if (species.StepCount == 0)
+        List<CareStep> steps = new List<CareStep>(species.requiredSteps ?? Array.Empty<CareStep>());
+
+        DayEvent dayEvent = GameManager.Instance != null ? GameManager.Instance.CurrentEvent : null;
+        if (dayEvent != null && dayEvent.addStep && !steps.Contains(dayEvent.extraStep)) steps.Add(dayEvent.extraStep);
+
+        // OrderBy เรียงแบบคงลำดับเดิมเมื่อค่าเท่ากัน — ขั้นตอนระดับเดียวกันจึงเรียงตาม requiredSteps
+        OrderedSteps = steps.OrderBy(FlowRank).ToArray();
+
+        if (OrderedSteps.Count == 0)
         {
             Debug.LogWarning($"[Pet] {species.speciesName} ไม่มีขั้นตอนใน requiredSteps เลย จะนับว่าเสร็จทันที");
         }
@@ -268,7 +276,7 @@ public class Pet : MonoBehaviour, ICarryable
     public bool NeedsStep(CareStep step)
     {
         if (species == null) return false;
-        return species.Requires(step) && !completedSteps.Contains(step);
+        return OrderedSteps.Contains(step) && !completedSteps.Contains(step);
     }
 
     /// <summary>ทำขั้นตอนนี้ไปแล้วหรือยัง ใช้วาดเครื่องหมายถูกบนป้าย</summary>
@@ -281,9 +289,7 @@ public class Pet : MonoBehaviour, ICarryable
     public List<CareStep> RemainingSteps()
     {
         List<CareStep> remaining = new List<CareStep>();
-        if (species == null || species.requiredSteps == null) return remaining;
-
-        foreach (CareStep step in species.requiredSteps)
+        foreach (CareStep step in OrderedSteps)
         {
             if (!completedSteps.Contains(step)) remaining.Add(step);
         }

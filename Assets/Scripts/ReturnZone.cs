@@ -99,6 +99,10 @@ public class ReturnZone : MonoBehaviour, IInteractable
             earned = Mathf.RoundToInt(earned * PlayerProgress.Instance.FeeMultiplier);
         }
 
+        // เหตุการณ์ประจำวัน (ลูกค้า VIP / ชั่วโมงเร่งด่วน) คูณค่าบริการอีกชั้น
+        DayEvent dayEvent = GameManager.Instance != null ? GameManager.Instance.CurrentEvent : null;
+        if (dayEvent != null) earned = Mathf.RoundToInt(earned * dayEvent.feeMultiplier);
+
         // ทิปที่สะสมไว้ระหว่างทางไม่โดนหัก penalty และไม่โดนคูณบัฟ เป็นค่าคงที่ตรงๆ
         earned += pet.CollectedTip;
 
