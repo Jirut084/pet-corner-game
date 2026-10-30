@@ -13,6 +13,6 @@
 
 | Branch | แก้ได้เฉพาะ |
 | --- | --- |
-| `art/stations` | `Assets/Art/Stations/`, `Assets/Art/Room/`, prefab สถานีใน `Assets/Prefabs/`, `Assets/Editor/ModelSwapTool.cs`, `ArtSource/` |
+| `art/stations` | `Assets/Art/Stations/`, `Assets/Art/Room/`, prefab สถานีใน `Assets/Prefabs/`, `Assets/Editor/ModelSwapTool.cs`, `Assets/Editor/ArtValidator.cs`, `ArtSource/` |
 | `art/pets` | `Assets/Art/Pets/`, `ArtSource/pets/` (ห้ามแก้ prefab สัตว์และโค้ด โปรแกรมเมอร์ผูกเข้าเกมเอง) |
-| `art/ui` | `Assets/Art/UI/`, `Assets/Art/FX/`, `Assets/Resources/UI/`, `Assets/Scripts/UiKit.cs`, `Assets/Scripts/GameHudOverlay.cs`, `Assets/Scripts/CareStepStyle.cs`, `Assets/Scripts/MainMenu.cs`, `ArtSource/` |
+| `art/ui` | `Assets/Art/UI/`, `Assets/Art/FX/`, `Assets/Resources/UI/`, `Assets/Scripts/UiKit.cs`, `Assets/Scripts/MainMenu.cs`, `ArtSource/` (โค้ด HUD และอีโมตเป็นของโปรแกรมเมอร์) |
