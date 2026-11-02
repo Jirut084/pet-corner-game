@@ -1,0 +1,101 @@
+[
+  {
+    "name": "01_Food",
+    "source": "Assets/Prefabs/Food.prefab",
+    "scale": 1,
+    "dimensions_metres": [
+      0.9639999866485596,
+      0.9639997482299805,
+      0.2932596206665039
+    ],
+    "render": "01_Renders_1080/01_Food.png"
+  },
+  {
+    "name": "02_Bath",
+    "source": "Assets/Models/Bath-Colored.fbx",
+    "scale": 0.12,
+    "dimensions_metres": [
+      0.7113158702850342,
+      0.7401320934295654,
+      0.427029013633728
+    ],
+    "render": "01_Renders_1080/02_Bath.png"
+  },
+  {
+    "name": "03_Groom",
+    "source": "Assets/Art/Stations/groom_colored.fbx",
+    "scale": 1.0,
+    "dimensions_metres": [
+      0.8532060384750366,
+      0.8858626484870911,
+      0.6206225752830505
+    ],
+    "render": "01_Renders_1080/03_Groom.png"
+  },
+  {
+    "name": "04_Play",
+    "source": "Assets/Art/Stations/play_colored.fbx",
+    "scale": 1.0,
+    "dimensions_metres": [
+      0.8532060384750366,
+      0.8858626484870911,
+      0.6953573822975159
+    ],
+    "render": "01_Renders_1080/04_Play.png"
+  },
+  {
+    "name": "05_Rest",
+    "source": "Assets/Art/Stations/rest_colored.fbx",
+    "scale": 1.0,
+    "dimensions_metres": [
+      0.8600000143051147,
+      0.8260000348091125,
+      0.30000004172325134
+    ],
+    "render": "01_Renders_1080/05_Rest.png"
+  },
+  {
+    "name": "06_Intake",
+    "source": "Assets/Models/cashier colored.fbx",
+    "scale": 0.33,
+    "dimensions_metres": [
+      0.5742490291595459,
+      0.7315104007720947,
+      0.7921987771987915
+    ],
+    "render": "01_Renders_1080/06_Intake.png"
+  },
+  {
+    "name": "07_Return",
+    "source": "Assets/Art/Stations/return_counter.fbx",
+    "scale": 1.0,
+    "dimensions_metres": [
+      0.8399999737739563,
+      0.7400000691413879,
+      0.9800000190734863
+    ],
+    "render": "01_Renders_1080/07_Return.png"
+  },
+  {
+    "name": "08_HoldingTable",
+    "source": "Assets/Prefabs/HoldingTable.prefab",
+    "scale": 1,
+    "dimensions_metres": [
+      1.0,
+      1.1660118103027344,
+      0.7962089776992798
+    ],
+    "render": "01_Renders_1080/08_HoldingTable.png"
+  },
+  {
+    "name": "09_EquipmentParcel",
+    "source": "Assets/ThirdParty/Kenney/FurnitureKit/Models/cardboardBoxClosed.fbx",
+    "scale": 1,
+    "dimensions_metres": [
+      0.53125,
+      0.53125,
+      0.7024999856948853
+    ],
+    "render": "01_Renders_1080/09_EquipmentParcel.png"
+  }
+]
