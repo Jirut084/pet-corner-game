@@ -98,10 +98,7 @@ public class MainMenu : MonoBehaviour
     {
         RectTransform panel = MakePanel("Title Screen", 640f, 430f, out titleRoot);
 
-        Text title = UiKit.MakeText("Title", panel, 58, UiKit.Ink, TextAnchor.UpperCenter);
-        title.fontStyle = FontStyle.Bold;
-        title.text = gameTitle;
-        GameFlowDebugControls.Fill(title.rectTransform, 62f, 70f);
+        MakeTitle(panel, 26f, 104f, 58);
 
         Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
         subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
@@ -133,10 +130,7 @@ public class MainMenu : MonoBehaviour
 
         RectTransform panel = MakePanel("Starter Select", Mathf.Max(760f, cardsWidth + 120f), cardHeight + 330f, out starterRoot);
 
-        Text title = UiKit.MakeText("Title", panel, 46, UiKit.Ink, TextAnchor.UpperCenter);
-        title.fontStyle = FontStyle.Bold;
-        title.text = gameTitle;
-        GameFlowDebugControls.Fill(title.rectTransform, 40f, 56f);
+        MakeTitle(panel, 30f, 64f, 46);
 
         Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
         subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
@@ -172,6 +166,23 @@ public class MainMenu : MonoBehaviour
         UiKit.Place(back.GetComponent<RectTransform>(),
             new Vector2((panel.sizeDelta.x - 220f) * 0.5f, -(174f + cardHeight + 62f)), new Vector2(220f, 46f));
         back.onClick.AddListener(() => ShowStarterSelect(false));
+    }
+
+    /// <summary>โลโก้เกมจาก Resources/UI/logo.png ถ้าหาไม่เจอค่อยใช้ชื่อเกมเป็นตัวหนังสือแทน</summary>
+    private void MakeTitle(RectTransform panel, float top, float height, int fallbackFontSize)
+    {
+        Sprite logo = UiKit.LoadSprite("logo");
+        if (logo != null)
+        {
+            Image logoImage = UiKit.MakeSpriteImage("Logo", panel, logo);
+            GameFlowDebugControls.Fill(logoImage.rectTransform, top, height);
+            return;
+        }
+
+        Text title = UiKit.MakeText("Title", panel, fallbackFontSize, UiKit.Ink, TextAnchor.MiddleCenter);
+        title.fontStyle = FontStyle.Bold;
+        title.text = gameTitle;
+        GameFlowDebugControls.Fill(title.rectTransform, top, height);
     }
 
     private RectTransform MakePanel(string name, float width, float height, out GameObject root)
