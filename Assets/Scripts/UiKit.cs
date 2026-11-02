@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -39,6 +40,8 @@ public static class UiKit
     {
         get
         {
+            // ฟอนต์ไทย Mitr (OFL) อยู่ใน Resources/UI จึงติดไปกับ build ด้วย ถ้าหาไม่เจอค่อยถอยไปใช้ฟอนต์ในตัว Unity
+            if (font == null) font = Resources.Load<Font>("UI/Mitr-SemiBold");
             if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             return font;
         }
@@ -108,6 +111,35 @@ public static class UiKit
         return rect;
     }
 
+    // ---------- ภาพที่วาดไว้ใน Assets/Resources/UI ----------
+    private static readonly Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
+
+    /// <summary>โหลดสไปรต์จาก Resources/UI ตามชื่อไฟล์ (ไม่ต้องใส่ .png) จำไว้ใช้ซ้ำ คืน null ถ้าไม่มีไฟล์</summary>
+    public static Sprite LoadSprite(string fileName)
+    {
+        if (spriteCache.TryGetValue(fileName, out Sprite cached)) return cached;
+        Sprite sprite = Resources.Load<Sprite>("UI/" + fileName);
+        spriteCache[fileName] = sprite;
+        return sprite;
+    }
+
+    /// <summary>ไอคอนขั้นตอนดูแล icon_feed / bath / groom / play / rest (256 px สีตรงกับ CareStepStyle)</summary>
+    public static Sprite StepIcon(CareStep step) => LoadSprite("icon_" + step.ToString().ToLowerInvariant());
+
+    /// <summary>บับเบิลอีโมตเหนือหัวลูกค้า emote_wait / impatient / happy / angry (128 px)</summary>
+    public static Sprite MoodEmote(Customer.CustomerMood mood) => LoadSprite("emote_" + mood.ToString().ToLowerInvariant());
+
+    /// <summary>Image แสดงสไปรต์ทั้งรูปโดยรักษาสัดส่วน ใช้กับไอคอน อีโมต และโลโก้</summary>
+    public static Image MakeSpriteImage(string name, Transform parent, Sprite sprite)
+    {
+        Image image = MakeRect(name, parent).gameObject.AddComponent<Image>();
+        image.sprite = sprite;
+        image.type = Image.Type.Simple;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+        return image;
+    }
+
     public static Image MakeImage(string name, Transform parent, Color color)
     {
         Image image = MakeRect(name, parent).gameObject.AddComponent<Image>();
@@ -148,7 +180,7 @@ public static class UiKit
         Text text = MakeRect(name, parent).gameObject.AddComponent<Text>();
         text.font = Font;
         text.fontSize = fontSize;
-        text.fontStyle = FontStyle.Bold; // เส้นหนาขึ้นอ่านง่ายกว่าบนจอเล็ก ตัวที่อยากบางค่อยสั่งทับทีหลัง
+        text.fontStyle = FontStyle.Normal; // Mitr SemiBold หนาในตัวอยู่แล้ว ถ้าสั่ง Bold ซ้ำ Unity จะปั้นตัวหนาปลอมจนตัวไทยตัวเล็กแตกเป็นก้อน
         text.color = color;
         text.alignment = anchor;
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
