@@ -146,6 +146,9 @@ public class ModelSwapTool : EditorWindow
         AddStation("Assets/Prefabs/HoldingTable.prefab", "tableCoffeeSquare");
         AddStation("Assets/Prefabs/EquipmentParcel.prefab", "cardboardBoxClosed");
         AddStation("Assets/Prefabs/ReturnZone.prefab", "return_counter");
+        AddStation("Assets/Prefabs/Groom.prefab", "groom_colored", "Station_Grooming (1)");
+        AddStation("Assets/Prefabs/Play.prefab", "play_colored", "Station_Toys");
+        AddStation("Assets/Prefabs/Rest.prefab", "rest_colored", "cage");
 
         basePetPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Object/PetProto.prefab");
 
