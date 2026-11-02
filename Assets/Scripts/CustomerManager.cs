@@ -21,6 +21,10 @@ public class CustomerManager : MonoBehaviour
     [Tooltip("Prefab ลูกค้า ต้องมี component Customer ติดอยู่")]
     [SerializeField] private GameObject customerPrefab;
 
+    [Tooltip("หน้าตาลูกค้าแบบอื่น สุ่มสลับกับ Customer Prefab ด้านบนเท่าๆ กัน " +
+             "(ต้องมี component Customer และใช้ Animator Controller เดียวกัน)")]
+    [SerializeField] private GameObject[] customerVariants;
+
     [Tooltip("ประตูร้าน — ลูกค้าเกิดที่นี่และเดินออกทางนี้")]
     [SerializeField] private Transform doorPoint;
 
@@ -490,7 +494,7 @@ public class CustomerManager : MonoBehaviour
             return;
         }
 
-        GameObject obj = Instantiate(customerPrefab, doorPoint.position, doorPoint.rotation);
+        GameObject obj = Instantiate(PickCustomerPrefab(), doorPoint.position, doorPoint.rotation);
         Customer customer = obj.GetComponent<Customer>();
 
         if (customer == null)
@@ -518,6 +522,15 @@ public class CustomerManager : MonoBehaviour
         customer.SetQueueSlot(slot, slotPosition);
 
         counterQueue.Add(customer);
+    }
+
+    /// <summary>สุ่มหน้าตาลูกค้าจาก prefab หลัก + customerVariants (ช่องที่ว่างข้ามไป)</summary>
+    private GameObject PickCustomerPrefab()
+    {
+        int count = customerVariants != null ? customerVariants.Length : 0;
+        int pick = Random.Range(0, count + 1);
+        if (pick == count || customerVariants[pick] == null) return customerPrefab;
+        return customerVariants[pick];
     }
 
     private PetSpecies PickSpecies()
