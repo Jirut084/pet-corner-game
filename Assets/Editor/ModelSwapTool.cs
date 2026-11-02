@@ -145,6 +145,7 @@ public class ModelSwapTool : EditorWindow
         AddStation("Assets/Prefabs/IntakePoint.prefab", "cashier colored", "Cashier Machine");
         AddStation("Assets/Prefabs/HoldingTable.prefab", "tableCoffeeSquare");
         AddStation("Assets/Prefabs/EquipmentParcel.prefab", "cardboardBoxClosed");
+        AddStation("Assets/Prefabs/ReturnZone.prefab", "return_counter");
 
         basePetPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Object/PetProto.prefab");
 
@@ -194,7 +195,7 @@ public class ModelSwapTool : EditorWindow
     private static GameObject FindModel(string fileName)
     {
         // ThirdParty = ชุดโมเดล CC0 ที่โหลดมา (Kenney Furniture Kit ตั้ง Scale Factor 0.25 ไว้แล้วให้พอดีกริด)
-        foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Models", "Assets/ThirdParty" }))
+        foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Models", "Assets/ThirdParty", "Assets/Art" }))
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
             if (Path.GetFileNameWithoutExtension(path).Equals(fileName, StringComparison.OrdinalIgnoreCase))
