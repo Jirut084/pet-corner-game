@@ -20,10 +20,6 @@ public class TilePlacer : MonoBehaviour
     [Header("References")]
     [SerializeField] private TileGrid grid;
 
-    [Header("Placement Settings")]
-    [Tooltip("ระยะห่างจากผู้เล่นที่จะเล็งช่องเป้าหมาย (หน่วยเมตร)")]
-    [SerializeField] private float placeDistance = 1.5f;
-
     private PlayerController playerController;
     private PlayerCarrier carrier;
 
@@ -80,12 +76,10 @@ public class TilePlacer : MonoBehaviour
         return true;
     }
 
-    /// <summary>หาช่องกริดที่อยู่ด้านหน้าผู้เล่นตามทิศที่หันล่าสุด</summary>
+    /// <summary>ช่องติดกันด้านหน้าผู้เล่น (4 ทิศ) — ช่องเดียวกับที่ InteractionManager ใช้โต้ตอบ</summary>
     private Vector2Int GetTargetCell()
     {
-        Vector3 facing = playerController.LastMoveDirection.normalized;
-        Vector3 targetPos = transform.position + facing * placeDistance;
-        return grid.WorldToCell(targetPos);
+        return grid.FacingCell(transform.position, playerController.LastMoveDirection);
     }
 
     /// <summary>ยกสถานีที่อยู่ในช่องเป้าหมายขึ้นมาถือ เพื่อย้ายไปวางที่อื่น</summary>

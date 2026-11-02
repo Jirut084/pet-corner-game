@@ -61,8 +61,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int upkeepPerStation = 5;
 
     [Header("Concurrent Orders")]
-    [Tooltip("จำนวนออเดอร์ที่รับค้างไว้พร้อมกันได้ ไล่ตามวัน (วัน 1 = ช่องแรก) วันที่เกินลิสต์ใช้ค่าสุดท้าย")]
-    [SerializeField] private int[] concurrentOrdersPerDay = new int[] { 1, 2, 3 };
+    [Tooltip("จำนวนออเดอร์ที่รับค้างไว้พร้อมกันได้ ไล่ตามวัน (วัน 1 = ช่องแรก) วันที่เกินลิสต์ใช้ค่าสุดท้าย " +
+             "— เพดานจริงคือจำนวนที่นั่งรอของลูกค้า (CustomerManager.SeatCount) ตั้งเกินไปก็ไม่มีผล")]
+    [SerializeField] private int[] concurrentOrdersPerDay = new int[] { 3, 3, 3 };
 
     [Header("Layout")]
     [Tooltip("กดเปิดร้านแล้วตรวจผังก่อน ถ้ามีสถานี/เคาน์เตอร์ที่เดินไปไม่ถึงจะไม่ให้เปิด (ปิดไว้ถ้าตัวตรวจฟ้องผิดกับห้องจริง)")]
@@ -144,7 +145,12 @@ public class GameManager : MonoBehaviour
             if (concurrentOrdersPerDay == null || concurrentOrdersPerDay.Length == 0) return 1;
 
             int index = Mathf.Clamp(Day - 1, 0, concurrentOrdersPerDay.Length - 1);
-            return Mathf.Max(1, concurrentOrdersPerDay[index]);
+            int limit = Mathf.Max(1, concurrentOrdersPerDay[index]);
+
+            // รับเกินจำนวนที่นั่งไม่ได้อยู่แล้ว (ลูกค้าไม่มีที่รอ) — ตัดให้ตรงกับของจริงในฉาก
+            // ไม่งั้นผู้เล่นกดรับออเดอร์ได้แต่ขึ้น "ไม่มีจุดรอว่าง" แทน ซึ่งงงกว่าบอกตรงๆ ว่าเต็ม
+            int seats = CustomerManager.Instance != null ? CustomerManager.Instance.SeatCount : 0;
+            return seats > 0 ? Mathf.Min(limit, seats) : limit;
         }
     }
 

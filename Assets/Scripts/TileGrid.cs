@@ -70,6 +70,19 @@ public class TileGrid : MonoBehaviour
         return transform.position + new Vector3(x, 0f, z);
     }
 
+    /// <summary>
+    /// ช่องติดกันด้านหน้า แบบ PlateUp — ช่องที่ยืนอยู่ + ทิศที่หันปัดเป็น 4 ทิศ (ไม่นับแนวทแยง)
+    /// ใช้ร่วมกันทั้งการโต้ตอบ (InteractionManager) และยก/วางอุปกรณ์ (TilePlacer) ให้เล็งช่องเดียวกันเสมอ
+    /// </summary>
+    public Vector2Int FacingCell(Vector3 position, Vector3 facing)
+    {
+        Vector2Int step = Mathf.Abs(facing.x) >= Mathf.Abs(facing.z)
+            ? new Vector2Int(facing.x >= 0f ? 1 : -1, 0)
+            : new Vector2Int(0, facing.z >= 0f ? 1 : -1);
+
+        return WorldToCell(position) + step;
+    }
+
     public bool IsInBounds(Vector2Int cell)
     {
         return cell.x >= 0 && cell.x < width && cell.y >= 0 && cell.y < height;
