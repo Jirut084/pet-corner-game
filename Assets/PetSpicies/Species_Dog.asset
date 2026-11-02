@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PetSpecies
   speciesName: Dog
   petPrefab: {fileID: 8284398693088725970, guid: 27eaa9ea55eb93847afab2419ed62ec6, type: 3}
+  shapeVariants:
+  - {fileID: 5636448151536730288, guid: 020f28fb14ee6d94c82b461e84b3bd7b, type: 3}
+  - {fileID: 8415032528567286854, guid: f7de4b53f35a20f4daa109893b969906, type: 3}
+  - {fileID: 1955970110758241057, guid: e5f3fa120cf81154c88d69f91f423d51, type: 3}
   requiredSteps: 0000000003000000
   patienceSeconds: 75
+  counterPatienceSeconds: 35
+  pickupPatienceSeconds: 20
   baseFee: 15
   feePerStep: 8
-  counterPatienceSeconds: 35
+  reputationToUnlock: 0
+  comboTip: 6
+  comboWindowSeconds: 12

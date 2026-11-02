@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PetSpecies
   speciesName: Pig
   petPrefab: {fileID: 8284398693088725970, guid: a3f866ff784e7e948940f92b6ff2592d, type: 3}
+  shapeVariants:
+  - {fileID: 3645444186712787702, guid: 02278970a9e33fc4081897c8a71dad1b, type: 3}
+  - {fileID: 4779711993859068807, guid: 4b47b0dc03da90142bf10c5180545c2a, type: 3}
+  - {fileID: 7510658119585074548, guid: bb5180124fc09b44f8b762f10fad579e, type: 3}
   requiredSteps: 0000000001000000
   patienceSeconds: 85
+  counterPatienceSeconds: 35
+  pickupPatienceSeconds: 20
   baseFee: 18
   feePerStep: 9
-  counterPatienceSeconds: 35
+  reputationToUnlock: 0
+  comboTip: 6
+  comboWindowSeconds: 12
