@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 638975e00759e5f45b6b7db107747524, type: 3}
+  m_Name: PetState_Cornered
+  m_EditorClassIdentifier: Assembly-CSharp::PetCorneredState
+  displayName: "\u0E08\u0E19\u0E21\u0E38\u0E21"
+  holdRadius: 2.2
+  fleeState: {fileID: 11400000, guid: 01151166724733f419b3b3d707e26395, type: 2}

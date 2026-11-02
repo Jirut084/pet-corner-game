@@ -196,9 +196,23 @@ public class InteractionManager : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// แบบ PlateUp: ของบนกริด (สถานี/เคาน์เตอร์) โต้ตอบได้เฉพาะชิ้นที่อยู่ในช่องติดกันด้านหน้าเท่านั้น
+    /// ช่องหน้าว่างค่อยใช้ทรงกลมหาของที่ไม่ได้ลงกริด (สัตว์ที่หนีอยู่บนพื้น ฯลฯ) — ของบนกริดถูกข้ามในขั้นนี้
+    /// ไม่งั้นทรงกลมจะไปโดนสถานีแนวทแยงหรือห่างไปสองช่อง
+    /// </summary>
     private IInteractable FindTargetViaOverlap()
     {
         Vector3 facing = playerController != null ? playerController.LastMoveDirection : transform.forward;
+
+        TileGrid grid = placer != null ? placer.Grid : null;
+        if (grid != null)
+        {
+            GameObject occupant = grid.GetOccupant(grid.FacingCell(transform.position, facing));
+            IInteractable onTile = occupant != null ? occupant.GetComponentInChildren<IInteractable>() : null;
+            if (onTile != null) return onTile;
+        }
+
         Vector3 checkCenter = transform.position + facing.normalized * overlapForwardOffset;
 
         Collider[] hits = Physics.OverlapSphere(checkCenter, overlapRadius, interactableLayers);
@@ -211,6 +225,11 @@ public class InteractionManager : MonoBehaviour
         {
             IInteractable interactable = col.GetComponentInParent<IInteractable>();
             if (interactable == null)
+            {
+                continue;
+            }
+
+            if (grid != null && col.GetComponentInParent<GridOccupant>() is GridOccupant onGrid && onGrid.IsRegistered)
             {
                 continue;
             }

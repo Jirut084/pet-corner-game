@@ -1,99 +1,143 @@
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
-/// สัตว์หนีเมื่อถูกทิ้งไว้นานเกินไป แล้วผู้เล่นต้องวิ่งไล่จับคืน
+/// สมองของสัตว์เลี้ยง — ตัวรันเครื่องจักรสถานะ (FSM) และเป็น blackboard ให้สถานะใช้ร่วมกัน
 ///
-/// นับว่า "ถูกทิ้ง" เมื่อสัตว์ไม่ได้อยู่ในมือผู้เล่น และไม่มีสถานีไหนกำลังดูแลอยู่
-/// (วางไว้บนโต๊ะพัก, วางคาสถานีที่ทำงานเสร็จแล้ว, หรือหลุดลงพื้น) ครบ neglectSeconds แล้วหนี
+/// FSM 3 สถานะ (ไฟล์สถานะเป็น ScriptableObject ดู PetState.cs):
 ///
-/// หนีด้วยการเดินถอยห่างจากผู้เล่นในรัศมีจำกัด เข้าใกล้ถึง catchRadius แล้วมันจะหยุดให้จับ
-/// จับด้วยปุ่ม interact เดิม (E) — สคริปต์นี้เป็น IInteractable เอง
-/// บัฟ CatchRadius จากการ์ดรางวัลขยายรัศมีที่สัตว์ยอมหยุด
+///     [สงบ] --ถูกทิ้งครบเวลา--> [หนี] --ผู้เล่นเข้าใกล้--> [จนมุม]
+///       ^                        ^                         |
+///       |                        +---ผู้เล่นถอยห่าง--------+
+///       +------------------ถูกอุ้ม / ถูกจับ-----------------+
 ///
-/// Pet.Awake ใส่ component นี้ให้อัตโนมัติ ไม่ต้องแก้ prefab
-/// อยากปรับค่า ให้ Add Component "PetEscape" ลง prefab สัตว์เองแล้วตั้งใน Inspector
-/// ponytail: เดินตรงเข้าหาทิศที่เลือก ไม่มี pathfinding — ถ้าสัตว์เริ่มมุดผ่านสถานีบ่อยค่อยใส่ NavMesh
+/// การเคลื่อนที่ตอนหนีใช้ NavMeshAgent:
+///   - อ้อมสถานีกับกำแพงแทนที่จะมุดทะลุ (สถานีทุกชิ้นมี NavMeshObstacle แบบ carve จาก GridOccupant)
+///   - ตัวสัตว์ติดพื้น NavMesh เสมอ ไม่ลอยและไม่ตกทะลุพื้น
+///   - ไม่มี NavMesh ในฉาก (เช่นฉากเทสเปล่า) จะถอยไปเลื่อน transform ตรงๆ แทน ยังเล่นได้
+///
+/// จับด้วยปุ่ม interact เดิม (E) — สคริปต์นี้เป็น IHoldInteractable เอง
+/// Pet.Awake ใส่ component นี้ให้อัตโนมัติ ไม่ต้องแก้ prefab สัตว์ทุกตัว
 /// </summary>
 [RequireComponent(typeof(Pet))]
 public class PetEscape : MonoBehaviour, IHoldInteractable
 {
-    [Header("Trigger")]
-    [Tooltip("ถูกทิ้งไว้โดยไม่มีใครดูแลนานกี่วินาทีแล้วหนี")]
-    [SerializeField] private float neglectSeconds = 12f;
+    [Header("States (ScriptableObject)")]
+    [Tooltip("ชุดสถานะของสัตว์ตัวนี้ ปล่อยว่างจะสร้างชุดมาตรฐานให้ตอนเริ่มเกม")]
+    [SerializeField] private PetState calmState;
+    [SerializeField] private PetState fleeState;
+    [SerializeField] private PetState corneredState;
 
-    [Tooltip("สัตว์บุคลิกขี้ตกใจ (Pet → Trait = Skittish) ถูกทิ้งแล้วหนีเร็วกว่าปกติกี่เท่า (0.6 = หนีไวขึ้น 40%)")]
-    [Range(0.1f, 1f)]
-    [SerializeField] private float skittishNeglectMultiplier = 0.6f;
+    [Header("Agent")]
+    [Tooltip("รัศมีตัวสัตว์สำหรับการหาทาง — เล็กกว่าช่องกริด (1) เพื่อให้ลอดช่องระหว่างสถานีได้")]
+    [SerializeField] private float agentRadius = 0.28f;
 
-    [Header("Chase")]
-    [Tooltip("ความเร็วตอนหนี ต้องน้อยกว่า moveSpeed ของผู้เล่น (5) ไม่งั้นไล่ไม่ทัน")]
-    [SerializeField] private float fleeSpeed = 2.6f;
+    [Tooltip("ความเร็วหมุนตัวตอนเปลี่ยนทิศ")]
+    [SerializeField] private float angularSpeed = 720f;
 
-    [Tooltip("หนีไกลจากจุดที่เริ่มหนีได้มากสุดกี่หน่วย")]
-    [SerializeField] private float wanderRadius = 7f;
-
-    [Tooltip("ผู้เล่นเข้ามาใกล้กว่านี้ สัตว์จะเริ่มหนีออกห่าง ไกลกว่านี้จะเดินเปะปะไปเรื่อย")]
-    [SerializeField] private float awarenessRadius = 4.5f;
-
-    [Tooltip("ผู้เล่นเข้ามาใกล้เท่านี้ สัตว์ยอมหยุดให้จับ (ขยายได้ด้วยบัฟ CatchRadius)")]
-    [SerializeField] private float catchRadius = 1.6f;
-
-    [Tooltip("ตอนเดินเปะปะ เปลี่ยนทิศทุกกี่วินาที")]
-    [SerializeField] private float wanderInterval = 1.5f;
-
-    /// <summary>กำลังหนีอยู่หรือไม่ — HUD/ระบบอื่นอ่านได้</summary>
-    public bool IsEscaping { get; private set; }
+    /// <summary>กำลังหนีอยู่หรือไม่ — HUD กับ InteractionManager อ่านค่านี้</summary>
+    public bool IsEscaping => current != null && current != calmState;
 
     /// <summary>หยุดรอให้จับอยู่ (ผู้เล่นเข้ามาในรัศมีจับแล้ว)</summary>
-    public bool IsCornered { get; private set; }
+    public bool IsCornered => current == corneredState;
 
-    private Pet pet;
+    /// <summary>ชื่อสถานะปัจจุบัน ใช้ดีบัก/โชว์ตอนนำเสนอ</summary>
+    public string StateName => current != null ? current.displayName : "-";
+
+    // ---------- blackboard ที่สถานะใช้ร่วมกัน ----------
+    public Pet Pet { get; private set; }
+    public PetState CalmState => calmState;
+    public float NeglectTimer { get; set; }
+    public float NextRepathTime { get; set; }
+
+    private PetState current;
+    private NavMeshAgent agent;
     private Rigidbody body;
     private Transform player;
     private TileGrid grid;
 
-    private float neglectTimer;
     private Vector3 escapeOrigin;
-    private Vector3 wanderDirection;
-    private float nextWanderTime;
     private bool cachedIsKinematic;
     private RigidbodyConstraints cachedConstraints;
+    private float moveSpeed = 2.6f;
 
     private void Awake()
     {
-        pet = GetComponent<Pet>();
+        Pet = GetComponent<Pet>();
         body = GetComponent<Rigidbody>();
-        grid = FindAnyObjectByType<TileGrid>(); // ไม่มีกริดในฉาก (ฉากเทสเปล่า) ก็หนีได้ แค่ไม่มีขอบกั้น
+        grid = FindAnyObjectByType<TileGrid>();
+
+        EnsureStates();
+        SetupAgent();
+
+        current = calmState;
+        current.Enter(this);
+    }
+
+    /// <summary>
+    /// ไม่ได้ผูกไฟล์สถานะใน Inspector ก็เล่นได้ — สร้างชุดมาตรฐานขึ้นมาใช้ในหน่วยความจำ
+    /// (อยากปรับค่า: สร้าง asset จากเมนู Create → Pet Corner → Pet State แล้วลากใส่ช่องด้านบน)
+    /// </summary>
+    private void EnsureStates()
+    {
+        if (calmState != null && fleeState != null && corneredState != null) return;
+
+        PetCalmState calm = ScriptableObject.CreateInstance<PetCalmState>();
+        PetFleeState flee = ScriptableObject.CreateInstance<PetFleeState>();
+        PetCorneredState cornered = ScriptableObject.CreateInstance<PetCorneredState>();
+
+        calm.displayName = "สงบ";
+        flee.displayName = "หนี";
+        cornered.displayName = "จนมุม";
+
+        // ผูกปลายทางของแต่ละสถานะเข้าหากัน (ช่องพวกนี้เป็น private ใน asset จึงตั้งผ่าน SerializedObject ไม่ได้ตอน runtime)
+        calm.LinkRuntime(flee);
+        flee.LinkRuntime(cornered);
+        cornered.LinkRuntime(flee);
+
+        calmState = calm;
+        fleeState = flee;
+        corneredState = cornered;
+    }
+
+    private void SetupAgent()
+    {
+        agent = GetComponent<NavMeshAgent>();
+        if (agent == null) agent = gameObject.AddComponent<NavMeshAgent>();
+
+        agent.radius = agentRadius;
+        agent.height = Mathf.Max(0.3f, Pet.VisualBounds.size.y);
+        agent.angularSpeed = angularSpeed;
+        agent.acceleration = 20f;
+        agent.stoppingDistance = 0.1f;
+        agent.autoBraking = true;
+        agent.enabled = false; // เปิดเฉพาะตอนหนี เวลาถูกอุ้ม/อยู่บนสถานีให้ตำแหน่งถูกคุมโดยพ่อแม่
     }
 
     private void Update()
     {
         float deltaTime = Time.deltaTime;
-        if (deltaTime <= 0f) return; // เกมหยุดอยู่ (timeScale 0)
+        if (deltaTime <= 0f || current == null) return; // เกมหยุดอยู่
 
-        if (IsEscaping)
-        {
-            UpdateEscape(deltaTime);
-            return;
-        }
+        PetState next = current.Tick(this, deltaTime);
+        if (next == current || next == null) return;
 
-        if (!IsNeglected())
-        {
-            neglectTimer = 0f;
-            return;
-        }
+        current.Exit(this);
 
-        neglectTimer += deltaTime;
+        // ออกจากกลุ่มสถานะหนีกลับมาสงบ = คืนค่า physics และปิด agent
+        if (next == calmState) EndRunaway();
 
-        float limit = pet.Trait == PetTrait.Skittish ? neglectSeconds * skittishNeglectMultiplier : neglectSeconds;
-        if (neglectTimer >= limit) BeginEscape();
+        current = next;
+        current.Enter(this);
     }
 
-    /// <summary>ถูกทิ้งอยู่ไหม — ไม่ได้ถูกอุ้ม ออเดอร์ยังเดินอยู่ และไม่มีสถานีไหนกำลังดูแล</summary>
-    private bool IsNeglected()
+    // ---------- เงื่อนไขที่สถานะเรียกใช้ ----------
+
+    /// <summary>ถูกทิ้งอยู่ไหม — ไม่ได้ถูกอุ้ม ออเดอร์ยังเดินอยู่ และไม่มีใครดูแล</summary>
+    public bool IsNeglected()
     {
-        if (pet.IsCarried) return false;
-        if (!pet.IsPatienceRunning) return false; // ยังไม่รับออเดอร์ / จบออเดอร์ไปแล้ว
+        if (Pet.IsCarried) return false;
+        if (!Pet.IsPatienceRunning) return false; // ยังไม่รับออเดอร์ / จบออเดอร์ไปแล้ว
 
         // ห้องรอข้างเคาน์เตอร์มีคนดูแล สัตว์ในนั้นจึงไม่หนี (โต๊ะพักกลางร้านไม่นับ)
         if (GetComponentInParent<PetWaitingRoom>() != null) return false;
@@ -102,135 +146,150 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
         return station == null || station.State != CareStation.StationState.Working;
     }
 
-    private void BeginEscape()
+    public float DistanceToPlayer()
     {
+        Transform target = Player();
+        if (target == null) return float.MaxValue;
+
+        Vector3 delta = target.position - transform.position;
+        delta.y = 0f;
+        return delta.magnitude;
+    }
+
+    /// <summary>รัศมีที่ปรับด้วยบัฟ CatchRadius จากการ์ดรางวัลแล้ว</summary>
+    public float ScaledCatchRadius(float baseRadius)
+    {
+        float multiplier = PlayerProgress.Instance != null
+            ? Mathf.Max(0.1f, PlayerProgress.Instance.CatchRadiusMultiplier)
+            : 1f;
+
+        return baseRadius * multiplier;
+    }
+
+    // ---------- การเคลื่อนที่ ----------
+
+    /// <summary>เริ่มหนี: หลุดจากสถานี เปิด collider คืน ปิด physics แล้วส่งตัวขึ้น NavMesh</summary>
+    public void BeginRunaway(float speed)
+    {
+        moveSpeed = speed;
+
         CareStation station = GetComponentInParent<CareStation>();
         if (station != null) station.ReleaseForEscape();
+        transform.SetParent(null);
 
-        IsEscaping = true;
-        IsCornered = false;
-        neglectTimer = 0f;
-        escapeOrigin = transform.position;
-        nextWanderTime = 0f;
-
-        // สัตว์ที่เคยถูกอุ้มจะถูกปิด collider ไว้ (PlayerCarrier ปิด แล้ว CareStation.Consume ไม่ได้เปิดคืน)
-        // ถ้าไม่เปิดคืน จะชนอะไรไม่ได้และเรย์ของผู้เล่นก็ยิงไม่โดน = ไล่จับไม่ได้
+        // สัตว์ที่เคยถูกอุ้มจะถูกปิด collider ไว้ ถ้าไม่เปิดคืน เรย์ของผู้เล่นจะยิงไม่โดน = ไล่จับไม่ได้
         foreach (Collider collider in GetComponentsInChildren<Collider>()) collider.enabled = true;
 
-        // เปิด physics จริงระหว่างหนี: แรงโน้มถ่วงดึงลงพื้นเอง และชนกำแพง/สถานีแทนที่จะมุดทะลุ
         if (body != null)
         {
             cachedIsKinematic = body.isKinematic;
             cachedConstraints = body.constraints;
 
-            body.isKinematic = false;
-            body.useGravity = true;
-            body.constraints = RigidbodyConstraints.FreezeRotation; // กันตัวสัตว์ล้มกลิ้งตอนชนของ
+            // NavMeshAgent เป็นคนขยับตัวสัตว์ จึงปิด physics ไว้ ไม่ให้สองระบบแย่งกันคุมตำแหน่ง
+            body.isKinematic = true;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+        }
+
+        escapeOrigin = transform.position;
+
+        if (agent != null && NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 4f, NavMesh.AllAreas))
+        {
+            agent.enabled = true;
+            agent.Warp(hit.position); // วางตัวลงบนพื้น NavMesh พอดี แก้อาการลอยหลังกระโดดลงจากสถานี
+            agent.speed = speed;
+            agent.isStopped = false;
+            escapeOrigin = hit.position;
         }
 
         RunStats.NoteEscape();
-        GameLog.Push($"{pet.DisplayName} หนีแล้ว! วิ่งไปไล่จับแล้วกด E", LogTone.Warn);
+        GameLog.Push($"{Pet.DisplayName} หนีแล้ว! วิ่งไปไล่จับแล้วกด E", LogTone.Warn);
     }
 
-    private void EndEscape()
+    /// <summary>กลับสู่สถานะสงบ — ปิด agent และคืนค่า physics เดิม</summary>
+    public void EndRunaway()
     {
-        IsEscaping = false;
-        IsCornered = false;
-        neglectTimer = 0f;
+        if (agent != null && agent.enabled)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+            agent.enabled = false;
+        }
 
         if (body == null) return;
 
-        body.linearVelocity = Vector3.zero;
-        body.angularVelocity = Vector3.zero;
+        // ระหว่างหนี body เป็น kinematic ตลอด (agent เป็นคนขยับ) จึงไม่มีความเร็วค้างให้ล้าง
         body.isKinematic = cachedIsKinematic;
         body.constraints = cachedConstraints;
     }
 
-    private void UpdateEscape(float deltaTime)
+    public void MoveTo(Vector3 destination)
     {
-        if (pet.IsCarried) // ถูกจับได้ด้วยทางอื่น (เช่นสถานีส่งต่อ)
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
         {
-            EndEscape();
+            agent.isStopped = false;
+            agent.SetDestination(destination);
             return;
         }
 
+        // ไม่มี NavMesh ในฉาก — เลื่อนตรงๆ พร้อมกันไม่ให้หลุดขอบกริด
+        Vector3 direction = destination - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f) return;
+
+        transform.position = ClampToShopFloor(transform.position + direction.normalized * moveSpeed * Time.deltaTime);
+        transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+    }
+
+    public void StopMoving()
+    {
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+    }
+
+    public void FacePlayer()
+    {
         Transform target = Player();
-        Vector3 toPlayer = target != null ? Flatten(target.position - transform.position) : Vector3.zero;
-        float playerDistance = target != null ? toPlayer.magnitude : float.MaxValue;
+        if (target == null) return;
 
-        float stopRadius = catchRadius * (PlayerProgress.Instance != null
-            ? Mathf.Max(0.1f, PlayerProgress.Instance.CatchRadiusMultiplier)
-            : 1f);
-
-        IsCornered = playerDistance <= stopRadius;
-        if (IsCornered)
-        {
-            Stop(); // จนมุมแล้ว ยืนรอให้กด E จับ
-            return;
-        }
-
-        Vector3 direction = ChooseDirection(toPlayer, playerDistance);
-        if (direction.sqrMagnitude < 0.0001f)
-        {
-            Stop();
-            return;
-        }
-
-        Move(direction, deltaTime);
-        transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+        Vector3 look = target.position - transform.position;
+        look.y = 0f;
+        if (look.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(look.normalized, Vector3.up);
     }
 
     /// <summary>
-    /// เดินด้วยความเร็วของ Rigidbody เฉพาะแนวราบ ปล่อยแกน Y ให้แรงโน้มถ่วงคุม
-    /// สัตว์จึงตกลงพื้นเองหลังกระโดดลงจากสถานี และชนกำแพง/สถานีแทนที่จะมุดทะลุ
+    /// เลือกจุดหมายของการหนี — หนีออกจากผู้เล่นถ้าใกล้ ไม่งั้นสุ่มจุดรอบๆ จุดที่เริ่มหนี
+    /// แล้วดึงจุดนั้นให้มาอยู่บน NavMesh เสมอ สัตว์จะได้ไม่พยายามวิ่งเข้ากำแพง
     /// </summary>
-    private void Move(Vector3 direction, float deltaTime)
+    public Vector3 PickFleeDestination(bool playerIsNear, float wanderRadius)
     {
-        if (body == null)
+        Vector3 candidate;
+
+        if (playerIsNear && Player() != null)
         {
-            // ไม่มี Rigidbody ในโมเดลสัตว์ตัวนี้ — ถอยไปใช้การเลื่อน transform แบบเดิมพร้อมขอบกริดกัน
-            transform.position = ClampToShopFloor(transform.position + direction * fleeSpeed * deltaTime);
-            return;
+            Vector3 away = transform.position - Player().position;
+            away.y = 0f;
+            candidate = transform.position + away.normalized * 3.5f;
+        }
+        else
+        {
+            Vector2 random = Random.insideUnitCircle * wanderRadius;
+            candidate = escapeOrigin + new Vector3(random.x, 0f, random.y);
         }
 
-        Vector3 velocity = direction * fleeSpeed;
-        velocity.y = body.linearVelocity.y;
-        body.linearVelocity = velocity;
+        // ไม่ให้หนีไกลเกินรัศมีจากจุดเริ่ม กันสัตว์หายไปมุมร้าน
+        Vector3 fromOrigin = candidate - escapeOrigin;
+        fromOrigin.y = 0f;
+        if (fromOrigin.magnitude > wanderRadius) candidate = escapeOrigin + fromOrigin.normalized * wanderRadius;
+
+        if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2.5f, NavMesh.AllAreas)) return hit.position;
+
+        return ClampToShopFloor(candidate);
     }
 
-    private void Stop()
-    {
-        if (body == null) return;
-
-        Vector3 velocity = body.linearVelocity;
-        body.linearVelocity = new Vector3(0f, velocity.y, 0f);
-    }
-
-    private Vector3 ChooseDirection(Vector3 toPlayer, float playerDistance)
-    {
-        // ออกนอกรัศมีที่ยอมให้หนีแล้ว — เลี้ยวกลับเข้าหาจุดเริ่มหนี กันสัตว์หายออกนอกแผนที่
-        Vector3 fromOrigin = Flatten(transform.position - escapeOrigin);
-        if (fromOrigin.magnitude > wanderRadius) return -fromOrigin.normalized;
-
-        if (playerDistance <= awarenessRadius && playerDistance > 0.01f)
-        {
-            return -toPlayer.normalized; // ผู้เล่นใกล้ = หนีออกห่าง
-        }
-
-        if (Time.time >= nextWanderTime)
-        {
-            Vector2 random = Random.insideUnitCircle.normalized;
-            wanderDirection = new Vector3(random.x, 0f, random.y);
-            nextWanderTime = Time.time + wanderInterval;
-        }
-
-        return wanderDirection;
-    }
-
-    /// <summary>
-    /// ดึงตำแหน่งกลับเข้าในพื้นที่กริดร้าน ใช้เฉพาะกรณีสัตว์ไม่มี Rigidbody (เดินด้วย transform จึงทะลุกำแพงได้)
-    /// ponytail: กันด้วยขอบกริด ไม่ได้ชนกำแพงจริง ถ้าต่อไปมีห้องหลายห้องค่อยเปลี่ยนไปใช้ NavMesh
-    /// </summary>
+    /// <summary>กันตำแหน่งให้อยู่ในกริดร้าน ใช้เฉพาะตอนไม่มี NavMesh ให้เดิน</summary>
     private Vector3 ClampToShopFloor(Vector3 position)
     {
         if (grid == null) return position;
@@ -242,6 +301,15 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
             Mathf.Clamp(position.x, Mathf.Min(min.x, max.x), Mathf.Max(min.x, max.x)),
             position.y,
             Mathf.Clamp(position.z, Mathf.Min(min.z, max.z), Mathf.Max(min.z, max.z)));
+    }
+
+    private Transform Player()
+    {
+        if (player != null) return player;
+
+        PlayerCarrier carrier = FindAnyObjectByType<PlayerCarrier>();
+        player = carrier != null ? carrier.transform : null;
+        return player;
     }
 
     // ---------- การจับ (ปุ่ม interact เดิม) ----------
@@ -281,35 +349,32 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
 
         if (carrier.IsCarrying)
         {
-            GameLog.Push($"มือไม่ว่าง — วางของที่ถืออยู่ก่อนถึงจะจับ {pet.DisplayName} ได้", LogTone.Warn);
+            GameLog.Push($"มือไม่ว่าง — วางของที่ถืออยู่ก่อนถึงจะจับ {Pet.DisplayName} ได้", LogTone.Warn);
             return;
         }
 
-        EndEscape();
+        // ออกจากสถานะหนีก่อน ไม่งั้น agent จะแย่งคุมตำแหน่งกับมือผู้เล่น
+        current.Exit(this);
+        EndRunaway();
+        current = calmState;
+        current.Enter(this);
 
         if (carrier.Carry(gameObject))
         {
             RunStats.NoteCatch();
-            GameLog.Push($"จับ {pet.DisplayName} กลับมาได้แล้ว", LogTone.Good);
+            GameLog.Push($"จับ {Pet.DisplayName} กลับมาได้แล้ว", LogTone.Good);
         }
     }
-
-    private Transform Player()
-    {
-        if (player != null) return player;
-
-        PlayerCarrier carrier = FindAnyObjectByType<PlayerCarrier>();
-        player = carrier != null ? carrier.transform : null;
-        return player;
-    }
-
-    private static Vector3 Flatten(Vector3 v) => new Vector3(v.x, 0f, v.z);
 
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, catchRadius);
-        Gizmos.color = new Color(1f, 0.6f, 0.2f, 0.5f);
-        Gizmos.DrawWireSphere(transform.position, awarenessRadius);
+        Gizmos.DrawWireSphere(transform.position, 1.6f);
+
+        if (Application.isPlaying && IsEscaping)
+        {
+            Gizmos.color = new Color(1f, 0.5f, 0.2f);
+            Gizmos.DrawLine(transform.position, escapeOrigin);
+        }
     }
 }

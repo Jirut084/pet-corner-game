@@ -7,7 +7,8 @@ using UnityEngine;
 ///
 /// กติกาการ spawn (อิงจาก Paw Parlor):
 ///   - ไม่ spawn เกินโควตาออเดอร์ของวัน (นับรวมคนที่กำลังเดินมาและออเดอร์ที่ค้างอยู่)
-///   - ไม่ spawn เกินจำนวนที่ดูแลพร้อมกันได้ของวันนั้น (GameManager.ConcurrentOrderLimit)
+///   - แถวหน้าเคาน์เตอร์ยืนได้ maxCounterQueue คน เต็มแล้วไปต่อคิวนอกร้าน (เกจแยกกัน)
+///     จำนวนที่ดูแลพร้อมกัน (GameManager.ConcurrentOrderLimit) จำกัดแค่การกดรับออเดอร์ ไม่ได้จำกัดคนเข้าแถว
 ///   - ระยะห่างระหว่างคนสั้นลงเรื่อยๆ ตามวัน
 ///
 /// จุดยืนหน้าเคาน์เตอร์อ่านจาก IntakePoint.CustomerStandPosition — ย้ายเคาน์เตอร์แล้วลูกค้าเดินตามไปเอง
@@ -20,6 +21,10 @@ public class CustomerManager : MonoBehaviour
     [Tooltip("Prefab ลูกค้า ต้องมี component Customer ติดอยู่")]
     [SerializeField] private GameObject customerPrefab;
 
+    [Tooltip("หน้าตาลูกค้าแบบอื่น สุ่มสลับกับ Customer Prefab ด้านบนเท่าๆ กัน " +
+             "(ต้องมี component Customer และใช้ Animator Controller เดียวกัน)")]
+    [SerializeField] private GameObject[] customerVariants;
+
     [Tooltip("ประตูร้าน — ลูกค้าเกิดที่นี่และเดินออกทางนี้")]
     [SerializeField] private Transform doorPoint;
 
@@ -30,9 +35,27 @@ public class CustomerManager : MonoBehaviour
     [Tooltip("จุดนั่งรอ — ควรมีอย่างน้อยเท่ากับจำนวนออเดอร์พร้อมกันสูงสุด")]
     [SerializeField] private Transform[] waitSeats;
 
+    /// <summary>จำนวนที่นั่งรอที่ใช้ได้จริง = เพดานของออเดอร์ที่รับค้างพร้อมกัน</summary>
+    public int SeatCount
+    {
+        get
+        {
+            if (waitSeats == null) return 0;
+
+            int count = 0;
+            foreach (Transform seat in waitSeats) if (seat != null) count++;
+            return count;
+        }
+    }
+
     [Header("Counter Queue")]
     [Tooltip("ระยะห่างระหว่างลูกค้าที่ต่อแถวหน้าเคาน์เตอร์ (เมตร) — เลือก CustomerManager แล้วดูจุดสีส้มใน Scene view")]
     [SerializeField] private float queueSpacing = 1.3f;
+
+    [Tooltip("แถวหน้าเคาน์เตอร์ยืนได้กี่คน — เต็มแล้วคนถัดไปต้องต่อคิวนอกร้าน " +
+             "(ยืนต่อแถวได้แม้ดูแลครบจำนวนพร้อมกันแล้ว แค่ยังกดรับออเดอร์ไม่ได้จนกว่าจะส่งคืนสักตัว)")]
+    [Min(1)]
+    [SerializeField] private int maxCounterQueue = 3;
 
     [Tooltip("ทิศที่แถวทอดยาวออกไป ปล่อยเป็น (0,0,0) จะคิดจากแนวเคาน์เตอร์→จุดยืนลูกค้าให้เอง")]
     [SerializeField] private Vector3 queueDirection = Vector3.zero;
@@ -49,9 +72,10 @@ public class CustomerManager : MonoBehaviour
     [Min(0)]
     [SerializeField] private int maxOutsideQueue = 3;
 
-    [Tooltip("เกจรอสั่งของคนนอกร้านลดเร็วกว่าในร้านกี่เท่า (ใช้เกจเดียวกัน เข้าร้านแล้วกลับมาลดปกติ ไม่รีเซ็ต)")]
-    [Min(1f)]
-    [SerializeField] private float outsideDrainMultiplier = 1.5f;
+    [Tooltip("เกจนอกร้าน (วินาที) แยกจากเกจหน้าเคาน์เตอร์ — หมดแล้วเดินกลับ (ไม่โดนความกดดันร่วม) " +
+             "ได้เข้าร้านแล้วเกจหน้าเคาน์เตอร์ของ PetSpecies เริ่มเต็มใหม่ (0 = รอนอกร้านได้ไม่จำกัด)")]
+    [Min(0f)]
+    [SerializeField] private float outsidePatienceSeconds = 30f;
 
     [Tooltip("ทิศจากประตูออกไปนอกร้าน (แถวทอดยาวไปทางนี้) — เลือก CustomerManager แล้วดูจุดสีแดงใน Scene view")]
     [SerializeField] private Vector3 outsideQueueDirection = Vector3.forward;
@@ -61,8 +85,8 @@ public class CustomerManager : MonoBehaviour
 
     [SerializeField] private float outsideQueueSpacing = 1.0f;
 
-    /// <summary>เกจรอสั่งตอนยืนนอกร้านลดเร็วกว่าในร้านกี่เท่า</summary>
-    public float OutsideDrainMultiplier => outsideDrainMultiplier;
+    /// <summary>ความยาวเกจนอกร้าน (วินาที)</summary>
+    public float OutsidePatienceSeconds => outsidePatienceSeconds;
 
     /// <summary>จุดที่คนนอกร้านเดินจากไปเมื่อหมดความอดทน (ปลายคิวออกไปอีก)</summary>
     public Vector3 OutsideLeavePosition => OutsideSlotPosition(maxOutsideQueue + 3);
@@ -186,10 +210,10 @@ public class CustomerManager : MonoBehaviour
         spawnTimer = SpawnGapForDay(game.Day) * (game.CurrentEvent != null ? game.CurrentEvent.spawnGapMultiplier : 1f);
     }
 
-    /// <summary>ร้านมีที่ว่างให้ลูกค้าเข้ามาต่อแถวหน้าเคาน์เตอร์อีกคนไหม (ดูแลไม่เต็ม + มีที่นั่งรอว่าง)</summary>
+    /// <summary>แถวหน้าเคาน์เตอร์ยังมีที่ให้ต่ออีกคนไหม — เต็มแล้วคนใหม่ต้องรอนอกร้าน</summary>
     private bool HasRoomInside(GameManager game)
     {
-        return game.ActiveOrderCount + CountIncoming() < game.ConcurrentOrderLimit && FreeSeatIndex() >= 0;
+        return CountIncoming() < maxCounterQueue;
     }
 
     /// <summary>ร้านว่างเมื่อไหร่ ให้หัวคิวนอกร้านเดินเข้ามาต่อแถวหน้าเคาน์เตอร์ (ทีละคนต่อเฟรม)</summary>
@@ -470,7 +494,7 @@ public class CustomerManager : MonoBehaviour
             return;
         }
 
-        GameObject obj = Instantiate(customerPrefab, doorPoint.position, doorPoint.rotation);
+        GameObject obj = Instantiate(PickCustomerPrefab(), doorPoint.position, doorPoint.rotation);
         Customer customer = obj.GetComponent<Customer>();
 
         if (customer == null)
@@ -498,6 +522,15 @@ public class CustomerManager : MonoBehaviour
         customer.SetQueueSlot(slot, slotPosition);
 
         counterQueue.Add(customer);
+    }
+
+    /// <summary>สุ่มหน้าตาลูกค้าจาก prefab หลัก + customerVariants (ช่องที่ว่างข้ามไป)</summary>
+    private GameObject PickCustomerPrefab()
+    {
+        int count = customerVariants != null ? customerVariants.Length : 0;
+        int pick = Random.Range(0, count + 1);
+        if (pick == count || customerVariants[pick] == null) return customerPrefab;
+        return customerVariants[pick];
     }
 
     private PetSpecies PickSpecies()
@@ -604,7 +637,7 @@ public class CustomerManager : MonoBehaviour
         Vector3 direction = QueueDirection();
         Gizmos.color = new Color(1f, 0.6f, 0.15f);
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < maxCounterQueue; i++)
         {
             Vector3 slot = stand + direction * (i * queueSpacing);
             Gizmos.DrawWireSphere(slot, 0.3f);

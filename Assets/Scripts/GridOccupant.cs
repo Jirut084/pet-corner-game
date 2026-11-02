@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// ติดบนอุปกรณ์ทุกชิ้นที่ "กินพื้นที่" บนกริด (ชามอาหาร/อ่างอาบน้ำ/จุดรับ/จุดคืน ฯลฯ)
@@ -24,6 +25,41 @@ public class GridOccupant : MonoBehaviour
     public bool Removable => removable;
     public Vector2Int Cell { get; private set; }
     public bool IsRegistered { get; private set; }
+
+    private void Awake()
+    {
+        EnsureNavMeshObstacle();
+    }
+
+    /// <summary>
+    /// ของทุกชิ้นที่กินช่องบนกริดเป็นสิ่งกีดขวางของ NavMesh ด้วย — สัตว์ที่หนีจะอ้อมแทนที่จะมุดทะลุ
+    /// ใช้ carve เพราะผู้เล่นยก/ย้ายสถานีได้ตอนจัดร้าน พื้นที่เดินได้จึงต้องอัปเดตตามทันที
+    /// (ทำที่นี่ที่เดียว ไม่ต้องไปใส่ component ทีละ prefab)
+    /// </summary>
+    private void EnsureNavMeshObstacle()
+    {
+        if (GetComponent<NavMeshObstacle>() != null) return;
+
+        NavMeshObstacle obstacle = gameObject.AddComponent<NavMeshObstacle>();
+        obstacle.shape = NavMeshObstacleShape.Box;
+        obstacle.carving = true;
+        obstacle.carveOnlyStationary = true;
+
+        // ขนาดตามของจริงถ้ามี collider ไม่งั้นใช้ขนาดช่องกริด 1 ช่อง
+        Collider self = GetComponent<Collider>();
+        if (self != null)
+        {
+            obstacle.center = transform.InverseTransformPoint(self.bounds.center);
+            obstacle.size = new Vector3(
+                Mathf.Max(0.4f, self.bounds.size.x * 0.9f),
+                Mathf.Max(0.4f, self.bounds.size.y),
+                Mathf.Max(0.4f, self.bounds.size.z * 0.9f));
+            return;
+        }
+
+        obstacle.center = new Vector3(0f, 0.3f, 0f);
+        obstacle.size = new Vector3(0.9f, 0.8f, 0.9f);
+    }
 
     private void Start()
     {

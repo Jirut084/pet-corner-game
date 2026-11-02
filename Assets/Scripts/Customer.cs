@@ -109,25 +109,22 @@ public class Customer : MonoBehaviour
     /// <summary>ควรวาดเกจไหม — วาดเฉพาะตอนมิเตอร์เดินอยู่จริง</summary>
     public bool ShowGauge => AssignedPet != null && AssignedPet.IsPatienceRunning;
 
-    // ---------- เกจรอสั่ง (ก่อนผู้เล่นรับออเดอร์) ----------
-    // แยกจากมิเตอร์ของสัตว์โดยสิ้นเชิง: อันนี้อยู่ที่ลูกค้า เดินตอนต่อแถว หยุดทันทีที่ผู้เล่นกดรับออเดอร์
+    // ---------- เกจรอ (ก่อนผู้เล่นรับออเดอร์) ----------
+    // แยกจากมิเตอร์ของสัตว์โดยสิ้นเชิง: อันนี้อยู่ที่ลูกค้า เดินตอนต่อคิว หยุดทันทีที่ผู้เล่นกดรับออเดอร์
     // จากนั้นมิเตอร์ของสัตว์ (Pet) ค่อยเริ่มนับต่อ — สองเกจจึงไม่มีวันเดินพร้อมกัน
+    // ใช้ตัวแปรชุดเดียวแต่เป็นคนละเกจ: นอกร้าน (CustomerManager.OutsidePatienceSeconds) กับหน้าเคาน์เตอร์
+    // (PetSpecies.counterPatienceSeconds) — เข้าร้านแล้วเกจหน้าเคาน์เตอร์เริ่มเต็มใหม่ตอนถึงแถว
 
     private bool counterPatienceRunning;
     private float counterPatienceRemaining;
+    private float counterPatienceTotal;
     private bool hasJoinedLine;
 
-    /// <summary>เกจรอสั่งเหลือกี่ส่วน 0–1</summary>
-    public float CounterPatienceNormalized
-    {
-        get
-        {
-            float total = RequestedSpecies != null ? RequestedSpecies.counterPatienceSeconds : 0f;
-            return total > 0f ? Mathf.Clamp01(counterPatienceRemaining / total) : 1f;
-        }
-    }
+    /// <summary>เกจรอที่กำลังเดินอยู่ (นอกร้านหรือหน้าเคาน์เตอร์) เหลือกี่ส่วน 0–1</summary>
+    public float CounterPatienceNormalized =>
+        counterPatienceTotal > 0f ? Mathf.Clamp01(counterPatienceRemaining / counterPatienceTotal) : 1f;
 
-    /// <summary>ยืนต่อคิวอยู่นอกร้าน (ร้านเต็ม) — เกจรอสั่งลดเร็วกว่าในร้าน</summary>
+    /// <summary>ยืนต่อคิวอยู่นอกร้าน (แถวหน้าเคาน์เตอร์เต็ม) — ใช้เกจนอกร้านของตัวเอง</summary>
     public bool IsOutside => State == CustomerState.WaitingOutside;
 
     /// <summary>ควรวาดเกจรอสั่งไหม — เฉพาะตอนต่อแถว (ในหรือนอกร้าน) และเกจกำลังเดิน</summary>
@@ -173,7 +170,7 @@ public class Customer : MonoBehaviour
     }
 
     /// <summary>
-    /// ร้านเต็ม — ต่อคิวนอกร้านแทน เกจรอสั่งเริ่มทันทีและลดเร็วกว่าในร้าน (CustomerManager.OutsideDrainMultiplier)
+    /// แถวหน้าเคาน์เตอร์เต็ม — ต่อคิวนอกร้านแทน เกจนอกร้านเริ่มทันที (CustomerManager.OutsidePatienceSeconds)
     /// เกิดที่ประตูก่อนเพื่อให้ SnapToGround เจอพื้นในร้าน แล้วค่อยย้ายไปยืนที่ช่องคิว (นอกร้านอาจไม่มีพื้นให้ยิงเรย์)
     /// </summary>
     public void InitializeOutside(CustomerManager owner, PetSpecies species, Vector3 outsidePosition)
@@ -188,10 +185,9 @@ public class Customer : MonoBehaviour
         State = CustomerState.WaitingOutside;
         idleFacing = FacingTowardDoor();
 
-        hasJoinedLine = true;
-        StartCounterPatience();
+        StartCounterPatience(owner.OutsidePatienceSeconds);
 
-        GameLog.Push($"ร้านเต็ม! ลูกค้า {species.speciesName} ต่อคิวรอนอกร้าน", LogTone.Warn);
+        GameLog.Push($"แถวในร้านเต็ม! ลูกค้า {species.speciesName} ต่อคิวรอนอกร้าน", LogTone.Warn);
     }
 
     /// <summary>ย้ายไปช่องที่ระบุในคิวนอกร้าน — คนหน้าเข้าร้านไปเมื่อไหร่ทุกคนขยับขึ้นมาเอง</summary>
@@ -200,11 +196,12 @@ public class Customer : MonoBehaviour
         if (IsOutside) SetTarget(position);
     }
 
-    /// <summary>ร้านมีที่ว่างแล้ว — เดินเข้าไปต่อแถวหน้าเคาน์เตอร์ เกจรอสั่งนับต่อจากเดิม (ไม่รีเซ็ต)</summary>
+    /// <summary>แถวหน้าเคาน์เตอร์มีที่ว่างแล้ว — ปิดเกจนอกร้าน เดินเข้าไปต่อแถว เกจหน้าเคาน์เตอร์เริ่มใหม่ตอนถึงแถว</summary>
     public void EnterShop()
     {
         if (!IsOutside) return;
 
+        counterPatienceRunning = false;
         State = CustomerState.WalkingToCounter;
         idleFacing = null;
         GameLog.Push($"ลูกค้า {RequestedSpecies.speciesName} เข้าร้านมาต่อแถวแล้ว");
@@ -232,7 +229,7 @@ public class Customer : MonoBehaviour
                     if (!hasJoinedLine)
                     {
                         hasJoinedLine = true;
-                        StartCounterPatience();
+                        StartCounterPatience(RequestedSpecies != null ? RequestedSpecies.counterPatienceSeconds : 0f);
                     }
 
                     // บอกเฉพาะหัวแถว คนที่ยืนต่อท้ายยังกดรับไม่ได้ ไม่ต้องรก log
@@ -348,11 +345,11 @@ public class Customer : MonoBehaviour
         LeaveShop();
     }
 
-    private void StartCounterPatience()
+    private void StartCounterPatience(float total)
     {
-        float total = RequestedSpecies != null ? RequestedSpecies.counterPatienceSeconds : 0f;
         if (total <= 0f) return; // ตั้งเป็น 0 = รอได้ไม่จำกัด ไม่ต้องมีเกจ
 
+        counterPatienceTotal = total;
         counterPatienceRemaining = total;
         counterPatienceRunning = true;
     }
@@ -376,11 +373,9 @@ public class Customer : MonoBehaviour
             ? PlayerProgress.Instance.PatienceDrainMultiplier
             : 1f;
 
-        // ยืนตากแดดนอกร้านใจร้อนกว่ายืนในร้าน
-        if (IsOutside && manager != null) drainRate *= manager.OutsideDrainMultiplier;
-
-        // คิวหน้าเคาน์เตอร์โดนความกดดันร่วมเหมือนกัน — ปล่อยคิวยาวแล้วทุกคนใจร้อนขึ้นพร้อมกัน
-        drainRate *= CustomerManager.PatiencePressure;
+        // คิวหน้าเคาน์เตอร์โดนความกดดันร่วม — ปล่อยคิวยาวแล้วทุกคนใจร้อนขึ้นพร้อมกัน
+        // เกจนอกร้านไม่โดน: คนนอกร้านมีได้ก็ต่อเมื่อแถวในร้านเต็มอยู่แล้ว ถ้าคูณซ้ำจะหมดก่อนได้เข้าร้าน
+        if (!IsOutside) drainRate *= CustomerManager.PatiencePressure;
 
         counterPatienceRemaining -= Time.deltaTime * drainRate;
         if (counterPatienceRemaining > 0f) return;

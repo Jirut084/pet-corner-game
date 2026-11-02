@@ -101,11 +101,11 @@ public class MainMenu : MonoBehaviour
         MakeTitle(panel, 26f, 104f, 58);
 
         Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
-        subtitle.text = "ร้านรับฝากดูแลสัตว์เลี้ยง";
+        subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
         GameFlowDebugControls.Fill(subtitle.rectTransform, 136f, 28f);
 
         Text tagline = UiKit.MakeText("Tagline", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
-        tagline.text = "เปิดร้านให้รอดจนครบทุกวัน";
+        tagline.text = "What home means to you — เปิดบ้านรับฝากสัตว์ให้รอดครบทุกวัน";
         GameFlowDebugControls.Fill(tagline.rectTransform, 168f, 26f);
 
         Button start = UiKit.MakeButton("Start", panel, 22, out Text startLabel);
@@ -133,7 +133,7 @@ public class MainMenu : MonoBehaviour
         MakeTitle(panel, 30f, 64f, 46);
 
         Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
-        subtitle.text = "ร้านรับฝากดูแลสัตว์เลี้ยง";
+        subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
         GameFlowDebugControls.Fill(subtitle.rectTransform, 98f, 26f);
 
         Text brief = UiKit.MakeText("Brief", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
