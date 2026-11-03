@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UI;
 
 /// <summary>
@@ -16,22 +18,32 @@ using UnityEngine.UI;
 public static class UiKit
 {
     // ---------- ชุดสี ----------
-    public static readonly Color Card = new Color(0.99f, 0.97f, 0.93f, 0.97f);
-    public static readonly Color CardQuiet = new Color(0.99f, 0.97f, 0.93f, 0.93f);
-    public static readonly Color Shadow = new Color(0.12f, 0.10f, 0.08f, 0.13f);
-    public static readonly Color Ink = new Color(0.16f, 0.14f, 0.11f);
-    public static readonly Color InkSoft = new Color(0.16f, 0.14f, 0.11f, 0.78f);
+    public static readonly Color Panel = new Color(0.95f, 0.93f, 0.89f, 0.98f);    // พื้นแผงเมนูใหญ่ อุ่นนวล
+    public static readonly Color Card = new Color(0.995f, 0.985f, 0.965f, 0.99f);   // พื้นการ์ด/ปุ่ม ขาวครีมสว่าง ลอยเด่นจากแผง
+    public static readonly Color CardQuiet = new Color(0.97f, 0.95f, 0.92f, 0.94f); // การ์ดเงียบ/ป้ายรอง
+    public static readonly Color Border = new Color(0.16f, 0.14f, 0.11f, 0.12f);    // เส้นขอบบางๆ
+    public static readonly Color Shadow = new Color(0.12f, 0.10f, 0.08f, 0.16f);    // เงานวลตา
+    public static readonly Color Ink = new Color(0.16f, 0.14f, 0.11f);              // สีหมึกหลัก
+    public static readonly Color InkSoft = new Color(0.16f, 0.14f, 0.11f, 0.78f);   // สีหมึกรอง
     public static readonly Color Track = new Color(0.16f, 0.14f, 0.11f, 0.18f);
 
     public static readonly Color Money = new Color(0.85f, 0.62f, 0.15f);
-    public static readonly Color Good = new Color(0.40f, 0.72f, 0.45f);
-    public static readonly Color Warn = new Color(0.93f, 0.72f, 0.26f);
+    public static readonly Color Good = new Color(0.35f, 0.68f, 0.40f);
+    public static readonly Color Warn = new Color(0.92f, 0.68f, 0.22f);
     public static readonly Color Danger = new Color(0.85f, 0.35f, 0.30f);
 
     /// <summary>ม่านทึบหลังหน้าจอเมนู — เข้มพอให้อ่านการ์ดได้ แต่ยังเห็นร้านอยู่ข้างหลังจางๆ</summary>
     public static readonly Color Dim = new Color(0.13f, 0.11f, 0.09f, 0.86f);
 
+    // สีปุ่มและการตอบสนองเมื่อชี้เมาส์
+    public static readonly Color ButtonHover = new Color(0.95f, 0.91f, 0.83f);
+    public static readonly Color ButtonPress = new Color(0.88f, 0.84f, 0.77f);
+    public static readonly Color PrimaryBtn = new Color(0.88f, 0.58f, 0.18f);
+    public static readonly Color PrimaryBtnHover = new Color(0.94f, 0.65f, 0.24f);
+    public static readonly Color PrimaryBtnPress = new Color(0.80f, 0.50f, 0.14f);
+
     private static Font font;
+    private static TMP_FontAsset tmpFont;
     private static Sprite rounded;
     private static Sprite circle;
     private static Sprite ring;
@@ -40,10 +52,86 @@ public static class UiKit
     {
         get
         {
-            // ฟอนต์ไทย Mitr (OFL) อยู่ใน Resources/UI จึงติดไปกับ build ด้วย ถ้าหาไม่เจอค่อยถอยไปใช้ฟอนต์ในตัว Unity
             if (font == null) font = Resources.Load<Font>("UI/Mitr-SemiBold");
             if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             return font;
+        }
+    }
+
+    public static Font DefaultFont => Font;
+
+    /// <summary>
+    /// TMP_FontAsset พร้อม OpenType features ภาษาไทย (mark, mkmk, liga, kern)
+    /// สร้างแบบ Dynamic SDF ที่ runtime ทำให้ไม่ต้องพึ่งพา prefab หรือ meta
+    /// </summary>
+    public static TMP_FontAsset TmpFont
+    {
+        get
+        {
+            if (tmpFont == null)
+            {
+                tmpFont = Resources.Load<TMP_FontAsset>("UI/Mitr-SemiBold SDF");
+                if (tmpFont == null)
+                {
+                    Font baseFont = Font;
+                    if (baseFont != null)
+                    {
+                        tmpFont = TMP_FontAsset.CreateFontAsset(
+                            baseFont,
+                            samplingPointSize: 44,
+                            atlasPadding: 6,
+                            renderMode: GlyphRenderMode.SDFAA,
+                            atlasWidth: 1024,
+                            atlasHeight: 1024,
+                            atlasPopulationMode: AtlasPopulationMode.Dynamic,
+                            enableMultiAtlasSupport: true);
+                    }
+                }
+
+                if (tmpFont != null)
+                {
+                    tmpFont.getFontFeatures = true;
+                }
+            }
+            return tmpFont;
+        }
+    }
+
+    /// <summary>
+    /// ตัวช่วยจัดลำดับตัวอักษรภาษาไทยสำหรับสระอำ (ำ) ที่มีวรรณยุกต์ซ้อน
+    /// เปลี่ยนเป็น นิคหิต (ํ) + วรรณยุกต์ + สระอา (า) เพื่อให้ OpenType แสดงผลซ้อนกันถูกต้อง
+    /// </summary>
+    public class ThaiTextPreprocessor : ITextPreprocessor
+    {
+        public static readonly ThaiTextPreprocessor Instance = new ThaiTextPreprocessor();
+
+        public string PreprocessText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            System.Text.StringBuilder sb = null;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (i + 1 < text.Length && (c >= '\u0E48' && c <= '\u0E4B') && text[i + 1] == '\u0E33')
+                {
+                    if (sb == null)
+                    {
+                        sb = new System.Text.StringBuilder(text.Length + 4);
+                        sb.Append(text, 0, i);
+                    }
+                    sb.Append('\u0E4D'); // นิคหิต
+                    sb.Append(c);        // วรรณยุกต์
+                    sb.Append('\u0E32'); // สระอา
+                    i++; // ข้ามสระอำเดิม
+                }
+                else
+                {
+                    sb?.Append(c);
+                }
+            }
+
+            return sb != null ? sb.ToString() : text;
         }
     }
 
@@ -88,7 +176,7 @@ public static class UiKit
         Canvas canvas = go.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = sortingOrder;
-        canvas.pixelPerfect = true; // ขอบและตัวหนังสือตกบนพิกเซลพอดี ไม่เบลอครึ่งพิกเซล
+        canvas.pixelPerfect = false; // SDF คมชัดอยู่แล้ว การปิด pixelPerfect ช่วยให้สเกลลื่นไหลและไม่สั่น
 
         CanvasScaler scaler = go.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -151,8 +239,7 @@ public static class UiKit
     }
 
     /// <summary>
-    /// การ์ดครีมพร้อมเงาจางด้านหลัง — ชิ้นส่วนหลักของหน้าตาทั้งเกม
-    /// คืน RectTransform ของตัวห่อ: จัดตำแหน่ง/ขนาดที่ตัวนี้ตัวเดียว เงากับพื้นการ์ดยืดตามเอง
+    /// การ์ดครีมพร้อมเงาด้านหลัง — ชิ้นส่วนหลักของหน้าตาทั้งเกม
     /// </summary>
     public static RectTransform MakeCard(string name, Transform parent, Color color)
     {
@@ -166,8 +253,8 @@ public static class UiKit
         Image shadow = MakeImage("Shadow", holder, Shadow);
         shadow.rectTransform.anchorMin = Vector2.zero;
         shadow.rectTransform.anchorMax = Vector2.one;
-        shadow.rectTransform.offsetMin = new Vector2(-1f, -4f);
-        shadow.rectTransform.offsetMax = new Vector2(1f, 0f);
+        shadow.rectTransform.offsetMin = new Vector2(-2f, -5f);
+        shadow.rectTransform.offsetMax = new Vector2(2f, 1f);
 
         card = MakeImage("Card", holder, color);
         Stretch(card.rectTransform);
@@ -175,32 +262,60 @@ public static class UiKit
         return holder;
     }
 
-    public static Text MakeText(string name, Transform parent, int fontSize, Color color, TextAnchor anchor)
+    /// <summary>สร้างข้อความ TextMeshProUGUI รองรับภาษาไทยและ OpenType mark positioning</summary>
+    public static TextMeshProUGUI MakeText(string name, Transform parent, float fontSize, Color color, TextAlignmentOptions alignment = TextAlignmentOptions.Center)
     {
-        Text text = MakeRect(name, parent).gameObject.AddComponent<Text>();
-        text.font = Font;
+        GameObject go = MakeRect(name, parent).gameObject;
+        TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
+        text.font = TmpFont;
         text.fontSize = fontSize;
-        text.fontStyle = FontStyle.Normal; // Mitr SemiBold หนาในตัวอยู่แล้ว ถ้าสั่ง Bold ซ้ำ Unity จะปั้นตัวหนาปลอมจนตัวไทยตัวเล็กแตกเป็นก้อน
         text.color = color;
-        text.alignment = anchor;
-        text.horizontalOverflow = HorizontalWrapMode.Overflow;
-        text.verticalOverflow = VerticalWrapMode.Overflow;
+        text.alignment = alignment;
+        text.textWrappingMode = TextWrappingModes.NoWrap;
+        text.overflowMode = TextOverflowModes.Overflow;
         text.raycastTarget = false;
+        text.extraPadding = true;
+        text.textPreprocessor = ThaiTextPreprocessor.Instance;
+
         return text;
+    }
+
+    public static TextMeshProUGUI MakeText(string name, Transform parent, float fontSize, Color color, TextAnchor anchor)
+    {
+        return MakeText(name, parent, fontSize, color, ConvertAnchor(anchor));
+    }
+
+    public static TextAlignmentOptions ConvertAnchor(TextAnchor anchor)
+    {
+        switch (anchor)
+        {
+            case TextAnchor.UpperLeft: return TextAlignmentOptions.TopLeft;
+            case TextAnchor.UpperCenter: return TextAlignmentOptions.Top;
+            case TextAnchor.UpperRight: return TextAlignmentOptions.TopRight;
+            case TextAnchor.MiddleLeft: return TextAlignmentOptions.Left;
+            case TextAnchor.MiddleCenter: return TextAlignmentOptions.Center;
+            case TextAnchor.MiddleRight: return TextAlignmentOptions.Right;
+            case TextAnchor.LowerLeft: return TextAlignmentOptions.BottomLeft;
+            case TextAnchor.LowerCenter: return TextAlignmentOptions.Bottom;
+            case TextAnchor.LowerRight: return TextAlignmentOptions.BottomRight;
+            default: return TextAlignmentOptions.Center;
+        }
     }
 
     /// <summary>
     /// ปุ่มหน้าตาเดียวกับการ์ด — ชี้แล้วสว่างขึ้น กดแล้วเข้มลง กดไม่ได้แล้วจาง
-    /// คืน Button ส่วนข้อความอยู่ใน label ให้เปลี่ยนทีหลังได้
+    /// มีตัวเลือก primary สำหรับปุ่มเด่น (เช่น เริ่มเกม, ไปวันถัดไป, เล่นใหม่)
     /// </summary>
-    public static Button MakeButton(string name, Transform parent, int fontSize, out Text label)
+    public static Button MakeButton(string name, Transform parent, float fontSize, out TextMeshProUGUI label, bool primary = false)
     {
-        RectTransform holder = MakeCard(name, parent, Card, out Image card);
+        Color btnBg = primary ? PrimaryBtn : Card;
+        RectTransform holder = MakeCard(name, parent, btnBg, out Image card);
         card.raycastTarget = true;
 
-        label = MakeText("Label", holder, fontSize, Ink, TextAnchor.MiddleCenter);
-        label.horizontalOverflow = HorizontalWrapMode.Wrap;
-        Stretch(label.rectTransform, 14f);
+        Color labelColor = primary ? Color.white : Ink;
+        label = MakeText("Label", holder, fontSize, labelColor, TextAlignmentOptions.Center);
+        label.textWrappingMode = TextWrappingModes.Normal;
+        Stretch(label.rectTransform, 10f);
 
         Button button = holder.gameObject.AddComponent<Button>();
         button.targetGraphic = card;
@@ -208,8 +323,8 @@ public static class UiKit
         button.colors = new ColorBlock
         {
             normalColor = Color.white,
-            highlightedColor = new Color(1.03f, 1.02f, 1f),
-            pressedColor = new Color(0.90f, 0.88f, 0.84f),
+            highlightedColor = primary ? PrimaryBtnHover : ButtonHover,
+            pressedColor = primary ? PrimaryBtnPress : ButtonPress,
             selectedColor = Color.white,
             disabledColor = new Color(1f, 1f, 1f, 0.45f),
             colorMultiplier = 1f,
@@ -217,6 +332,77 @@ public static class UiKit
         };
 
         return button;
+    }
+
+    /// <summary>
+    /// การ์ดตัวเลือกแบบ 3 ส่วน (Header ชื่อ / Body รายละเอียด / Footer ราคาหรือเลขปุ่มลัด)
+    /// ช่วยจัดวางเนื้อหาไม่ให้ล้นการ์ดและให้ตำแหน่งหัวกับท้ายตรงกันทุกใบ
+    /// </summary>
+    public class ChoiceCard
+    {
+        public RectTransform holder;
+        public Button button;
+        public Image background;
+        public TextMeshProUGUI header;
+        public TextMeshProUGUI body;
+        public TextMeshProUGUI footer;
+    }
+
+    public static ChoiceCard MakeChoiceCard(string name, Transform parent, Vector2 size)
+    {
+        RectTransform holder = MakeCard(name, parent, Card, out Image card);
+        card.raycastTarget = true;
+        holder.sizeDelta = size;
+
+        Button button = holder.gameObject.AddComponent<Button>();
+        button.targetGraphic = card;
+        button.transition = Selectable.Transition.ColorTint;
+        button.colors = new ColorBlock
+        {
+            normalColor = Color.white,
+            highlightedColor = ButtonHover,
+            pressedColor = ButtonPress,
+            selectedColor = Color.white,
+            disabledColor = new Color(1f, 1f, 1f, 0.45f),
+            colorMultiplier = 1f,
+            fadeDuration = 0.08f
+        };
+
+        // Header: บนสุด
+        TextMeshProUGUI header = MakeText("Header", holder, 22f, Ink, TextAlignmentOptions.Top);
+        header.fontStyle = FontStyles.Bold;
+        header.rectTransform.anchorMin = new Vector2(0f, 1f);
+        header.rectTransform.anchorMax = new Vector2(1f, 1f);
+        header.rectTransform.pivot = new Vector2(0.5f, 1f);
+        header.rectTransform.offsetMin = new Vector2(12f, -42f);
+        header.rectTransform.offsetMax = new Vector2(-12f, -14f);
+
+        // Footer: ล่างสุด
+        TextMeshProUGUI footer = MakeText("Footer", holder, 19f, InkSoft, TextAlignmentOptions.Bottom);
+        footer.rectTransform.anchorMin = new Vector2(0f, 0f);
+        footer.rectTransform.anchorMax = new Vector2(1f, 0f);
+        footer.rectTransform.pivot = new Vector2(0.5f, 0f);
+        footer.rectTransform.offsetMin = new Vector2(12f, 12f);
+        footer.rectTransform.offsetMax = new Vector2(-12f, 44f);
+
+        // Body: ตรงกลาง
+        TextMeshProUGUI body = MakeText("Body", holder, 18f, Ink, TextAlignmentOptions.Center);
+        body.textWrappingMode = TextWrappingModes.Normal;
+        body.lineSpacing = 1.3f;
+        body.rectTransform.anchorMin = Vector2.zero;
+        body.rectTransform.anchorMax = Vector2.one;
+        body.rectTransform.offsetMin = new Vector2(14f, 46f);
+        body.rectTransform.offsetMax = new Vector2(-14f, -44f);
+
+        return new ChoiceCard
+        {
+            holder = holder,
+            button = button,
+            background = card,
+            header = header,
+            body = body,
+            footer = footer
+        };
     }
 
     public static void Stretch(RectTransform rect, float padding = 0f)

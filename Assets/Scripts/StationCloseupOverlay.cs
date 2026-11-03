@@ -21,7 +21,7 @@ public class StationCloseupOverlay : MonoBehaviour
     [SerializeField] private int textureSize = 256;
 
     [Tooltip("ระยะจากขอบบนจอ เว้นที่ให้แถบสถานะของ HUD")]
-    [SerializeField] private float topMargin = 44f;
+    [SerializeField] private float topMargin = 104f;
 
     /// <summary>กล้องซูมมองสัตว์จากทิศไหน — ทั้งสองแบบเป็นมุมคงที่ ไม่หมุนตามตัวสัตว์</summary>
     public enum ViewAngleMode
@@ -289,8 +289,12 @@ public class StationCloseupOverlay : MonoBehaviour
     {
         if (titleStyle != null) return;
 
+        Font font = UiKit.Font;
+
         titleStyle = new GUIStyle(GUI.skin.label)
         {
+            font = font,
+            fontSize = 13,
             alignment = TextAnchor.MiddleCenter,
             fontStyle = FontStyle.Bold,
             clipping = TextClipping.Clip
@@ -299,6 +303,7 @@ public class StationCloseupOverlay : MonoBehaviour
 
         captionStyle = new GUIStyle(GUI.skin.label)
         {
+            font = font,
             alignment = TextAnchor.UpperCenter,
             fontSize = 12,
             clipping = TextClipping.Clip

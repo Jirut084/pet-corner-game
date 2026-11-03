@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -28,8 +29,8 @@ public class MainMenu : MonoBehaviour
     [SerializeField] private KeyCode startKey = KeyCode.Return;
     [SerializeField] private KeyCode backKey = KeyCode.Escape;
 
-    [SerializeField] private int cardWidth = 260;
-    [SerializeField] private int cardHeight = 190;
+    [SerializeField] private int cardWidth = 270;
+    [SerializeField] private int cardHeight = 240;
     [SerializeField] private Vector2 referenceResolution = new Vector2(1600f, 900f);
 
     private Canvas canvas;
@@ -96,75 +97,84 @@ public class MainMenu : MonoBehaviour
 
     private void BuildTitleScreen()
     {
-        RectTransform panel = MakePanel("Title Screen", 640f, 430f, out titleRoot);
+        RectTransform panel = MakePanel("Title Screen", 660f, 440f, out titleRoot);
 
-        MakeTitle(panel, 26f, 104f, 58);
+        MakeTitle(panel, 26f, 104f, 54);
 
-        Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
+        TextMeshProUGUI subtitle = UiKit.MakeText("Subtitle", panel, 21f, UiKit.InkSoft, TextAlignmentOptions.Top);
         subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
         GameFlowDebugControls.Fill(subtitle.rectTransform, 136f, 28f);
 
-        Text tagline = UiKit.MakeText("Tagline", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
+        TextMeshProUGUI tagline = UiKit.MakeText("Tagline", panel, 19f, UiKit.InkSoft, TextAlignmentOptions.Top);
         tagline.text = "What home means to you — เปิดบ้านรับฝากสัตว์ให้รอดครบทุกวัน";
         GameFlowDebugControls.Fill(tagline.rectTransform, 168f, 26f);
 
-        Button start = UiKit.MakeButton("Start", panel, 22, out Text startLabel);
+        Button start = UiKit.MakeButton("Start", panel, 22f, out TextMeshProUGUI startLabel, primary: true);
         startLabel.text = $"เริ่มเกม  ({startKey})";
-        UiKit.Place(start.GetComponent<RectTransform>(), new Vector2((640f - 300f) * 0.5f, -232f), new Vector2(300f, 60f));
+        UiKit.Place(start.GetComponent<RectTransform>(), new Vector2((660f - 320f) * 0.5f, -232f), new Vector2(320f, 60f));
         start.onClick.AddListener(() => ShowStarterSelect(true));
 
-        Button quit = UiKit.MakeButton("Quit", panel, 19, out Text quitLabel);
+        Button quit = UiKit.MakeButton("Quit", panel, 19f, out TextMeshProUGUI quitLabel);
         quitLabel.text = $"ออกจากเกม  ({backKey})";
-        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((640f - 300f) * 0.5f, -304f), new Vector2(300f, 52f));
+        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((660f - 320f) * 0.5f, -304f), new Vector2(320f, 52f));
         quit.onClick.AddListener(GameFlowDebugControls.QuitGame);
 
-        Text hint = UiKit.MakeText("Hint", panel, 18, UiKit.InkSoft, TextAnchor.UpperCenter);
+        TextMeshProUGUI hint = UiKit.MakeText("Hint", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
         hint.text = "WASD เดิน   ·   E ทำทุกอย่าง   ·   Enter เปิดร้าน   ·   Esc เมนู";
-        GameFlowDebugControls.Fill(hint.rectTransform, 380f, 26f);
+        GameFlowDebugControls.Fill(hint.rectTransform, 386f, 26f);
     }
 
     private void BuildStarterSelect()
     {
         int count = selectableStarters != null ? selectableStarters.Length : 0;
-        float cardsWidth = count > 0 ? count * cardWidth + (count - 1) * 16f : 520f;
+        float spacing = 18f;
+        float cardsWidth = count > 0 ? count * cardWidth + (count - 1) * spacing : 540f;
 
-        RectTransform panel = MakePanel("Starter Select", Mathf.Max(760f, cardsWidth + 120f), cardHeight + 330f, out starterRoot);
+        float panelWidth = Mathf.Max(840f, cardsWidth + 100f);
+        float panelHeight = cardHeight + 300f;
 
-        MakeTitle(panel, 30f, 64f, 46);
+        RectTransform panel = MakePanel("Starter Select", panelWidth, panelHeight, out starterRoot);
 
-        Text subtitle = UiKit.MakeText("Subtitle", panel, 21, UiKit.InkSoft, TextAnchor.UpperCenter);
+        MakeTitle(panel, 26f, 64f, 44);
+
+        TextMeshProUGUI subtitle = UiKit.MakeText("Subtitle", panel, 20f, UiKit.InkSoft, TextAlignmentOptions.Top);
         subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
-        GameFlowDebugControls.Fill(subtitle.rectTransform, 98f, 26f);
+        GameFlowDebugControls.Fill(subtitle.rectTransform, 96f, 26f);
 
-        Text brief = UiKit.MakeText("Brief", panel, 19, UiKit.InkSoft, TextAnchor.UpperCenter);
+        TextMeshProUGUI brief = UiKit.MakeText("Brief", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
         brief.text = "เลือกสัตว์ที่จะเปิดรับ — สถานีเริ่มต้นมาจากสิ่งที่สัตว์ตัวนั้นต้องการ";
-        GameFlowDebugControls.Fill(brief.rectTransform, 128f, 26f);
+        GameFlowDebugControls.Fill(brief.rectTransform, 124f, 26f);
 
-        float cardsLeft = (panel.sizeDelta.x - cardsWidth) * 0.5f;
+        float cardsLeft = (panelWidth - cardsWidth) * 0.5f;
 
         for (int i = 0; i < count; i++)
         {
             PetSpecies species = selectableStarters[i];
             if (species == null) continue;
 
-            Button button = UiKit.MakeButton($"Starter {i}", panel, 20, out Text label);
-            UiKit.Place(button.GetComponent<RectTransform>(),
-                new Vector2(cardsLeft + i * (cardWidth + 16f), -174f), new Vector2(cardWidth, cardHeight));
-            button.onClick.AddListener(() => StartGame(species));
+            UiKit.ChoiceCard card = UiKit.MakeChoiceCard($"Starter {i}", panel, new Vector2(cardWidth, cardHeight));
+            UiKit.Place(card.holder,
+                new Vector2(cardsLeft + i * (cardWidth + spacing), -160f), new Vector2(cardWidth, cardHeight));
+            card.button.onClick.AddListener(() => StartGame(species));
+
+            card.header.text = species.speciesName;
+            card.header.fontSize = 24f;
 
             string needs = string.Join(" · ", System.Array.ConvertAll(species.requiredSteps, CareStepStyle.LabelOf));
-            label.text = $"{species.speciesName}\n\n{needs}\n\nอดทน {species.patienceSeconds:F0} วิ\n" +
-                         $"ค่าบริการ {species.baseFee} + {species.feePerStep}/ขั้น\n\n({i + 1})";
+            card.body.text = $"{needs}\n\nอดทน {species.patienceSeconds:F0} วิ\nค่าบริการ {species.baseFee} + {species.feePerStep}/ขั้น";
+
+            card.footer.text = $"({i + 1})";
+            card.footer.fontSize = 19f;
         }
 
-        Text hint = UiKit.MakeText("Hint", panel, 18, UiKit.InkSoft, TextAnchor.UpperCenter);
+        TextMeshProUGUI hint = UiKit.MakeText("Hint", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
         hint.text = "WASD เดิน   ·   E ทำทุกอย่าง (ยก / วาง / ดูแล)   ·   Enter เปิดร้าน";
-        GameFlowDebugControls.Fill(hint.rectTransform, 174f + cardHeight + 26f, 24f);
+        GameFlowDebugControls.Fill(hint.rectTransform, 160f + cardHeight + 20f, 24f);
 
-        Button back = UiKit.MakeButton("Back", panel, 19, out Text backLabel);
+        Button back = UiKit.MakeButton("Back", panel, 19f, out TextMeshProUGUI backLabel);
         backLabel.text = "ย้อนกลับ";
         UiKit.Place(back.GetComponent<RectTransform>(),
-            new Vector2((panel.sizeDelta.x - 220f) * 0.5f, -(174f + cardHeight + 62f)), new Vector2(220f, 46f));
+            new Vector2((panelWidth - 220f) * 0.5f, -(160f + cardHeight + 54f)), new Vector2(220f, 48f));
         back.onClick.AddListener(() => ShowStarterSelect(false));
     }
 
@@ -179,15 +189,14 @@ public class MainMenu : MonoBehaviour
             return;
         }
 
-        Text title = UiKit.MakeText("Title", panel, fallbackFontSize, UiKit.Ink, TextAnchor.MiddleCenter);
-        title.fontStyle = FontStyle.Bold;
+        TextMeshProUGUI title = UiKit.MakeText("Title", panel, fallbackFontSize, UiKit.Ink, TextAlignmentOptions.Center);
         title.text = gameTitle;
         GameFlowDebugControls.Fill(title.rectTransform, top, height);
     }
 
     private RectTransform MakePanel(string name, float width, float height, out GameObject root)
     {
-        RectTransform panel = UiKit.MakeCard(name, canvas.transform, UiKit.Card);
+        RectTransform panel = UiKit.MakeCard(name, canvas.transform, UiKit.Panel);
         UiKit.Center(panel, new Vector2(width, height));
         root = panel.gameObject;
         return panel;
