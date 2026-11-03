@@ -9,6 +9,7 @@ using UnityEngine;
 ///   - ไม่ spawn เกินโควตาออเดอร์ของวัน (นับรวมคนที่กำลังเดินมาและออเดอร์ที่ค้างอยู่)
 ///   - แถวหน้าเคาน์เตอร์ยืนได้ maxCounterQueue คน เต็มแล้วไปต่อคิวนอกร้าน (เกจแยกกัน)
 ///     จำนวนที่ดูแลพร้อมกัน (GameManager.ConcurrentOrderLimit) จำกัดแค่การกดรับออเดอร์ ไม่ได้จำกัดคนเข้าแถว
+///   - คนในร้านรวมทุกสถานะ (ต่อแถว/นั่งรอ/รอรับคืน) เกิน maxCustomersInShop คนถัดไปต้องรอนอกร้าน
 ///   - ระยะห่างระหว่างคนสั้นลงเรื่อยๆ ตามวัน
 ///
 /// จุดยืนหน้าเคาน์เตอร์อ่านจาก IntakePoint.CustomerStandPosition — ย้ายเคาน์เตอร์แล้วลูกค้าเดินตามไปเอง
@@ -56,6 +57,11 @@ public class CustomerManager : MonoBehaviour
              "(ยืนต่อแถวได้แม้ดูแลครบจำนวนพร้อมกันแล้ว แค่ยังกดรับออเดอร์ไม่ได้จนกว่าจะส่งคืนสักตัว)")]
     [Min(1)]
     [SerializeField] private int maxCounterQueue = 3;
+
+    [Tooltip("คนในร้านพร้อมกันได้สูงสุดกี่คน นับรวมคนต่อแถว นั่งรอ และรอรับสัตว์คืน " +
+             "เต็มแล้วคนถัดไปต้องรอนอกร้าน (0 = ไม่จำกัด ใช้แค่ Max Counter Queue)")]
+    [Min(0)]
+    [SerializeField] private int maxCustomersInShop = 0;
 
     [Tooltip("ทิศที่แถวทอดยาวออกไป ปล่อยเป็น (0,0,0) จะคิดจากแนวเคาน์เตอร์→จุดยืนลูกค้าให้เอง")]
     [SerializeField] private Vector3 queueDirection = Vector3.zero;
@@ -210,10 +216,25 @@ public class CustomerManager : MonoBehaviour
         spawnTimer = SpawnGapForDay(game.Day) * (game.CurrentEvent != null ? game.CurrentEvent.spawnGapMultiplier : 1f);
     }
 
-    /// <summary>แถวหน้าเคาน์เตอร์ยังมีที่ให้ต่ออีกคนไหม — เต็มแล้วคนใหม่ต้องรอนอกร้าน</summary>
+    /// <summary>แถวหน้าเคาน์เตอร์ยังมีที่ และคนในร้านยังไม่เต็ม — เต็มแล้วคนใหม่ต้องรอนอกร้าน</summary>
     private bool HasRoomInside(GameManager game)
     {
-        return CountIncoming() < maxCounterQueue;
+        if (CountIncoming() >= maxCounterQueue) return false;
+        return maxCustomersInShop <= 0 || CountInShop() < maxCustomersInShop;
+    }
+
+    /// <summary>คนที่อยู่ในร้านตอนนี้ — ไม่นับคนรอนอกร้านและคนที่กำลังเดินออก</summary>
+    private int CountInShop()
+    {
+        int count = 0;
+
+        foreach (Customer c in customers)
+        {
+            if (c == null || c.IsOutside || c.State == Customer.CustomerState.Leaving) continue;
+            count++;
+        }
+
+        return count;
     }
 
     /// <summary>ร้านว่างเมื่อไหร่ ให้หัวคิวนอกร้านเดินเข้ามาต่อแถวหน้าเคาน์เตอร์ (ทีละคนต่อเฟรม)</summary>
@@ -265,8 +286,49 @@ public class CustomerManager : MonoBehaviour
 
         for (int i = 0; i < pickupLine.Count; i++)
         {
-            pickupLine[i].SetPickupSlot(stand + away * (i * queueSpacing), returnZone.transform.position);
+            pickupLine[i].SetPickupSlot(LineSlot(stand, away, i), returnZone.transform.position);
         }
+    }
+
+    /// <summary>
+    /// ช่องที่ n ของแถวที่เริ่มจาก stand ทอดไปทาง direction — ถ้าช่องถัดไปชนผนังหรือของในร้าน
+    /// แถวจะหักเลี้ยวไปข้างที่ว่างแทน ลูกค้าจะได้ไม่ยืนทะลุผนัง (เคาน์เตอร์ย้ายได้ช่วงจัดร้าน ตั้งทิศตายตัวไม่พอ)
+    /// </summary>
+    private Vector3 LineSlot(Vector3 stand, Vector3 direction, int index)
+    {
+        Vector3 slot = stand;
+        for (int i = 0; i < index; i++)
+        {
+            if (LineBlocked(slot, direction))
+            {
+                Vector3 side = Vector3.Cross(Vector3.up, direction);
+                if (!LineBlocked(slot, side)) direction = side;
+                else if (!LineBlocked(slot, -side)) direction = -side;
+                // ponytail: ตันทุกทางก็ยืนตามทิศเดิม ถ้าผังแคบจนเกิดจริงค่อยเพิ่มการหาทางแบบเต็ม
+            }
+
+            slot += direction * queueSpacing;
+        }
+
+        return slot;
+    }
+
+    /// <summary>ก้าวจาก from ไปทาง direction หนึ่งช่องแล้วชนอะไรไหม (ไม่นับคน สัตว์ และ trigger)</summary>
+    private bool LineBlocked(Vector3 from, Vector3 direction)
+    {
+        const float radius = 0.3f;
+        RaycastHit[] hits = Physics.SphereCastAll(from + Vector3.up * 0.8f, radius, direction, queueSpacing,
+            ~0, QueryTriggerInteraction.Ignore);
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider.GetComponentInParent<Customer>() != null) continue;
+            if (hit.collider.GetComponentInParent<Pet>() != null) continue;
+            if (hit.collider.GetComponentInParent<PlayerController>() != null) continue;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>ตำแหน่งช่องที่ n ในคิวนอกร้าน (0 = ติดประตู)</summary>
@@ -449,7 +511,7 @@ public class CustomerManager : MonoBehaviour
 
         for (int i = 0; i < counterQueue.Count; i++)
         {
-            counterQueue[i].SetQueueSlot(i, stand + direction * (i * queueSpacing));
+            counterQueue[i].SetQueueSlot(i, LineSlot(stand, direction, i));
         }
     }
 
@@ -480,7 +542,7 @@ public class CustomerManager : MonoBehaviour
     private Vector3 QueueSlotPosition(int index)
     {
         TryGetCounterPosition(out Vector3 stand);
-        return stand + QueueDirection() * (index * queueSpacing);
+        return LineSlot(stand, QueueDirection(), index);
     }
 
     private void SpawnCustomer(bool inside)
@@ -637,15 +699,13 @@ public class CustomerManager : MonoBehaviour
         Vector3 direction = QueueDirection();
         Gizmos.color = new Color(1f, 0.6f, 0.15f);
 
+        Vector3 previous = stand;
         for (int i = 0; i < maxCounterQueue; i++)
         {
-            Vector3 slot = stand + direction * (i * queueSpacing);
+            Vector3 slot = LineSlot(stand, direction, i);
             Gizmos.DrawWireSphere(slot, 0.3f);
-
-            if (i > 0)
-            {
-                Gizmos.DrawLine(slot - direction * queueSpacing, slot);
-            }
+            Gizmos.DrawLine(previous, slot);
+            previous = slot;
         }
     }
 
