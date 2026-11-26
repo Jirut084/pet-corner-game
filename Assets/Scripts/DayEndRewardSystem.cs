@@ -159,6 +159,7 @@ public class DayEndRewardSystem : MonoBehaviour
         {
             if (GameInput.DigitPressed(i + 1))
             {
+                UiKit.PlayClickSound();
                 Choose(i);
                 return;
             }

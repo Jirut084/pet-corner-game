@@ -5,12 +5,13 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// ฉากเมนูหลัก (MainMenu.unity) — หน้าแรก + หน้าเลือกสัตว์เริ่มต้น สร้าง Canvas ด้วยโค้ดเหมือนหน้าจออื่น
+/// ฉากเมนูหลัก (MainMenu.unity) — หน้าแรก + หน้าตั้งค่าเสียง + หน้าเลือกสัตว์เริ่มต้น สร้าง Canvas ด้วยโค้ดเหมือนหน้าจออื่น
 ///
 /// เลือกสัตว์แล้วจำไว้ใน ChosenStarter (static ข้ามฉากได้) แล้วโหลดฉากร้าน
 /// GameManager ในฉากร้านอ่านค่านี้ตอน Start แล้วเริ่ม run ให้เอง
 ///
-///   หน้าแรก      — Enter / ปุ่มเริ่มเกม ไปหน้าเลือกสัตว์ · Esc ออกเกม
+///   หน้าแรก      — Enter / ปุ่มเริ่มเกม ไปหน้าเลือกสัตว์ · ปุ่มตั้งค่าเสียง · Esc ออกเกม
+///   หน้าตั้งค่าเสียง — แถบเลื่อนปรับเสียง BGM และ SFX พร้อมบันทึกค่าลง PlayerPrefs
 ///   หน้าเลือกสัตว์ — คลิกการ์ด หรือกด 1..9 · Esc ย้อนกลับ
 /// </summary>
 public class MainMenu : MonoBehaviour
@@ -36,11 +37,18 @@ public class MainMenu : MonoBehaviour
     private Canvas canvas;
     private GameObject titleRoot;
     private GameObject starterRoot;
+    private GameObject settingsRoot;
+
+    private UiKit.VolumeSliderRow settingsMusicSlider;
+    private UiKit.VolumeSliderRow settingsSfxSlider;
 
     private void Awake()
     {
         // กลับมาหน้าเมนูจากเกมที่หยุดไว้ timeScale อาจค้างเป็น 0
         Time.timeScale = 1f;
+
+        // ตรวจสอบ AudioListener สำหรับฉากเมนู
+        UiKit.EnsureAudioListener();
 
         canvas = UiKit.MakeCanvas("Menu Canvas", transform, 50, true, referenceResolution);
 
@@ -48,21 +56,38 @@ public class MainMenu : MonoBehaviour
         UiKit.Stretch(dim.rectTransform);
 
         BuildTitleScreen();
+        BuildSettingsScreen();
         BuildStarterSelect();
+
         ShowStarterSelect(false);
+        ShowSettings(false);
     }
 
     private void Update()
     {
         bool selecting = starterRoot.activeSelf;
+        bool inSettings = settingsRoot != null && settingsRoot.activeSelf;
 
         if (GameInput.Pressed(backKey))
         {
+            if (inSettings)
+            {
+                ShowSettings(false);
+                return;
+            }
+
             // หน้าเลือกสัตว์ = ถอยกลับหน้าแรกก่อน ต้องกดซ้ำถึงจะออกเกมจริง
-            if (selecting) ShowStarterSelect(false);
-            else GameFlowDebugControls.QuitGame();
+            if (selecting)
+            {
+                ShowStarterSelect(false);
+                return;
+            }
+
+            GameFlowDebugControls.QuitGame();
             return;
         }
+
+        if (inSettings) return;
 
         if (!selecting)
         {
@@ -74,6 +99,7 @@ public class MainMenu : MonoBehaviour
         {
             if (GameInput.DigitPressed(i + 1))
             {
+                UiKit.PlayClickSound();
                 StartGame(selectableStarters[i]);
                 return;
             }
@@ -84,6 +110,35 @@ public class MainMenu : MonoBehaviour
     {
         titleRoot.SetActive(!show);
         starterRoot.SetActive(show);
+        if (settingsRoot != null) settingsRoot.SetActive(false);
+    }
+
+    private void ShowSettings(bool show)
+    {
+        titleRoot.SetActive(!show);
+        if (settingsRoot != null)
+        {
+            settingsRoot.SetActive(show);
+            if (show) SyncSettingsSliders();
+        }
+        starterRoot.SetActive(false);
+    }
+
+    private void SyncSettingsSliders()
+    {
+        if (settingsMusicSlider != null)
+        {
+            float m = AudioManager.GetMusicVolumeGlobal();
+            settingsMusicSlider.slider.SetValueWithoutNotify(m);
+            settingsMusicSlider.valueText.text = $"{Mathf.RoundToInt(m * 100f)}%";
+        }
+
+        if (settingsSfxSlider != null)
+        {
+            float s = AudioManager.GetSfxVolumeGlobal();
+            settingsSfxSlider.slider.SetValueWithoutNotify(s);
+            settingsSfxSlider.valueText.text = $"{Mathf.RoundToInt(s * 100f)}%";
+        }
     }
 
     private void StartGame(PetSpecies starter)
@@ -97,7 +152,9 @@ public class MainMenu : MonoBehaviour
 
     private void BuildTitleScreen()
     {
-        RectTransform panel = MakePanel("Title Screen", 660f, 440f, out titleRoot);
+        float panelWidth = 660f;
+        float panelHeight = 470f;
+        RectTransform panel = MakePanel("Title Screen", panelWidth, panelHeight, out titleRoot);
 
         MakeTitle(panel, 26f, 104f, 54);
 
@@ -109,19 +166,55 @@ public class MainMenu : MonoBehaviour
         tagline.text = "What home means to you — เปิดบ้านรับฝากสัตว์ให้รอดครบทุกวัน";
         GameFlowDebugControls.Fill(tagline.rectTransform, 168f, 26f);
 
-        Button start = UiKit.MakeButton("Start", panel, 22f, out TextMeshProUGUI startLabel, primary: true);
-        startLabel.text = $"เริ่มเกม  ({startKey})";
-        UiKit.Place(start.GetComponent<RectTransform>(), new Vector2((660f - 320f) * 0.5f, -232f), new Vector2(320f, 60f));
+        // ปุ่มเริ่มเกม
+        Button start = UiKit.MakeButton("Start", panel, 21f, out TextMeshProUGUI startLabel, primary: true);
+        startLabel.text = $"เริ่มเกม  ({UiKit.KeyLabel(startKey)})";
+        UiKit.Place(start.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -214f), new Vector2(320f, 52f));
         start.onClick.AddListener(() => ShowStarterSelect(true));
 
+        // ปุ่มตั้งค่าเสียง
+        Button settingsBtn = UiKit.MakeButton("Settings", panel, 19f, out TextMeshProUGUI settingsLabel);
+        settingsLabel.text = "ตั้งค่าเสียง";
+        UiKit.Place(settingsBtn.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -274f), new Vector2(320f, 48f));
+        settingsBtn.onClick.AddListener(() => ShowSettings(true));
+
+        // ปุ่มออกจากเกม
         Button quit = UiKit.MakeButton("Quit", panel, 19f, out TextMeshProUGUI quitLabel);
-        quitLabel.text = $"ออกจากเกม  ({backKey})";
-        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((660f - 320f) * 0.5f, -304f), new Vector2(320f, 52f));
+        quitLabel.text = $"ออกจากเกม  ({UiKit.KeyLabel(backKey)})";
+        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -328f), new Vector2(320f, 48f));
         quit.onClick.AddListener(GameFlowDebugControls.QuitGame);
 
         TextMeshProUGUI hint = UiKit.MakeText("Hint", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
         hint.text = "WASD เดิน   ·   E ทำทุกอย่าง   ·   Enter เปิดร้าน   ·   Esc เมนู";
-        GameFlowDebugControls.Fill(hint.rectTransform, 386f, 26f);
+        GameFlowDebugControls.Fill(hint.rectTransform, 396f, 26f);
+    }
+
+    private void BuildSettingsScreen()
+    {
+        float panelWidth = 460f;
+        float panelHeight = 290f;
+        RectTransform panel = MakePanel("Settings Screen", panelWidth, panelHeight, out settingsRoot);
+
+        TextMeshProUGUI title = UiKit.MakeText("Title", panel, 28f, UiKit.Ink, TextAlignmentOptions.Top);
+        title.fontStyle = FontStyles.Bold;
+        title.text = "ตั้งค่าระดับเสียง";
+        GameFlowDebugControls.Fill(title.rectTransform, 26f, 36f);
+
+        float sliderWidth = 390f;
+        float sliderLeft = (panelWidth - sliderWidth) * 0.5f;
+
+        settingsMusicSlider = UiKit.MakeSliderRow("MusicSlider", panel, "เสียงเพลง",
+            AudioManager.GetMusicVolumeGlobal(), (v) => AudioManager.SetMusicVolumeGlobal(v), sliderWidth);
+        UiKit.Place(settingsMusicSlider.holder, new Vector2(sliderLeft, -84f), new Vector2(sliderWidth, 36f));
+
+        settingsSfxSlider = UiKit.MakeSliderRow("SfxSlider", panel, "เสียงเอฟเฟกต์",
+            AudioManager.GetSfxVolumeGlobal(), (v) => AudioManager.SetSfxVolumeGlobal(v), sliderWidth);
+        UiKit.Place(settingsSfxSlider.holder, new Vector2(sliderLeft, -132f), new Vector2(sliderWidth, 36f));
+
+        Button back = UiKit.MakeButton("Back", panel, 19f, out TextMeshProUGUI backLabel, primary: true);
+        backLabel.text = $"ย้อนกลับ  ({UiKit.KeyLabel(backKey)})";
+        UiKit.Place(back.GetComponent<RectTransform>(), new Vector2((panelWidth - 220f) * 0.5f, -198f), new Vector2(220f, 48f));
+        back.onClick.AddListener(() => ShowSettings(false));
     }
 
     private void BuildStarterSelect()

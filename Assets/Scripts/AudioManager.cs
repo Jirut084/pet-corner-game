@@ -6,10 +6,14 @@ using UnityEngine.Audio;
 ///
 /// Audio Mixer (ไม่บังคับ): ใส่กลุ่ม BGM / SFX แล้วทุกเสียงจะวิ่งผ่านกลุ่มนั้น ปรับสมดุลได้ในหน้าต่าง Audio Mixer ตอนกด Play
 /// รวมถึงเสียงวนของสถานี (CareStation อ่าน SfxGroup ไปใช้) — ไม่ใส่ก็เล่นได้เหมือนเดิม
+/// มีระบบบันทึกค่าลง PlayerPrefs อัตโนมัติ ปรับระดับเสียงจากหน้าจอเมนูใดก็ได้
 /// </summary>
 public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance { get; private set; }
+
+    public const string PrefKeyMusic = "PetCorner_MusicVolume";
+    public const string PrefKeySfx = "PetCorner_SfxVolume";
 
     [Header("Audio Sources")]
     [SerializeField] private AudioSource sfxSource;
@@ -36,6 +40,9 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioClip bgMusic;
     [Range(0f, 1f)] [SerializeField] private float musicVolume = 0.5f;
 
+    [Header("SFX Settings")]
+    [Range(0f, 1f)] [SerializeField] private float sfxVolume = 0.8f;
+
     [Header("Footstep Settings")]
     [SerializeField] private AudioClip walkSfx;
 
@@ -54,11 +61,52 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioClip playToySfx; // เพิ่มเสียงเล่นของเล่น
     [SerializeField] private AudioClip showerSfx;  // เพิ่มเสียงอาบน้ำ
 
+    [Header("UI SFX")]
+    [SerializeField] private AudioClip uiClickSfx;
+
     // ส่งต่อคลิปเสียงให้ CareStation ไปเปิดเล่นลูป
     public AudioClip EatClip => eatSfx;
     public AudioClip CuttingHairClip => cuttingHairSfx;
     public AudioClip SleepClip => sleepSfx;
     public AudioClip PlayToyClip => playToySfx;
+    public AudioClip UiClickClip => uiClickSfx;
+
+    /// <summary>ระดับเสียงดนตรีปัจจุบัน (0–1)</summary>
+    public float MusicVolume => musicVolume;
+
+    /// <summary>ระดับเสียงเอฟเฟกต์ปัจจุบัน (0–1)</summary>
+    public float SfxVolume => sfxVolume;
+
+    /// <summary>แจ้งเตือนเมื่อระดับ SFX มีการเปลี่ยนแปลง (สำหรับระบบที่ไม่ได้ใช้ mixer ปรับตาม)</summary>
+    public event System.Action<float> OnSfxVolumeChanged;
+
+    // ---------- ตัวช่วยเรียกใช้งานจากหน้าจอเมนู (แม้ไม่มี Instance ในฉาก) ----------
+
+    public static float GetMusicVolumeGlobal()
+    {
+        if (Instance != null) return Instance.musicVolume;
+        return PlayerPrefs.GetFloat(PrefKeyMusic, 0.5f);
+    }
+
+    public static float GetSfxVolumeGlobal()
+    {
+        if (Instance != null) return Instance.sfxVolume;
+        return PlayerPrefs.GetFloat(PrefKeySfx, 0.8f);
+    }
+
+    public static void SetMusicVolumeGlobal(float volume)
+    {
+        volume = Mathf.Clamp01(volume);
+        PlayerPrefs.SetFloat(PrefKeyMusic, volume);
+        if (Instance != null) Instance.SetMusicVolume(volume);
+    }
+
+    public static void SetSfxVolumeGlobal(float volume)
+    {
+        volume = Mathf.Clamp01(volume);
+        PlayerPrefs.SetFloat(PrefKeySfx, volume);
+        if (Instance != null) Instance.SetSfxVolume(volume);
+    }
 
     private void Awake()
     {
@@ -69,11 +117,16 @@ public class AudioManager : MonoBehaviour
         }
         Instance = this;
 
+        // โหลดค่าระดับเสียงที่เซฟไว้ใน PlayerPrefs
+        if (PlayerPrefs.HasKey(PrefKeyMusic)) musicVolume = PlayerPrefs.GetFloat(PrefKeyMusic, musicVolume);
+        if (PlayerPrefs.HasKey(PrefKeySfx)) sfxVolume = PlayerPrefs.GetFloat(PrefKeySfx, sfxVolume);
+
         if (sfxSource == null)
         {
             sfxSource = gameObject.AddComponent<AudioSource>();
             sfxSource.playOnAwake = false;
         }
+        sfxSource.spatialBlend = 0f;
 
         if (footstepSource == null)
         {
@@ -103,8 +156,9 @@ public class AudioManager : MonoBehaviour
 
     private void Start()
     {
-        // ตั้งค่า mixer ใน Awake ไม่ติด (ข้อจำกัดของ Unity) จึงตั้งระดับเพลงตอน Start
-        if (mixer != null) SetMusicVolume(musicVolume);
+        // ตั้งค่า mixer และความดังของ AudioSource ตอน Start (ตั้งใน Awake ค่า mixer อาจยังไม่ติด)
+        SetMusicVolume(musicVolume);
+        SetSfxVolume(sfxVolume);
 
         if (GameManager.Instance != null)
         {
@@ -132,6 +186,7 @@ public class AudioManager : MonoBehaviour
     public void SetMusicVolume(float volume)
     {
         musicVolume = Mathf.Clamp01(volume);
+        PlayerPrefs.SetFloat(PrefKeyMusic, musicVolume);
 
         // มี mixer = ปรับที่กลุ่ม แล้วเปิด bgmSource เต็ม ไม่งั้นเสียงโดนลดซ้ำสองชั้น
         bool viaMixer = mixer != null && mixer.SetFloat(musicVolumeParameter, ToDecibels(musicVolume));
@@ -144,13 +199,26 @@ public class AudioManager : MonoBehaviour
 
     public void SetSfxVolume(float volume)
     {
-        volume = Mathf.Clamp01(volume);
-        if (mixer != null && mixer.SetFloat(sfxVolumeParameter, ToDecibels(volume))) return;
+        sfxVolume = Mathf.Clamp01(volume);
+        PlayerPrefs.SetFloat(PrefKeySfx, sfxVolume);
+
+        if (mixer != null && mixer.SetFloat(sfxVolumeParameter, ToDecibels(sfxVolume)))
+        {
+            OnSfxVolumeChanged?.Invoke(sfxVolume);
+            return;
+        }
 
         if (sfxSource != null)
         {
-            sfxSource.volume = volume;
+            sfxSource.volume = sfxVolume;
         }
+
+        if (footstepSource != null)
+        {
+            footstepSource.volume = sfxVolume;
+        }
+
+        OnSfxVolumeChanged?.Invoke(sfxVolume);
     }
 
     /// <summary>mixer ใช้หน่วย dB (0 = ดังเต็ม, −80 = เงียบ) แปลงจากค่า 0–1 แบบที่หูได้ยินลดลงเป็นเส้นตรง</summary>
@@ -172,6 +240,12 @@ public class AudioManager : MonoBehaviour
     public void PlayCuttingHair() => PlaySfx(cuttingHairSfx);
     public void PlaySleep() => PlaySfx(sleepSfx);
     public void PlayShower() => PlaySfx(showerSfx); // เรียกเล่นเสียงอาบน้ำ (ครั้งเดียว)
+
+    public void PlayClick()
+    {
+        if (uiClickSfx == null) uiClickSfx = Resources.Load<AudioClip>("UI/ui_click");
+        if (uiClickSfx != null) PlaySfx(uiClickSfx);
+    }
 
     public void SetWalking(bool isMoving)
     {

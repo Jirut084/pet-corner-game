@@ -571,6 +571,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         // ส่งเข้ากลุ่ม SFX ของ mixer — ตั้งตอนเล่น ไม่ใช่ Awake เพราะสถานีในฉากอาจตื่นก่อน AudioManager
         if (audio.SfxGroup != null) stationAudioSource.outputAudioMixerGroup = audio.SfxGroup;
+        else stationAudioSource.volume = audio.SfxVolume;
 
         // บัฟ "ใช้สถานีเร็วขึ้น" ย่นเวลาทำงาน เร่ง pitch ตามไปด้วยเสียงจะได้จบพร้อมงาน
         stationAudioSource.pitch = loopPitch * InteractSpeed;

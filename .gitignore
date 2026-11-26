@@ -108,3 +108,7 @@ InitTestScene*.unity*
 
 # Claude Code personal settings
 .claude/settings.local.json
+
+# Local builds and Claude reports, kept off GitHub
+/Build1/
+/Claude outputs/

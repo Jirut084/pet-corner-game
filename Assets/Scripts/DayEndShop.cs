@@ -214,6 +214,7 @@ public class DayEndShop : MonoBehaviour
         {
             if (GameInput.DigitPressed(i + 1))
             {
+                UiKit.PlayClickSound();
                 TryBuy(i);
                 return;
             }
@@ -221,6 +222,7 @@ public class DayEndShop : MonoBehaviour
 
         if (GameInput.Pressed(continueKey))
         {
+            UiKit.PlayClickSound();
             Close();
         }
     }
@@ -244,7 +246,7 @@ public class DayEndShop : MonoBehaviour
         IsOpen = true;
         openedFrame = Time.frameCount;
 
-        GameLog.Push($"ร้านค้าท้ายวันเปิดแล้ว — มีเงิน {Money} (กด 1–{offers.Count} ซื้อ, {continueKey} ไปวันถัดไป)", LogTone.Good);
+        GameLog.Push($"ร้านค้าท้ายวันเปิดแล้ว — มีเงิน {Money} (กด 1–{offers.Count} ซื้อ, {UiKit.KeyLabel(continueKey)} ไปวันถัดไป)", LogTone.Good);
         OnShopOpened?.Invoke();
         return true;
     }

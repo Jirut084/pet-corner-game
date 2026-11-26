@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paw Parlor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Karla:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --paper:#e9efe9;
+    --panel:#fbfdfa;
+    --ink:#1b2723;
+    --text:#1b2723;
+    --text-soft:#5d6f68;
+    --line:rgba(27,39,35,0.13);
+    --rose:#cf4f74;
+    --rose-deep:#a63a59;
+    --mint:#2f8f78;
+    --sun:#b3801f;
+    --chip:#d7e3dc;
+    --shadow:0 20px 44px -22px rgba(27,39,35,0.45);
+    --f-display:'Fredoka','Segoe UI',system-ui,sans-serif;
+    --f-body:'Karla','Segoe UI',system-ui,sans-serif;
+    --f-mono:'IBM Plex Mono','Courier New',monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0e1412;
+      --panel:#19221f;
+      --ink:#e3ebe7;
+      --text:#e3ebe7;
+      --text-soft:#9fb2aa;
+      --line:rgba(227,235,231,0.14);
+      --rose:#ff8ba6;
+      --rose-deep:#ffa3ba;
+      --mint:#5cc3a4;
+      --sun:#dcb055;
+      --chip:#26332e;
+      --shadow:0 20px 44px -22px rgba(0,0,0,0.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0e1412;
+    --panel:#19221f;
+    --ink:#e3ebe7;
+    --text:#e3ebe7;
+    --text-soft:#9fb2aa;
+    --line:rgba(227,235,231,0.14);
+    --rose:#ff8ba6;
+    --rose-deep:#ffa3ba;
+    --mint:#5cc3a4;
+    --sun:#dcb055;
+    --chip:#26332e;
+    --shadow:0 20px 44px -22px rgba(0,0,0,0.7);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--text);
+    font-family:var(--f-body);
+    min-height:100vh;
+  }
+  .page{max-width:1400px;margin:0 auto;padding:48px 24px 60px;}
+  header{max-width:720px;}
+  .eyebrow{
+    font-family:var(--f-mono);
+    text-transform:uppercase;
+    letter-spacing:.18em;
+    font-size:11.5px;
+    color:var(--rose-deep);
+    margin:0 0 12px;
+  }
+  h1.title{
+    font-family:var(--f-display);
+    font-weight:700;
+    font-size:clamp(2.3rem,5.4vw,4rem);
+    line-height:1;
+    letter-spacing:-0.015em;
+    text-wrap:balance;
+    margin:0 0 14px;
+  }
+  h1.title em{font-style:normal;color:var(--rose);}
+  header p.sub{
+    font-size:15.5px;line-height:1.6;color:var(--text-soft);
+    max-width:58ch;margin:0;
+  }
+  .stage{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap;margin-top:36px;}
+  .console{
+    position:relative;flex:1 1 700px;max-width:1060px;
+    background:linear-gradient(158deg,var(--chip),var(--panel));
+    border:1px solid var(--line);border-radius:20px;padding:14px;box-shadow:var(--shadow);
+  }
+  .console .bolt{position:absolute;width:9px;height:9px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6),transparent 60%),var(--text-soft);opacity:.5;}
+  .console .bolt.tl{top:9px;left:9px;} .console .bolt.tr{top:9px;right:9px;}
+  .console .bolt.bl{bottom:9px;left:9px;} .console .bolt.br{bottom:9px;right:9px;}
+  canvas{display:block;width:100%;height:auto;aspect-ratio:1040/680;border-radius:11px;background:#0d1210;cursor:pointer;}
+  canvas:focus-visible{outline:3px solid var(--rose);outline-offset:3px;}
+  .rail{flex:0 1 296px;min-width:262px;display:flex;flex-direction:column;gap:15px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px 17px;box-shadow:var(--shadow);}
+  .card h2{
+    font-family:var(--f-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--rose-deep);margin:0 0 11px;padding-bottom:8px;border-bottom:1px dashed var(--line);
+  }
+  dl.keys{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;margin:0;align-items:center;}
+  dl.keys dt{font-family:var(--f-mono);font-size:11.5px;background:var(--chip);color:var(--ink);
+    padding:3px 7px;border-radius:5px;white-space:nowrap;justify-self:start;}
+  dl.keys dd{margin:0;font-size:13px;color:var(--text-soft);line-height:1.4;}
+  ol.flow{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:7px;}
+  ol.flow li{font-size:13px;line-height:1.45;color:var(--text-soft);}
+  ol.flow li b{color:var(--text);font-weight:700;}
+  p.note{font-size:13px;line-height:1.55;color:var(--text-soft);margin:0;}
+  p.note + p.note{margin-top:9px;}
+  p.note b{color:var(--text);}
+  footer{margin:42px auto 0;max-width:620px;text-align:center;font-family:var(--f-mono);font-size:11.5px;color:var(--text-soft);}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <p class="eyebrow">Shop-management arcade &middot; runs in the browser</p>
+    <h1 class="title">Paw <em>Parlor</em></h1>
+    <p class="sub">Pick a starter pet, lay out your grooming floor however you like, then open the doors. Carry each pet through the stations its owner asked for and hand it back before their patience runs out.</p>
+  </header>
+
+  <main class="stage">
+    <div class="console">
+      <div class="bolt tl"></div><div class="bolt tr"></div><div class="bolt bl"></div><div class="bolt br"></div>
+      <canvas id="game" width="1040" height="680" tabindex="0" aria-label="Paw Parlor game canvas"></canvas>
+    </div>
+    <aside class="rail">
+      <div class="card">
+        <h2>Controls</h2>
+        <dl class="keys">
+          <dt>WASD / Arrows</dt><dd>Walk</dd>
+          <dt>Space / E</dt><dd>Pick up &middot; drop &middot; serve</dd>
+          <dt>Enter</dt><dd>Confirm &middot; open the shop</dd>
+          <dt>Esc / P</dt><dd>Pause</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>The Day</h2>
+        <ol class="flow">
+          <li><b>Set up.</b> Move stations anywhere on the floor.</li>
+          <li><b>Open.</b> Owners arrive and wait at the counter.</li>
+          <li><b>Take the order</b> to see what the pet needs.</li>
+          <li><b>Carry the pet</b> through every station listed.</li>
+          <li><b>Hand it back</b> at the return counter.</li>
+          <li><b>Pick a reward</b> once the day's quota is met.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h2>House Rules</h2>
+        <p class="note"><b>Stations run themselves.</b> Drop a pet off and go start another one &mdash; up to three owners can be waiting at once.</p>
+        <p class="note"><b>Put a pet down anywhere.</b> Holding tables and any free wall counter will hold one pet, so your hands are never stuck.</p>
+        <p class="note"><b>Tips are earned late.</b> Once a pet's list is fully checked off, any extra station it visits before you return it pays a bonus.</p>
+        <p class="note"><b>The floor locks at opening.</b> Rearranging only happens between days, and the game won't let you wall off a station.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer>a small tribute to shop-management games &middot; one file, no install, no server</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   CONFIG — every tunable number lives here
+   ============================================================ */
+var CONFIG = {
+  TIP_PER_EXTRA_STATION: 6,   // flat tip for each extra station visited after the list is done
+  BASE_LIVES: 3,
+  ORDERS_DAY1: 3,             // quota = ORDERS_DAY1 + (day-1), capped
+  ORDERS_MAX: 12,
+  CONCURRENT_DAY1: 1,         // owners that can be in the shop at once
+  CONCURRENT_EARLY: 2,        // days 2-3
+  CONCURRENT_LATE: 3,         // day 4+
+  SPAWN_GAP_BASE: 4.2,        // seconds between arrivals on day 1
+  SPAWN_GAP_MIN: 1.6,
+  SPAWN_GAP_STEP: 0.35,       // shaved off per day
+  PATIENCE_DAY_SCALE: 0.035,  // patience shrinks this fraction per day
+  PATIENCE_FLOOR: 0.55,
+  SPEED_BONUS: 0.35,          // payout multiplier at full remaining patience
+  WALK_SPEED: 168,
+  CUSTOMER_SPEED: 3.1         // tiles per second
+};
+
+/* ---------- grid ---------- */
+var TILE=52, COLS=14, ROWS=9;
+var KX=18, KY=104;
+var CW=1040, CH=680;
+var RAIL_X=764, RAIL_W=258;
+var STRIP_Y=582;   // banner / new-order strip sits below the floor, never over it
+
+var ORDER_C=3, ORDER_R=3;      // counter where owners hand over their pet
+var RETURN_C=3, RETURN_R=6;    // counter where finished pets go back
+var DOOR_C=0, DOOR_R=ROWS-2;   // 0,8
+var RESERVED={'4,3':1,'4,6':1};// service aprons — kept clear so counters stay reachable
+
+var WORK_C0=4, WORK_C1=COLS-2, WORK_R0=1, WORK_R1=ROWS-2;
+
+var QUEUE_SLOTS=[[2,3],[2,4],[2,5]];
+var WAIT_SLOTS=[[1,1],[1,4],[1,7]];
+
+/* ---------- content ---------- */
+// `count` = how many units you get the first time this station is unlocked.
+// The three high-traffic stations open in pairs so one pet never blocks the line.
+var STATIONS={
+  feed:  {name:'Feeding Bowl',   short:'Feed',  icon:'🥣', color:'#c0872f', time:3.2, count:2},
+  rest:  {name:'Nap Bed',        short:'Nap',   icon:'🛏️', color:'#7a63aa', time:3.6, count:2},
+  bath:  {name:'Bath Tub',       short:'Bath',  icon:'🛁', color:'#3f87ae', time:4.2, count:2},
+  groom: {name:'Grooming Table', short:'Groom', icon:'✂️', color:'#2f8f78', time:4.0, count:1},
+  play:  {name:'Play Pen',       short:'Play',  icon:'🎾', color:'#c85f3c', time:3.4, count:1},
+  spa:   {name:'Bubble Spa',     short:'Spa',   icon:'🧼', color:'#b04a72', time:4.6, count:1},
+  table: {name:'Holding Table',  short:'Table', icon:'🪑', color:'#5f7169', time:0,   count:2, hold:true}
+};
+var STATION_ORDER=['feed','rest','bath','groom','play','spa','table'];
+var CARE_STATIONS=['feed','rest','bath','groom','play','spa']; // the ones a pet can actually ask for
+var MAX_COPIES=4;
+
+var PETS={
+  cat:    {name:'Cat',     icon:'🐱', needs:['feed','rest'],         value:16, patience:56},
+  dog:    {name:'Dog',     icon:'🐶', needs:['bath','feed'],         value:18, patience:60},
+  rabbit: {name:'Rabbit',  icon:'🐰', needs:['groom','feed'],        value:22, patience:62},
+  pig:    {name:'Pig',     icon:'🐷', needs:['bath','spa'],          value:28, patience:68},
+  hamster:{name:'Hamster', icon:'🐹', needs:['play','feed','rest'],  value:38, patience:86}
+};
+var PET_ORDER=['cat','dog','rabbit','pig','hamster'];
+
+var BUFFS=[
+  {id:'speed', name:'Comfy Sneakers',  icon:'👟', desc:'Walk 15% faster',            max:4},
+  {id:'fast',  name:'Pro Equipment',   icon:'⚙️', desc:'Stations finish 15% sooner', max:4},
+  {id:'calm',  name:'Calming Music',   icon:'🎵', desc:'Owners wait 15% longer',     max:4},
+  {id:'tip',   name:'Big Tip Jar',     icon:'💰', desc:'+$4 per extra station',      max:4},
+  {id:'pay',   name:'Loyalty Program', icon:'💳', desc:'+12% on every payout',       max:4},
+  {id:'life',  name:'Spare Heart',     icon:'❤️', desc:'+1 maximum life',            max:2}
+];
+
+/* ---------- canvas ---------- */
+var canvas=document.getElementById('game');
+var ctx=canvas.getContext('2d');
+
+/* ---------- state ---------- */
+var game={
+  screen:'title',      // title | layout | playing | dayend | gameover
+  paused:false,
+  starterPick:'cat',
+  day:1,
+  money:0,
+  lives:3,
+  unlockedPets:[],
+  ownedStations:{},    // type -> count
+  buffs:{speed:0,fast:0,calm:0,tip:0,pay:0,life:0},
+  stats:null,
+  delivered:0,
+  quota:3,
+  orders:[],
+  customers:[],
+  orderSeq:1,
+  spawnTimer:0,
+  popup:null,
+  toast:null,
+  floats:[],
+  rewards:[],
+  lastReward:null,
+  dayReport:null,
+  finalDay:1,
+  buttons:[]
+};
+
+var placed=[];      // {type,col,row,pet,progress,state}
+var placedAt={};    // "c,r" -> station
+var parked={};      // "c,r" -> order, for pets set down on a wall counter
+
+var player={x:0,y:0,hw:17,hh:17,dir:'down',carryPet:null,carryStation:null};
+
+function recalc(){
+  var b=game.buffs;
+  game.stats={
+    walkMult:1+0.15*b.speed,
+    stationMult:1+0.15*b.fast,
+    patienceMult:1+0.15*b.calm,
+    tipValue:CONFIG.TIP_PER_EXTRA_STATION+4*b.tip,
+    payMult:1+0.12*b.pay,
+    maxLives:CONFIG.BASE_LIVES+b.life
+  };
+}
+recalc();
+
+/* ---------- audio ---------- */
+var audioCtx=null;
+function ensureAudio(){ if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function beep(f,d,type,vol,delay){
+  if(!audioCtx) return;
+  var t0=audioCtx.currentTime+(delay||0);
+  var o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(f,t0);
+  g.gain.setValueAtTime(0,t0);
+  g.gain.linearRampToValueAtTime(vol||0.05,t0+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+d);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t0); o.stop(t0+d+0.02);
+}
+function sfx(n){
+  if(!audioCtx) return;
+  switch(n){
+    case 'pick':    beep(680,0.07,'sine',0.05); break;
+    case 'drop':    beep(450,0.06,'sine',0.05); break;
+    case 'order':   beep(560,0.07,'triangle',0.05); beep(760,0.1,'triangle',0.05,0.07); break;
+    case 'ready':   beep(880,0.09,'triangle',0.055); break;
+    case 'deliver': beep(720,0.08,'sine',0.06); beep(1000,0.13,'sine',0.06,0.08); break;
+    case 'tip':     beep(1080,0.07,'sine',0.05); beep(1320,0.09,'sine',0.05,0.06); break;
+    case 'nope':    beep(240,0.11,'sawtooth',0.045); break;
+    case 'fail':    beep(300,0.15,'sawtooth',0.055); beep(170,0.2,'sawtooth',0.055,0.12); break;
+    case 'open':    beep(520,0.08,'sine',0.055); beep(780,0.12,'sine',0.055,0.08); break;
+    case 'reward':  beep(620,0.07,'sine',0.05); beep(830,0.07,'sine',0.05,0.07); beep(1050,0.13,'sine',0.05,0.14); break;
+  }
+}
+
+/* ---------- helpers ---------- */
+function key(c,r){ return c+','+r; }
+function isWorkTile(c,r){ return c>=WORK_C0 && c<=WORK_C1 && r>=WORK_R0 && r<=WORK_R1; }
+function isBorder(c,r){ return c===0||r===0||c===COLS-1||r===ROWS-1; }
+function isOrderCounter(c,r){ return c===ORDER_C && r===ORDER_R; }
+function isReturnCounter(c,r){ return c===RETURN_C && r===RETURN_R; }
+// Any wall/counter surface a pet can be set down on while you go do something else.
+function isParkableWall(c,r){
+  if(c===DOOR_C && r===DOOR_R) return false;
+  if(isOrderCounter(c,r) || isReturnCounter(c,r)) return false;
+  if(isBorder(c,r)) return true;
+  if(c===3 && r>=1 && r<=ROWS-2) return true;   // the counter wall facing the shop floor
+  return false;
+}
+function stationAt(c,r){ return placedAt[key(c,r)]||null; }
+function playerTile(){ return [Math.floor(player.x/TILE), Math.floor(player.y/TILE)]; }
+function tileCenter(c,r){ return {x:KX+c*TILE+TILE/2, y:KY+r*TILE+TILE/2}; }
+
+// player may only stand on free work-area floor
+function solidForPlayer(c,r){
+  if(!isWorkTile(c,r)) return true;
+  if(placedAt[key(c,r)]) return true;
+  return false;
+}
+function collides(x,y){
+  var pts=[[x-player.hw,y-player.hh],[x+player.hw,y-player.hh],[x-player.hw,y+player.hh],[x+player.hw,y+player.hh]];
+  for(var i=0;i<pts.length;i++){
+    if(solidForPlayer(Math.floor(pts[i][0]/TILE), Math.floor(pts[i][1]/TILE))) return true;
+  }
+  return false;
+}
+function facingTile(){
+  var t=playerTile();
+  var o={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[player.dir];
+  return [t[0]+o[0], t[1]+o[1]];
+}
+function shade(hex,amt){
+  var n=parseInt(hex.slice(1),16);
+  var r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  if(amt<0){ r=Math.round(r*(1+amt)); g=Math.round(g*(1+amt)); b=Math.round(b*(1+amt)); }
+  else { r=Math.round(r+(255-r)*amt); g=Math.round(g+(255-g)*amt); b=Math.round(b+(255-b)*amt); }
+  return 'rgb('+r+','+g+','+b+')';
+}
+function toast(msg){ game.toast={text:msg,life:2.0}; }
+function floatText(txt,x,y,color){ game.floats.push({text:txt,x:x,y:y,life:1.1,color:color||'#ffd77a'}); }
+
+/* ============================================================
+   STATION PLACEMENT — with walkway validation so the player
+   can never seal off a station (or themselves) during setup.
+   ============================================================ */
+function freeTileSet(alsoBlock){
+  var free={};
+  for(var r=WORK_R0;r<=WORK_R1;r++){
+    for(var c=WORK_C0;c<=WORK_C1;c++){
+      var k=key(c,r);
+      if(placedAt[k]) continue;
+      if(alsoBlock && k===alsoBlock) continue;
+      free[k]=true;
+    }
+  }
+  return free;
+}
+function reachableFrom(free,startKey){
+  var seen={}, stack=[], n=0;
+  if(!free[startKey]){
+    var ks=Object.keys(free);
+    if(!ks.length) return {seen:seen,count:0};
+    startKey=ks[0];
+  }
+  seen[startKey]=true; stack.push(startKey);
+  while(stack.length){
+    var cur=stack.pop(); n++;
+    var p=cur.split(','), c=+p[0], r=+p[1];
+    var dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    for(var i=0;i<4;i++){
+      var nk=key(c+dirs[i][0], r+dirs[i][1]);
+      if(free[nk] && !seen[nk]){ seen[nk]=true; stack.push(nk); }
+    }
+  }
+  return {seen:seen,count:n};
+}
+// A layout is legal when all open floor is one connected region and every
+// station still touches that region.
+function layoutLegalWith(newKey){
+  var free=freeTileSet(newKey);
+  var total=0; for(var k in free) total++;
+  if(total===0) return false;
+  var t=playerTile();
+  var res=reachableFrom(free, key(t[0],t[1]));
+  if(res.count!==total) return false;
+  var stationKeys=[];
+  for(var sk in placedAt) stationKeys.push(sk);
+  if(newKey) stationKeys.push(newKey);
+  for(var i=0;i<stationKeys.length;i++){
+    var p=stationKeys[i].split(','), c=+p[0], r=+p[1], ok=false;
+    var dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    for(var d=0;d<4;d++){ if(res.seen[key(c+dirs[d][0], r+dirs[d][1])]) ok=true; }
+    if(!ok) return false;
+  }
+  return true;
+}
+function canPlaceAt(c,r){
+  if(!isWorkTile(c,r)) return false;
+  if(RESERVED[key(c,r)]) return false;
+  if(placedAt[key(c,r)]) return false;
+  var t=playerTile();
+  if(t[0]===c && t[1]===r) return false;
+  return layoutLegalWith(key(c,r));
+}
+function addStation(type,c,r){
+  var st={type:type,col:c,row:r,pet:null,progress:0,state:'idle'};
+  placed.push(st); placedAt[key(c,r)]=st;
+  return st;
+}
+function removeStation(st){
+  delete placedAt[key(st.col,st.row)];
+  var i=placed.indexOf(st); if(i>=0) placed.splice(i,1);
+}
+function autoPlace(type){
+  for(var r=WORK_R0;r<=WORK_R1;r++){
+    for(var c=WORK_C0;c<=WORK_C1;c++){
+      if(RESERVED[key(c,r)] || placedAt[key(c,r)]) continue;
+      var t=playerTile();
+      if(t[0]===c && t[1]===r) continue;
+      if(layoutLegalWith(key(c,r))){ return addStation(type,c,r); }
+    }
+  }
+  for(var r2=WORK_R0;r2<=WORK_R1;r2++)
+    for(var c2=WORK_C0;c2<=WORK_C1;c2++)
+      if(!RESERVED[key(c2,r2)] && !placedAt[key(c2,r2)]) return addStation(type,c2,r2);
+  return null;
+}
+
+/* ============================================================
+   RUN SETUP
+   ============================================================ */
+function resetPlayer(){
+  var c=tileCenter(8,4);
+  player.x=8*TILE+TILE/2; player.y=4*TILE+TILE/2;
+  player.dir='down'; player.carryPet=null; player.carryStation=null;
+}
+// First time a station type is unlocked you get STATIONS[type].count units of it.
+function unlockStation(type){
+  if(game.ownedStations[type]) return 0;
+  var n=STATIONS[type].count||1;
+  game.ownedStations[type]=0;
+  for(var i=0;i<n;i++){ game.ownedStations[type]++; autoPlace(type); }
+  return n;
+}
+function startRun(starter){
+  game.day=1; game.money=0;
+  game.buffs={speed:0,fast:0,calm:0,tip:0,pay:0,life:0};
+  recalc();
+  game.lives=game.stats.maxLives;
+  game.unlockedPets=[starter];
+  game.ownedStations={};
+  placed=[]; placedAt={}; parked={};
+  resetPlayer();
+  PETS[starter].needs.forEach(unlockStation);
+  unlockStation('table');
+  game.lastReward=null;
+  enterLayout();
+}
+function quotaFor(day){ return Math.min(CONFIG.ORDERS_DAY1+(day-1), CONFIG.ORDERS_MAX); }
+function concurrentFor(day){
+  if(day<=1) return CONFIG.CONCURRENT_DAY1;
+  if(day<=3) return CONFIG.CONCURRENT_EARLY;
+  return CONFIG.CONCURRENT_LATE;
+}
+function spawnGapFor(day){
+  return Math.max(CONFIG.SPAWN_GAP_MIN, CONFIG.SPAWN_GAP_BASE-(day-1)*CONFIG.SPAWN_GAP_STEP);
+}
+function patienceFor(petType,day){
+  var base=PETS[petType].patience*game.stats.patienceMult;
+  var scale=Math.max(CONFIG.PATIENCE_FLOOR, 1-(day-1)*CONFIG.PATIENCE_DAY_SCALE);
+  return base*scale;
+}
+function enterLayout(){
+  game.screen='layout';
+  game.paused=false;
+  game.orders=[]; game.customers=[];
+  game.popup=null; game.floats=[];
+  player.carryPet=null; player.carryStation=null;
+  parked={};
+  placed.forEach(function(s){ s.pet=null; s.progress=0; s.state='idle'; });
+  game.quota=quotaFor(game.day);
+}
+function openShop(){
+  if(player.carryStation){ toast('Put the station down first.'); sfx('nope'); return; }
+  game.screen='playing';
+  game.delivered=0;
+  game.quota=quotaFor(game.day);
+  game.orders=[]; game.customers=[];
+  game.spawnTimer=0.6;
+  game.dayReport={earned:0,tips:0,lost:0};
+  sfx('open');
+}
+function endDay(){
+  game.screen='dayend';
+  game.rewards=rollRewards();
+  sfx('reward');
+}
+function gameOver(){
+  game.finalDay=game.day;
+  game.screen='gameover';
+}
+
+/* ============================================================
+   CUSTOMERS & ORDERS
+   ============================================================ */
+function freeSlot(list,taken){
+  for(var i=0;i<list.length;i++){
+    var used=false;
+    for(var j=0;j<taken.length;j++){ if(taken[j]&&taken[j][0]===list[i][0]&&taken[j][1]===list[i][1]) used=true; }
+    if(!used) return list[i];
+  }
+  return null;
+}
+function spawnCustomer(){
+  var pool=game.unlockedPets;
+  var petType=pool[Math.floor(Math.random()*pool.length)];
+  var takenQueue=game.customers.map(function(c){ return c.slot; });
+  var slot=freeSlot(QUEUE_SLOTS,takenQueue);
+  if(!slot) return;
+  var cust={
+    id:game.orderSeq++,
+    petType:petType,
+    cx:DOOR_C+0.5, cy:DOOR_R+0.5,
+    path:[],
+    slot:slot,
+    state:'toCounter',
+    order:null,
+    mood:0
+  };
+  cust.path=pathTo(cust,slot[0],slot[1]);
+  game.customers.push(cust);
+}
+function pathTo(cust,col,row){
+  // lobby is a clear rectangle: move on x first, then y
+  var pts=[];
+  if(Math.abs(cust.cx-(col+0.5))>0.01) pts.push([col+0.5, cust.cy]);
+  pts.push([col+0.5, row+0.5]);
+  return pts;
+}
+function advanceQueue(){
+  // pull waiting customers forward into vacated queue slots
+  var atCounter=null;
+  game.customers.forEach(function(c){
+    if(c.state==='toCounter'||c.state==='atCounter'){
+      if(c.slot[0]===QUEUE_SLOTS[0][0]&&c.slot[1]===QUEUE_SLOTS[0][1]) atCounter=c;
+    }
+  });
+  if(atCounter) return;
+  var best=null;
+  game.customers.forEach(function(c){
+    if(c.state!=='toCounter'&&c.state!=='atCounter') return;
+    if(!best || c.id<best.id) best=c;
+  });
+  if(best){
+    best.slot=QUEUE_SLOTS[0];
+    best.path=pathTo(best,QUEUE_SLOTS[0][0],QUEUE_SLOTS[0][1]);
+    best.state='toCounter';
+  }
+}
+function updateCustomers(dt){
+  var speed=CONFIG.CUSTOMER_SPEED*dt;
+  for(var i=game.customers.length-1;i>=0;i--){
+    var c=game.customers[i];
+    if(c.path.length){
+      var t=c.path[0];
+      var dx=t[0]-c.cx, dy=t[1]-c.cy;
+      var dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<=speed){ c.cx=t[0]; c.cy=t[1]; c.path.shift(); }
+      else { c.cx+=dx/dist*speed; c.cy+=dy/dist*speed; }
+    } else {
+      if(c.state==='toCounter') c.state='atCounter';
+      else if(c.state==='toWait') c.state='waiting';
+      else if(c.state==='leaving'){ game.customers.splice(i,1); continue; }
+    }
+  }
+  advanceQueue();
+}
+function customerAtCounter(){
+  for(var i=0;i<game.customers.length;i++){
+    var c=game.customers[i];
+    if(c.state==='atCounter') return c;
+  }
+  return null;
+}
+function petsWaitingAtCounter(){
+  return game.orders.filter(function(o){ return o.state==='active' && o.loc==='counter'; });
+}
+function takeOrder(cust){
+  var petType=cust.petType;
+  var maxP=patienceFor(petType,game.day);
+  var order={
+    id:cust.id,
+    petType:petType,
+    needs:PETS[petType].needs.slice(),
+    done:{},
+    extras:{},
+    tips:0,
+    patience:maxP,
+    patienceMax:maxP,
+    state:'active',
+    loc:'counter',      // counter | carry | station | table | parked | returned
+    station:null,
+    parkKey:null,
+    customer:cust
+  };
+  game.orders.push(order);
+  cust.order=order;
+  // owner steps aside to a waiting spot
+  var takenWait=game.customers.map(function(c){ return c.state==='toWait'||c.state==='waiting' ? c.slot : null; });
+  var w=freeSlot(WAIT_SLOTS,takenWait) || WAIT_SLOTS[0];
+  cust.slot=w; cust.state='toWait'; cust.path=pathTo(cust,w[0],w[1]);
+  game.popup={order:order, life:4.0};
+  sfx('order');
+}
+function orderNeedsRemaining(o){
+  var left=[];
+  o.needs.forEach(function(n){ if(!o.done[n]) left.push(n); });
+  return left;
+}
+function orderComplete(o){ return orderNeedsRemaining(o).length===0; }
+function releasePet(o){
+  if(o.loc==='carry' && player.carryPet===o) player.carryPet=null;
+  if((o.loc==='station'||o.loc==='table') && o.station){
+    o.station.pet=null;
+    if(o.loc==='station'){ o.station.state='idle'; o.station.progress=0; }
+    o.station=null;
+  }
+  if(o.loc==='parked' && o.parkKey){ delete parked[o.parkKey]; o.parkKey=null; }
+}
+function failOrder(o){
+  releasePet(o);
+  o.state='failed';
+  var idx=game.orders.indexOf(o); if(idx>=0) game.orders.splice(idx,1);
+  if(o.customer){ o.customer.state='leaving'; o.customer.mood=-1; o.customer.path=[[1.5,o.customer.cy],[1.5,DOOR_R+0.5],[DOOR_C+0.5,DOOR_R+0.5]]; }
+  game.lives--;
+  if(game.dayReport) game.dayReport.lost++;
+  toast('Out of patience! '+PETS[o.petType].name+"'s owner walked out.");
+  sfx('fail');
+  if(game.lives<=0) gameOver();
+}
+function deliverOrder(o){
+  var frac=Math.max(o.patience/o.patienceMax,0);
+  var pay=Math.round(PETS[o.petType].value*(1+CONFIG.SPEED_BONUS*frac)*game.stats.payMult);
+  var total=pay+o.tips;
+  game.money+=total;
+  game.delivered++;
+  if(game.dayReport){ game.dayReport.earned+=total; game.dayReport.tips+=o.tips; }
+  var p=tileCenter(RETURN_C,RETURN_R);
+  floatText('+$'+total, p.x+30, p.y-14, '#ffd77a');
+  o.state='returned';
+  player.carryPet=null;
+  var idx=game.orders.indexOf(o); if(idx>=0) game.orders.splice(idx,1);
+  if(o.customer){ o.customer.state='leaving'; o.customer.mood=1; o.customer.path=[[1.5,o.customer.cy],[1.5,DOOR_R+0.5],[DOOR_C+0.5,DOOR_R+0.5]]; }
+  sfx('deliver');
+  if(game.delivered>=game.quota) endDay();
+}
+function updateOrders(dt){
+  for(var i=game.orders.length-1;i>=0;i--){
+    var o=game.orders[i];
+    if(o.state!=='active') continue;
+    o.patience-=dt;
+    if(o.patience<=0){ failOrder(o); if(game.screen!=='playing') return; }
+  }
+}
+function updateStations(dt){
+  for(var i=0;i<placed.length;i++){
+    var st=placed[i];
+    if(st.state!=='working'||!st.pet) continue;
+    st.progress+=dt*game.stats.stationMult/STATIONS[st.type].time;
+    if(st.progress>=1){
+      st.progress=1; st.state='ready';
+      var o=st.pet;
+      if(o.needs.indexOf(st.type)>=0 && !o.done[st.type]){
+        o.done[st.type]=true;
+      } else if(orderComplete(o) && !o.extras[st.type]){
+        o.extras[st.type]=true;
+        o.tips+=game.stats.tipValue;
+        var c=tileCenter(st.col,st.row);
+        floatText('TIP +$'+game.stats.tipValue, c.x, c.y-22, '#8fe0c4');
+        sfx('tip');
+      }
+      sfx('ready');
+    }
+  }
+}
+function updateSpawning(dt){
+  var maxC=concurrentFor(game.day);
+  var inFlight=game.orders.length;
+  var incoming=0;
+  game.customers.forEach(function(c){ if(c.state!=='leaving' && !c.order) incoming++; });
+  var busy=inFlight+incoming;
+  if(game.delivered+busy>=game.quota) return;   // enough owners already lined up
+  if(busy>=maxC) return;
+  game.spawnTimer-=dt;
+  if(game.spawnTimer<=0){
+    spawnCustomer();
+    game.spawnTimer=spawnGapFor(game.day);
+  }
+}
+
+/* ============================================================
+   INTERACTION
+   ============================================================ */
+function interactPlaying(){
+  var f=facingTile(), c=f[0], r=f[1];
+
+  if(isOrderCounter(c,r)){
+    if(player.carryPet){ toast('Your hands are full.'); sfx('nope'); return; }
+    var waiting=petsWaitingAtCounter();
+    if(waiting.length){
+      var o=waiting[0];
+      o.loc='carry'; player.carryPet=o; sfx('pick'); return;
+    }
+    var cust=customerAtCounter();
+    if(cust && !cust.order){
+      if(game.orders.length>=concurrentFor(game.day)){ toast('Too many pets in the shop already.'); sfx('nope'); return; }
+      takeOrder(cust); return;
+    }
+    toast('Nobody at the counter yet.'); sfx('nope'); return;
+  }
+
+  if(isReturnCounter(c,r)){
+    if(!player.carryPet){ toast('Bring the pet here when it is ready.'); sfx('nope'); return; }
+    var p=player.carryPet;
+    if(!orderComplete(p)){
+      var left=orderNeedsRemaining(p).map(function(n){ return STATIONS[n].short; }).join(' + ');
+      toast('Still needs: '+left); sfx('nope'); return;
+    }
+    deliverOrder(p); return;
+  }
+
+  // park a pet on any free wall counter
+  if(isParkableWall(c,r)){
+    var pk=parked[key(c,r)];
+    if(pk){
+      if(player.carryPet){ toast('Your hands are full.'); sfx('nope'); return; }
+      pk.loc='carry'; pk.parkKey=null; player.carryPet=pk;
+      delete parked[key(c,r)];
+      sfx('pick'); return;
+    }
+    if(player.carryPet){
+      var park=player.carryPet;
+      parked[key(c,r)]=park; park.loc='parked'; park.parkKey=key(c,r);
+      player.carryPet=null; sfx('drop'); return;
+    }
+    return;
+  }
+
+  var st=stationAt(c,r);
+  if(!st) return;
+
+  // holding table: a place to set a pet down, nothing more
+  if(STATIONS[st.type].hold){
+    if(st.pet){
+      if(player.carryPet){ toast('Your hands are full.'); sfx('nope'); return; }
+      var held=st.pet; held.loc='carry'; held.station=null;
+      player.carryPet=held; st.pet=null;
+      sfx('pick'); return;
+    }
+    if(player.carryPet){
+      var lay=player.carryPet;
+      st.pet=lay; lay.loc='table'; lay.station=st; player.carryPet=null;
+      sfx('drop'); return;
+    }
+    return;
+  }
+
+  // collect a finished pet
+  if(st.state==='ready'&&st.pet){
+    if(player.carryPet){ toast('Your hands are full.'); sfx('nope'); return; }
+    var done=st.pet;
+    done.loc='carry'; done.station=null;
+    player.carryPet=done; st.pet=null; st.state='idle'; st.progress=0;
+    sfx('pick'); return;
+  }
+  // drop a pet off
+  if(player.carryPet){
+    if(st.pet){ toast(STATIONS[st.type].name+' is busy.'); sfx('nope'); return; }
+    var pet=player.carryPet;
+    var isNeeded=pet.needs.indexOf(st.type)>=0 && !pet.done[st.type];
+    var isExtra=orderComplete(pet) && !pet.extras[st.type];
+    if(!isNeeded && !isExtra){
+      if(!orderComplete(pet)) toast(PETS[pet.petType].name+" doesn't need that yet.");
+      else toast('Already tipped for that station.');
+      sfx('nope'); return;
+    }
+    st.pet=pet; st.state='working'; st.progress=0;
+    pet.loc='station'; pet.station=st; player.carryPet=null;
+    sfx('drop'); return;
+  }
+}
+function interactLayout(){
+  var f=facingTile(), c=f[0], r=f[1];
+  if(player.carryStation){
+    if(!isWorkTile(c,r)){ toast('Stations go on the shop floor.'); sfx('nope'); return; }
+    if(RESERVED[key(c,r)]){ toast('That spot is the counter walkway.'); sfx('nope'); return; }
+    if(placedAt[key(c,r)]){ toast('Something is already there.'); sfx('nope'); return; }
+    if(!canPlaceAt(c,r)){ toast('That would block the walkway.'); sfx('nope'); return; }
+    addStation(player.carryStation,c,r);
+    player.carryStation=null;
+    sfx('drop'); return;
+  }
+  var st=stationAt(c,r);
+  if(st){ removeStation(st); player.carryStation=st.type; sfx('pick'); return; }
+}
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+var keys={}, interactPrev=false;
+var MOVE_KEYS=['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' ','e','escape','p','enter'];
+window.addEventListener('keydown',function(e){
+  ensureAudio();
+  var k=e.key.length===1?e.key.toLowerCase():e.key.toLowerCase();
+  if(MOVE_KEYS.indexOf(k)>=0) e.preventDefault();
+  keys[k]=true;
+  if(k==='enter') primary();
+  if(k==='escape'||k==='p'){
+    if(game.screen==='playing'||game.screen==='layout') game.paused=!game.paused;
+  }
+  if(game.screen==='title'){
+    if(k==='a'||k==='arrowleft') game.starterPick='cat';
+    if(k==='d'||k==='arrowright') game.starterPick='dog';
+  }
+},{passive:false});
+window.addEventListener('keyup',function(e){
+  var k=e.key.length===1?e.key.toLowerCase():e.key.toLowerCase();
+  keys[k]=false;
+});
+canvas.addEventListener('click',function(e){
+  ensureAudio();
+  var rect=canvas.getBoundingClientRect();
+  var mx=(e.clientX-rect.left)*(canvas.width/rect.width);
+  var my=(e.clientY-rect.top)*(canvas.height/rect.height);
+  for(var i=0;i<game.buttons.length;i++){
+    var b=game.buttons[i];
+    if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h){ b.action(); return; }
+  }
+});
+function primary(){
+  if(game.screen==='title'){ startRun(game.starterPick); }
+  else if(game.screen==='layout'){ openShop(); }
+  else if(game.screen==='gameover'){ game.screen='title'; }
+}
+function interactDown(){ return !!(keys[' ']||keys['e']); }
+
+/* ============================================================
+   UPDATE
+   ============================================================ */
+function updateMovement(dt){
+  var vx=0,vy=0;
+  if(keys['w']||keys['arrowup']) vy-=1;
+  if(keys['s']||keys['arrowdown']) vy+=1;
+  if(keys['a']||keys['arrowleft']) vx-=1;
+  if(keys['d']||keys['arrowright']) vx+=1;
+  if(vx&&vy){ vx*=0.7071; vy*=0.7071; }
+  if(vx>0) player.dir='right'; else if(vx<0) player.dir='left';
+  if(vy>0) player.dir='down'; else if(vy<0) player.dir='up';
+  var sp=CONFIG.WALK_SPEED*game.stats.walkMult*dt;
+  var nx=player.x+vx*sp; if(!collides(nx,player.y)) player.x=nx;
+  var ny=player.y+vy*sp; if(!collides(player.x,ny)) player.y=ny;
+}
+function updateEphemeral(dt){
+  if(game.toast){ game.toast.life-=dt; if(game.toast.life<=0) game.toast=null; }
+  if(game.popup){ game.popup.life-=dt; if(game.popup.life<=0) game.popup=null; }
+  for(var i=game.floats.length-1;i>=0;i--){
+    var f=game.floats[i]; f.y-=26*dt; f.life-=dt;
+    if(f.life<=0) game.floats.splice(i,1);
+  }
+}
+function update(dt){
+  if(game.screen!=='playing'&&game.screen!=='layout') return;
+  if(game.paused) return;
+
+  updateMovement(dt);
+  var down=interactDown(), just=down&&!interactPrev;
+  if(just){
+    if(game.screen==='playing') interactPlaying();
+    else interactLayout();
+  }
+  interactPrev=down;
+
+  updateEphemeral(dt);
+  if(game.screen!=='playing') return;
+  updateCustomers(dt);
+  updateStations(dt);
+  updateOrders(dt);
+  if(game.screen!=='playing') return;
+  updateSpawning(dt);
+}
+
+/* ============================================================
+   REWARDS
+   ============================================================ */
+function rollRewards(){
+  var pool=[];
+  BUFFS.forEach(function(b){ if(game.buffs[b.id]<b.max) pool.push({kind:'buff',id:b.id}); });
+  CARE_STATIONS.forEach(function(t){ if(!game.ownedStations[t]) pool.push({kind:'station',id:t}); });
+  PET_ORDER.forEach(function(p){ if(game.unlockedPets.indexOf(p)<0) pool.push({kind:'pet',id:p}); });
+  STATION_ORDER.forEach(function(t){
+    var n=game.ownedStations[t]||0;
+    if(n>=1 && n<MAX_COPIES) pool.push({kind:'dup',id:t});
+  });
+  for(var i=pool.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp; }
+  return pool.slice(0,3);
+}
+function rewardTitle(rw){
+  if(rw.kind==='buff'){ var b=buffDef(rw.id); return b.name; }
+  if(rw.kind==='station') return 'New: '+STATIONS[rw.id].name;
+  if(rw.kind==='dup') return 'Extra '+STATIONS[rw.id].name;
+  if(rw.kind==='pet') return 'New client: '+PETS[rw.id].name;
+  return '';
+}
+function rewardIcon(rw){
+  if(rw.kind==='buff') return buffDef(rw.id).icon;
+  if(rw.kind==='station'||rw.kind==='dup') return STATIONS[rw.id].icon;
+  if(rw.kind==='pet') return PETS[rw.id].icon;
+  return '';
+}
+function rewardLines(rw){
+  if(rw.kind==='buff'){
+    var b=buffDef(rw.id);
+    return [b.desc, 'Level '+game.buffs[rw.id]+' → '+(game.buffs[rw.id]+1)+' of '+b.max];
+  }
+  if(rw.kind==='station'){
+    var n=STATIONS[rw.id].count||1;
+    return [n>1 ? ('Adds '+n+' '+STATIONS[rw.id].name+'s to your floor')
+                : ('Adds a '+STATIONS[rw.id].name+' to your floor'),
+            n>1 ? 'A busy station never blocks the line' : 'Place it however you like'];
+  }
+  if(rw.kind==='dup'){
+    var have=game.ownedStations[rw.id]||0;
+    return ['One more '+STATIONS[rw.id].name, 'You would run '+(have+1)+' of them'];
+  }
+  if(rw.kind==='pet'){
+    var needs=PETS[rw.id].needs.map(function(n){ return STATIONS[n].short; }).join(' + ');
+    var missing=PETS[rw.id].needs.filter(function(n){ return !game.ownedStations[n]; });
+    var second = missing.length ? 'Unlocks '+missing.map(function(n){return STATIONS[n].name;}).join(' & ')+' free'
+                                : 'Pays $'+PETS[rw.id].value+' per visit';
+    return ['Needs '+needs, second];
+  }
+  return ['',''];
+}
+function buffDef(id){ for(var i=0;i<BUFFS.length;i++){ if(BUFFS[i].id===id) return BUFFS[i]; } return null; }
+function applyReward(rw){
+  if(rw.kind==='buff'){
+    game.buffs[rw.id]++;
+    recalc();
+    if(rw.id==='life') game.lives++;
+  } else if(rw.kind==='station'){
+    unlockStation(rw.id);                       // arrives with its full starting count
+  } else if(rw.kind==='dup'){
+    game.ownedStations[rw.id]=(game.ownedStations[rw.id]||0)+1;
+    autoPlace(rw.id);
+  } else if(rw.kind==='pet'){
+    game.unlockedPets.push(rw.id);
+    // a new pet that needs a station you don't own unlocks that station immediately
+    PETS[rw.id].needs.forEach(unlockStation);
+  }
+  game.lastReward=rw;
+  game.day++;
+  enterLayout();
+  sfx('open');
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function drawButton(x,y,w,h,label,opt){
+  opt=opt||{};
+  ctx.save();
+  roundRect(x,y,w,h,10);
+  ctx.fillStyle=opt.disabled?'#37423d':(opt.color||'#cf4f74');
+  ctx.globalAlpha=opt.disabled?0.55:1; ctx.fill(); ctx.globalAlpha=1;
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='600 16px Fredoka, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label,x+w/2,y+h/2+1);
+  ctx.restore();
+  if(!opt.disabled) game.buttons.push({x:x,y:y,w:w,h:h,action:opt.action||function(){}});
+}
+function emoji(size){ return size+'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; }
+
+function drawBackdrop(){ ctx.fillStyle='#0d1210'; ctx.fillRect(0,0,CW,CH); }
+
+function drawFloor(){
+  // lobby (owner side)
+  for(var r=1;r<=ROWS-2;r++){
+    for(var c=1;c<=2;c++){
+      var x=KX+c*TILE, y=KY+r*TILE;
+      ctx.fillStyle=((c+r)%2===0)?'#1c2b28':'#192623';
+      ctx.fillRect(x,y,TILE,TILE);
+    }
+  }
+  // work floor (salon tiles)
+  for(var r2=WORK_R0;r2<=WORK_R1;r2++){
+    for(var c2=WORK_C0;c2<=WORK_C1;c2++){
+      var x2=KX+c2*TILE, y2=KY+r2*TILE;
+      ctx.fillStyle=((c2+r2)%2===0)?'#232f2b':'#1e2926';
+      ctx.fillRect(x2,y2,TILE,TILE);
+      ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.lineWidth=1;
+      ctx.strokeRect(x2+0.5,y2+0.5,TILE-1,TILE-1);
+    }
+  }
+  // service aprons
+  ctx.save();
+  ctx.setLineDash([5,4]); ctx.strokeStyle='rgba(207,79,116,0.5)'; ctx.lineWidth=2;
+  Object.keys(RESERVED).forEach(function(k){
+    var p=k.split(','), c=+p[0], r=+p[1];
+    ctx.strokeRect(KX+c*TILE+5, KY+r*TILE+5, TILE-10, TILE-10);
+  });
+  ctx.restore();
+}
+function drawWalls(){
+  function block(c,r,fill,top){
+    var x=KX+c*TILE, y=KY+r*TILE;
+    ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(x,y+TILE-8,TILE,8);
+    ctx.fillStyle=fill; ctx.fillRect(x,y,TILE,TILE-6);
+    ctx.fillStyle=top; ctx.fillRect(x+3,y+3,TILE-6,10);
+  }
+  for(var r=0;r<ROWS;r++){
+    for(var c=0;c<COLS;c++){
+      if(!isBorder(c,r)) continue;
+      if(c===DOOR_C&&r===DOOR_R) continue;
+      block(c,r,'#39443f','#46534d');
+    }
+  }
+  // counter wall between lobby and work floor
+  for(var r2=1;r2<=ROWS-2;r2++){
+    if(isOrderCounter(3,r2)||isReturnCounter(3,r2)) continue;
+    block(3,r2,'#3d4a44','#4b5a53');
+  }
+  // door
+  var dx=KX+DOOR_C*TILE, dy=KY+DOOR_R*TILE;
+  ctx.fillStyle='#20302b'; ctx.fillRect(dx,dy,TILE,TILE);
+  ctx.fillStyle='#5d7168'; ctx.fillRect(dx+6,dy+4,TILE-12,TILE-8);
+  ctx.font=emoji(20); ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🚪', dx+TILE/2, dy+TILE/2);
+}
+function drawCounter(c,r,color,label,icon){
+  var x=KX+c*TILE, y=KY+r*TILE;
+  ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(x,y+TILE-9,TILE,9);
+  ctx.fillStyle=shade(color,-0.3); ctx.fillRect(x,y+6,TILE,TILE-12);
+  ctx.fillStyle=color; ctx.fillRect(x,y,TILE,TILE-10);
+  ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(x+3,y+3,TILE-6,5);
+  ctx.font=emoji(19); ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(icon,x+TILE/2,y+TILE/2-6);
+  ctx.font='600 8.5px "IBM Plex Mono", monospace';
+  ctx.fillStyle='rgba(255,255,255,0.92)';
+  ctx.fillText(label,x+TILE/2,y+TILE-19);
+}
+function drawCounters(){
+  drawCounter(ORDER_C,ORDER_R,'#b0567d','ORDERS','📋');
+  drawCounter(RETURN_C,RETURN_R,'#2f8f78','RETURN','🛎️');
+  // pets waiting on the order counter
+  var waiting=petsWaitingAtCounter();
+  for(var i=0;i<waiting.length;i++){
+    var p=tileCenter(ORDER_C,ORDER_R);
+    var ox=(i-(waiting.length-1)/2)*11;
+    ctx.font=emoji(23); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(PETS[waiting[i].petType].icon, p.x+ox, p.y-19);
+  }
+  if(waiting.length>1){
+    var pc=tileCenter(ORDER_C,ORDER_R);
+    ctx.fillStyle='#cf4f74'; ctx.beginPath(); ctx.arc(pc.x+19,pc.y-30,8,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='700 10px "IBM Plex Mono", monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(String(waiting.length), pc.x+19, pc.y-29);
+  }
+}
+function drawStations(){
+  for(var i=0;i<placed.length;i++){
+    var st=placed[i], def=STATIONS[st.type];
+    var x=KX+st.col*TILE, y=KY+st.row*TILE;
+    ctx.fillStyle='rgba(0,0,0,0.34)'; roundRect(x+5,y+11,TILE-10,TILE-13,9); ctx.fill();
+    ctx.fillStyle=shade(def.color,-0.32); roundRect(x+4,y+8,TILE-8,TILE-12,9); ctx.fill();
+    ctx.fillStyle=def.color; roundRect(x+4,y+4,TILE-8,TILE-16,9); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.16)'; roundRect(x+7,y+6,TILE-14,7,4); ctx.fill();
+    // an occupied station shows the pet in place of its own icon, so nothing
+    // ever spills into the tile above (where counter-parked pets sit)
+    ctx.font=emoji(21); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(st.pet?PETS[st.pet.petType].icon:def.icon, x+TILE/2, y+TILE/2-5);
+    ctx.font='600 7.5px "IBM Plex Mono", monospace';
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.fillText(def.short.toUpperCase(),x+TILE/2,y+TILE-17);
+
+    if(st.pet){
+      if(def.hold){
+        drawPetTag(st.pet, x+TILE/2, y+TILE-7);
+      } else if(st.state==='working'){
+        ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(x+7,y+TILE-10,TILE-14,5);
+        ctx.fillStyle='#ffd77a'; ctx.fillRect(x+7,y+TILE-10,(TILE-14)*Math.min(st.progress,1),5);
+      } else {
+        ctx.fillStyle='#8fe0c4'; ctx.fillRect(x+7,y+TILE-10,TILE-14,5);
+      }
+    }
+  }
+}
+// small "what does this pet still need" tag, used wherever a pet is set down
+function drawPetTag(o,x,y){
+  var rem=orderNeedsRemaining(o);
+  ctx.font='600 7.5px "IBM Plex Mono", monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle=rem.length?'#ffd77a':'#8fe0c4';
+  ctx.fillText(rem.length?rem.map(function(n){return STATIONS[n].short.toUpperCase();}).join('+'):'READY',x,y);
+}
+function drawParked(){
+  for(var k in parked){
+    var o=parked[k]; if(!o) continue;
+    var p=k.split(','), t=tileCenter(+p[0],+p[1]);
+    ctx.font=emoji(21); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(PETS[o.petType].icon,t.x,t.y-4);
+    drawPetTag(o,t.x,t.y+15);
+  }
+}
+function drawCustomers(){
+  for(var i=0;i<game.customers.length;i++){
+    var c=game.customers[i];
+    var x=KX+c.cx*TILE, y=KY+c.cy*TILE;
+    ctx.fillStyle='rgba(0,0,0,0.32)';
+    ctx.beginPath(); ctx.ellipse(x,y+14,13,5,0,0,Math.PI*2); ctx.fill();
+    var body = c.mood<0 ? '#a34a4a' : (c.mood>0 ? '#2f8f78' : '#4d6f8f');
+    ctx.fillStyle=body; roundRect(x-12,y-10,24,24,8); ctx.fill();
+    ctx.fillStyle='#e8d9c6'; ctx.beginPath(); ctx.arc(x,y-15,8.5,0,Math.PI*2); ctx.fill();
+    if(c.state==='atCounter'&&!c.order){
+      ctx.fillStyle='#fff'; roundRect(x-14,y-46,28,20,7); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x-4,y-27); ctx.lineTo(x+3,y-27); ctx.lineTo(x,y-21); ctx.closePath(); ctx.fill();
+      ctx.font=emoji(13); ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(PETS[c.petType].icon,x,y-36);
+    } else if(c.state==='waiting'&&c.order){
+      var frac=Math.max(c.order.patience/c.order.patienceMax,0);
+      ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(x-14,y-30,28,5);
+      ctx.fillStyle=frac<0.25?'#e0574f':(frac<0.5?'#e0a63f':'#5cc3a4');
+      ctx.fillRect(x-14,y-30,28*frac,5);
+    }
+  }
+}
+function drawPlayer(){
+  var x=KX+player.x, y=KY+player.y;
+  ctx.fillStyle='rgba(0,0,0,0.34)';
+  ctx.beginPath(); ctx.ellipse(x,y+15,15,6,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#cf4f74'; roundRect(x-15,y-13,30,29,10); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.85)'; roundRect(x-9,y-2,18,15,5); ctx.fill(); // apron
+  ctx.fillStyle='#f0ddc9'; ctx.beginPath(); ctx.arc(x,y-19,9.5,0,Math.PI*2); ctx.fill();
+  var o={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[player.dir];
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath(); ctx.arc(x+o[0]*13,y-19+o[1]*7,3,0,Math.PI*2); ctx.fill();
+
+  if(player.carryPet){
+    ctx.font=emoji(24); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(PETS[player.carryPet.petType].icon,x,y-40);
+    var rem=orderNeedsRemaining(player.carryPet);
+    ctx.font='600 9px "IBM Plex Mono", monospace';
+    ctx.fillStyle=rem.length?'#ffd77a':'#8fe0c4';
+    ctx.fillText(rem.length?rem.map(function(n){return STATIONS[n].short;}).join('+'):'READY', x, y-57);
+  } else if(player.carryStation){
+    ctx.font=emoji(22); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(STATIONS[player.carryStation].icon,x,y-40);
+  }
+}
+function drawFacingHint(){
+  if(game.screen!=='layout') return;
+  var f=facingTile(), c=f[0], r=f[1];
+  if(!isWorkTile(c,r)) return;
+  var x=KX+c*TILE, y=KY+r*TILE;
+  ctx.save(); ctx.lineWidth=2;
+  if(player.carryStation){
+    var ok=canPlaceAt(c,r);
+    ctx.strokeStyle=ok?'rgba(92,195,164,0.95)':'rgba(224,87,79,0.95)';
+    ctx.fillStyle=ok?'rgba(92,195,164,0.16)':'rgba(224,87,79,0.14)';
+    roundRect(x+3,y+3,TILE-6,TILE-6,7); ctx.fill(); ctx.stroke();
+  } else if(stationAt(c,r)){
+    ctx.strokeStyle='rgba(255,215,122,0.9)';
+    roundRect(x+2,y+2,TILE-4,TILE-4,8); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawFloats(){
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(var i=0;i<game.floats.length;i++){
+    var f=game.floats[i];
+    ctx.globalAlpha=Math.max(Math.min(f.life,1),0);
+    ctx.font='700 15px "IBM Plex Mono", monospace';
+    ctx.fillStyle=f.color;
+    ctx.fillText(f.text,f.x,f.y);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ---------- HUD & rail ---------- */
+function drawHUD(){
+  ctx.fillStyle='#151d1a'; ctx.fillRect(0,0,CW,96);
+  ctx.strokeStyle='rgba(255,255,255,0.07)';
+  ctx.beginPath(); ctx.moveTo(0,96); ctx.lineTo(CW,96); ctx.stroke();
+
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.font='600 22px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+  ctx.fillText('Day '+game.day,26,32);
+
+  ctx.font='600 13px "IBM Plex Mono", monospace'; ctx.fillStyle='#ffd77a';
+  ctx.fillText('$'+game.money,26,60);
+
+  var hearts=''; for(var i=0;i<game.stats.maxLives;i++) hearts+= (i<game.lives?'♥':'♡');
+  ctx.font='17px "IBM Plex Mono", monospace'; ctx.fillStyle='#ff8ba6';
+  ctx.fillText(hearts,26,80);
+
+  // quota progress
+  var bx=170,by=24,bw=250,bh=16;
+  ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('PETS RETURNED',bx,14);
+  ctx.fillStyle='rgba(255,255,255,0.1)'; roundRect(bx,by,bw,bh,8); ctx.fill();
+  var frac=game.quota?Math.min(game.delivered/game.quota,1):0;
+  ctx.fillStyle='#2f8f78'; roundRect(bx,by,Math.max(bw*frac,frac>0?10:0),bh,8); ctx.fill();
+  ctx.textAlign='center'; ctx.fillStyle='#f2f7f4'; ctx.font='600 11px "IBM Plex Mono", monospace';
+  ctx.fillText(game.delivered+' / '+game.quota, bx+bw/2, by+bh/2+1);
+
+  ctx.textAlign='left';
+  ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('ON THE FLOOR: '+game.orders.length+' / '+concurrentFor(game.day), bx, 62);
+  ctx.fillText('CLIENTS: '+game.unlockedPets.map(function(p){return PETS[p].name;}).join(', '), bx, 80);
+
+  ctx.textAlign='right';
+  ctx.font='600 15px Fredoka, sans-serif'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('PAW PARLOR',CW-26,32);
+  ctx.font='10px "IBM Plex Mono", monospace';
+  var buffTxt=BUFFS.filter(function(b){return game.buffs[b.id]>0;})
+    .map(function(b){return b.icon+game.buffs[b.id];}).join('  ');
+  ctx.fillText(buffTxt||'no upgrades yet',CW-26,58);
+  ctx.textAlign='left';
+}
+function drawRail(){
+  var x=RAIL_X, y=KY;
+  ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.fillText('ACTIVE ORDERS',x,y-4);
+
+  if(!game.orders.length){
+    ctx.fillStyle='rgba(255,255,255,0.05)';
+    roundRect(x,y+6,RAIL_W,66,10); ctx.fill();
+    ctx.fillStyle='#6f827a'; ctx.font='12px Karla, sans-serif';
+    ctx.fillText('No pets in the shop.',x+14,y+34);
+    ctx.fillText('Take an order at the counter.',x+14,y+52);
+    return;
+  }
+  var cy=y+6;
+  for(var i=0;i<game.orders.length;i++){
+    var o=game.orders[i], pet=PETS[o.petType];
+    var h=104;
+    ctx.fillStyle='#f4f7f3'; roundRect(x,cy,RAIL_W,h,10); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.16)'; ctx.lineWidth=1; roundRect(x,cy,RAIL_W,h,10); ctx.stroke();
+
+    ctx.font=emoji(26); ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(pet.icon,x+12,cy+24);
+    ctx.font='600 15px Fredoka, sans-serif'; ctx.fillStyle='#1b2723';
+    ctx.fillText(pet.name,x+48,cy+19);
+    ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#a63a59';
+    var where=o.loc==='counter'?'AT COUNTER'
+             :o.loc==='carry'?'IN YOUR ARMS'
+             :o.loc==='table'?'ON A TABLE'
+             :o.loc==='parked'?'ON A COUNTER'
+             :'IN A STATION';
+    ctx.fillText(where,x+48,cy+35);
+    ctx.textAlign='right'; ctx.fillStyle='#b3801f';
+    ctx.fillText('$'+pet.value+(o.tips?' +'+o.tips:''),x+RAIL_W-12,cy+19);
+    ctx.textAlign='left';
+
+    // checklist
+    var sx=x+12;
+    for(var n=0;n<o.needs.length;n++){
+      var need=o.needs[n], done=!!o.done[need];
+      ctx.fillStyle=done?'#2f8f78':'#dfe6e0';
+      roundRect(sx,cy+46,74,22,7); ctx.fill();
+      ctx.font=emoji(12); ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(STATIONS[need].icon,sx+6,cy+57);
+      ctx.font='600 10px "IBM Plex Mono", monospace';
+      ctx.fillStyle=done?'#ffffff':'#5d6f68';
+      ctx.fillText((done?'✓ ':'')+STATIONS[need].short.toUpperCase(),sx+24,cy+58);
+      sx+=79;
+    }
+    // patience gauge
+    var pf=Math.max(o.patience/o.patienceMax,0);
+    ctx.fillStyle='rgba(0,0,0,0.12)'; roundRect(x+12,cy+h-22,RAIL_W-24,10,5); ctx.fill();
+    ctx.fillStyle=pf<0.25?'#d1453c':(pf<0.5?'#c8912c':'#2f8f78');
+    roundRect(x+12,cy+h-22,(RAIL_W-24)*pf,10,5); ctx.fill();
+    ctx.font='600 9px "IBM Plex Mono", monospace'; ctx.fillStyle='#5d6f68';
+    ctx.textAlign='left';
+    ctx.fillText('PATIENCE',x+12,cy+h-26);
+    ctx.textAlign='right';
+    ctx.fillText(Math.ceil(Math.max(o.patience,0))+'s',x+RAIL_W-12,cy+h-26);
+    ctx.textAlign='left';
+    cy+=h+10;
+  }
+}
+function drawHintBar(){
+  var y=CH-42;
+  ctx.fillStyle='#151d1a'; ctx.fillRect(0,y,CW,42);
+  ctx.font='12.5px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  var msg='';
+  if(game.screen==='layout'){
+    msg=player.carryStation
+      ? 'Carrying the '+STATIONS[player.carryStation].name+' — face an open tile and press Space to set it down.'
+      : 'Face a station and press Space to pick it up. Press Enter or click OPEN SHOP when the floor looks right.';
+  } else {
+    var f=facingTile(), st=stationAt(f[0],f[1]);
+    if(isOrderCounter(f[0],f[1])){
+      msg = petsWaitingAtCounter().length ? 'Space: pick up the pet waiting on the counter'
+          : (customerAtCounter() ? 'Space: take this owner’s order' : 'The order counter is empty right now');
+    } else if(isReturnCounter(f[0],f[1])){
+      msg = player.carryPet ? 'Space: hand the pet back to its owner' : 'Return counter — bring finished pets here';
+    } else if(isParkableWall(f[0],f[1])){
+      msg = parked[key(f[0],f[1])] ? 'Space: pick this pet back up'
+          : (player.carryPet ? 'Space: set the pet down on this counter' : 'Free counter — a pet can wait here');
+    } else if(st && STATIONS[st.type].hold){
+      msg = st.pet ? 'Holding table — Space to pick the pet back up'
+          : (player.carryPet ? 'Space: set the pet down on the holding table' : 'Holding table — somewhere to park a pet');
+    } else if(st){
+      msg = STATIONS[st.type].name+(st.pet? (st.state==='ready'?' — finished, press Space to collect':' — working…') : ' — Space to drop a pet off');
+    } else {
+      msg='Carry each pet through every station on its ticket, then return it before patience runs out.';
+    }
+  }
+  ctx.fillText(msg,CW/2,y+21);
+  ctx.textAlign='left';
+}
+function drawToast(){
+  if(!game.toast) return;
+  ctx.save();
+  ctx.globalAlpha=Math.min(game.toast.life/0.4,1);
+  ctx.font='600 14px Fredoka, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  var w=ctx.measureText(game.toast.text).width+30;
+  var cx=KX+(COLS*TILE)/2, cy=KY+ROWS*TILE-24;
+  ctx.fillStyle='rgba(12,18,16,0.9)'; roundRect(cx-w/2,cy-17,w,34,9); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.14)'; ctx.lineWidth=1; roundRect(cx-w/2,cy-17,w,34,9); ctx.stroke();
+  ctx.fillStyle='#f2f7f4'; ctx.fillText(game.toast.text,cx,cy+1);
+  ctx.restore(); ctx.textAlign='left';
+}
+function drawOrderPopup(){
+  if(!game.popup) return;
+  var o=game.popup.order, pet=PETS[o.petType];
+  var w=700, h=52;
+  var x=KX+(COLS*TILE)/2-w/2, y=STRIP_Y;
+  ctx.save();
+  ctx.globalAlpha=Math.min(game.popup.life/0.5,1);
+  ctx.fillStyle='rgba(12,18,16,0.95)'; roundRect(x,y,w,h,11); ctx.fill();
+  ctx.strokeStyle='#cf4f74'; ctx.lineWidth=2; roundRect(x,y,w,h,11); ctx.stroke();
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.font='600 9.5px "IBM Plex Mono", monospace'; ctx.fillStyle='#ff8ba6';
+  ctx.fillText('NEW ORDER',x+16,y+15);
+  ctx.font=emoji(23); ctx.fillText(pet.icon,x+16,y+35);
+  ctx.font='600 17px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+  ctx.fillText(pet.name,x+50,y+31);
+  ctx.font='10px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('needs '+o.needs.length,x+50,y+44);
+  var sx=x+150;
+  for(var i=0;i<o.needs.length;i++){
+    var n=o.needs[i];
+    ctx.fillStyle='rgba(255,255,255,0.1)'; roundRect(sx,y+12,116,28,8); ctx.fill();
+    ctx.font=emoji(15); ctx.textBaseline='middle';
+    ctx.fillText(STATIONS[n].icon,sx+10,y+26);
+    ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#e3ebe7';
+    ctx.fillText(STATIONS[n].short.toUpperCase(),sx+34,y+27);
+    sx+=124;
+  }
+  ctx.restore(); ctx.textAlign='left';
+}
+function drawPauseOverlay(){
+  if(!game.paused) return;
+  ctx.fillStyle='rgba(8,12,10,0.66)'; ctx.fillRect(0,0,CW,CH);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='600 42px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+  ctx.fillText('Paused',CW/2,CH/2-12);
+  ctx.font='12px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('press Esc or P to resume',CW/2,CH/2+24);
+  ctx.textAlign='left';
+}
+
+/* ---------- screens ---------- */
+function drawTitle(){
+  drawBackdrop();
+  var g=ctx.createRadialGradient(CW/2,250,60,CW/2,250,560);
+  g.addColorStop(0,'#1d2b27'); g.addColorStop(1,'#0d1210');
+  ctx.fillStyle=g; ctx.fillRect(0,0,CW,CH);
+
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='600 62px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+  ctx.fillText('Paw Parlor',CW/2,120);
+  ctx.font='600 12px "IBM Plex Mono", monospace'; ctx.fillStyle='#ff8ba6';
+  ctx.fillText('PICK YOUR STARTING CLIENT',CW/2,166);
+  ctx.font='13px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('Your choice decides which two stations your shop opens with.',CW/2,192);
+
+  var cards=['cat','dog'];
+  var cw=250, ch=210, gap=30;
+  var startX=CW/2-(cw*2+gap)/2;
+  for(var i=0;i<cards.length;i++){
+    var petKey=cards[i], pet=PETS[petKey];
+    var x=startX+i*(cw+gap), y=224;
+    var sel=game.starterPick===petKey;
+    ctx.fillStyle=sel?'rgba(207,79,116,0.16)':'rgba(255,255,255,0.05)';
+    roundRect(x,y,cw,ch,14); ctx.fill();
+    ctx.strokeStyle=sel?'#cf4f74':'rgba(255,255,255,0.14)'; ctx.lineWidth=sel?2.5:1;
+    roundRect(x,y,cw,ch,14); ctx.stroke();
+
+    ctx.font=emoji(48); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(pet.icon,x+cw/2,y+52);
+    ctx.font='600 24px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+    ctx.fillText(pet.name,x+cw/2,y+100);
+    ctx.font='11px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+    ctx.fillText('OPENS WITH',x+cw/2,y+126);
+    var sx=x+cw/2-(pet.needs.length*84)/2;
+    for(var n=0;n<pet.needs.length;n++){
+      var need=pet.needs[n];
+      ctx.fillStyle='rgba(255,255,255,0.09)'; roundRect(sx,y+140,78,32,8); ctx.fill();
+      ctx.font=emoji(15); ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(STATIONS[need].icon,sx+8,y+156);
+      ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#e3ebe7';
+      ctx.fillText(STATIONS[need].short.toUpperCase(),sx+30,y+157);
+      sx+=84;
+    }
+    ctx.textAlign='center';
+    ctx.font='11px Karla, sans-serif'; ctx.fillStyle='#6f827a';
+    ctx.fillText('$'+pet.value+' per visit',x+cw/2,y+190);
+    game.buttons.push({x:x,y:y,w:cw,h:ch,action:(function(k){ return function(){ game.starterPick=k; sfx('pick'); }; })(petKey)});
+  }
+
+  drawButton(CW/2-120,470,240,54,'START THE SHOP',{color:'#cf4f74',action:function(){ startRun(game.starterPick); }});
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='11px "IBM Plex Mono", monospace'; ctx.fillStyle='#59685f';
+  ctx.fillText('click a card or use ← →  ·  Enter to begin',CW/2,542);
+  ctx.font='12px Karla, sans-serif'; ctx.fillStyle='#6f827a';
+  ctx.fillText('More pets, stations and upgrades unlock at the end of each day.',CW/2,572);
+  ctx.textAlign='left';
+}
+function drawLayoutOverlay(){
+  // setup banner lives in the strip below the floor
+  var w=560, h=52, x=KX+(COLS*TILE)/2-w/2, y=STRIP_Y;
+  ctx.fillStyle='rgba(12,18,16,0.92)'; roundRect(x,y,w,h,11); ctx.fill();
+  ctx.strokeStyle='rgba(207,79,116,0.65)'; ctx.lineWidth=1.5; roundRect(x,y,w,h,11); ctx.stroke();
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.font='600 16px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+  ctx.fillText('Set up the floor for Day '+game.day,x+20,y+21);
+  ctx.font='10.5px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('Space picks up and puts down stations',x+20,y+38);
+  drawButton(x+w-210,y+9,190,34,'OPEN SHOP  ↵',{color:'#2f8f78',action:openShop});
+  ctx.textAlign='left';
+
+  // right rail: shows what's on the floor + last reward
+  var rx=RAIL_X, ry=KY;
+  ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.fillText('TODAY’S QUOTA',rx,ry-4);
+  ctx.fillStyle='rgba(255,255,255,0.05)'; roundRect(rx,ry+6,RAIL_W,58,10); ctx.fill();
+  ctx.font='600 30px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+  ctx.textBaseline='middle';
+  ctx.fillText(String(game.quota),rx+16,ry+36);
+  ctx.font='12px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('pets to return',rx+58,ry+29);
+  ctx.fillText('up to '+concurrentFor(game.day)+' at a time',rx+58,ry+46);
+
+  ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+  ctx.textBaseline='alphabetic';
+  ctx.fillText('ON THE FLOOR',rx,ry+92);
+  var yy=ry+102;
+  STATION_ORDER.forEach(function(t){
+    var count=game.ownedStations[t]||0;
+    if(!count) return;
+    ctx.fillStyle='rgba(255,255,255,0.05)'; roundRect(rx,yy,RAIL_W,34,8); ctx.fill();
+    ctx.font=emoji(17); ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(STATIONS[t].icon,rx+10,yy+17);
+    ctx.font='600 13px Fredoka, sans-serif'; ctx.fillStyle='#e3ebe7';
+    ctx.fillText(STATIONS[t].name+(count>1?'  ×'+count:''),rx+38,yy+17);
+    ctx.textBaseline='alphabetic';
+    yy+=39;
+  });
+  if(game.lastReward){
+    ctx.font='600 10px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+    ctx.fillText('LAST PICK',rx,yy+16);
+    ctx.fillStyle='rgba(92,195,164,0.12)'; roundRect(rx,yy+24,RAIL_W,40,8); ctx.fill();
+    ctx.font=emoji(18); ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(rewardIcon(game.lastReward),rx+10,yy+44);
+    ctx.font='600 13px Fredoka, sans-serif'; ctx.fillStyle='#8fe0c4';
+    ctx.fillText(rewardTitle(game.lastReward),rx+38,yy+44);
+    ctx.textBaseline='alphabetic';
+  }
+}
+function drawDayEnd(){
+  drawBackdrop();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='600 38px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+  ctx.fillText('Day '+game.day+' closed',CW/2,58);
+  var rep=game.dayReport||{earned:0,tips:0,lost:0};
+  ctx.font='12px "IBM Plex Mono", monospace'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('returned '+game.delivered+'  ·  earned $'+rep.earned+'  ·  tips $'+rep.tips+'  ·  walkouts '+rep.lost+'  ·  bank $'+game.money,CW/2,92);
+  ctx.font='600 12px "IBM Plex Mono", monospace'; ctx.fillStyle='#ff8ba6';
+  ctx.fillText('CHOOSE ONE',CW/2,132);
+
+  var cw=290, ch=300, gap=26;
+  var startX=CW/2-(cw*game.rewards.length+gap*(game.rewards.length-1))/2;
+  for(var i=0;i<game.rewards.length;i++){
+    var rw=game.rewards[i];
+    var x=startX+i*(cw+gap), y=158;
+    ctx.fillStyle='rgba(255,255,255,0.055)'; roundRect(x,y,cw,ch,14); ctx.fill();
+    ctx.strokeStyle= rw.kind==='pet'?'#cf4f74':(rw.kind==='station'||rw.kind==='dup'?'#2f8f78':'rgba(255,255,255,0.16)');
+    ctx.lineWidth=1.6; roundRect(x,y,cw,ch,14); ctx.stroke();
+
+    ctx.font='600 10px "IBM Plex Mono", monospace';
+    ctx.fillStyle= rw.kind==='pet'?'#ff8ba6':(rw.kind==='station'||rw.kind==='dup'?'#8fe0c4':'#9fb2aa');
+    var tag = rw.kind==='buff'?'UPGRADE':(rw.kind==='pet'?'NEW CLIENT':'STATION');
+    ctx.fillText(tag,x+cw/2,y+26);
+    ctx.font=emoji(52); ctx.fillText(rewardIcon(rw),x+cw/2,y+92);
+    ctx.font='600 20px Fredoka, sans-serif'; ctx.fillStyle='#f2f7f4';
+    ctx.fillText(rewardTitle(rw),x+cw/2,y+148);
+    var lines=rewardLines(rw);
+    ctx.font='13px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+    ctx.fillText(lines[0],x+cw/2,y+180);
+    ctx.font='12px Karla, sans-serif'; ctx.fillStyle='#6f827a';
+    ctx.fillText(lines[1],x+cw/2,y+202);
+    drawButton(x+cw/2-90,y+232,180,44,'TAKE IT',{
+      color: rw.kind==='pet'?'#cf4f74':'#2f8f78',
+      action:(function(r){ return function(){ applyReward(r); }; })(rw)
+    });
+  }
+  if(!game.rewards.length){
+    ctx.font='15px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+    ctx.fillText('Everything is unlocked. Keep the streak going.',CW/2,300);
+    drawButton(CW/2-120,340,240,50,'NEXT DAY',{color:'#2f8f78',action:function(){ game.day++; enterLayout(); }});
+  }
+  ctx.textAlign='left';
+}
+function drawGameOver(){
+  drawBackdrop();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='600 48px Fredoka, sans-serif'; ctx.fillStyle='#ff8ba6';
+  ctx.fillText('The shop closed early',CW/2,220);
+  ctx.font='15px "IBM Plex Mono", monospace'; ctx.fillStyle='#f2f7f4';
+  ctx.fillText('You reached day '+game.finalDay+' and banked $'+game.money+'.',CW/2,272);
+  ctx.font='13px Karla, sans-serif'; ctx.fillStyle='#9fb2aa';
+  ctx.fillText('Too many owners walked out without their pets.',CW/2,300);
+  drawButton(CW/2-120,352,240,54,'TRY AGAIN',{color:'#cf4f74',action:function(){ game.screen='title'; }});
+  ctx.font='11px "IBM Plex Mono", monospace'; ctx.fillStyle='#59685f';
+  ctx.fillText('or press Enter',CW/2,426);
+  ctx.textAlign='left';
+}
+
+function render(){
+  game.buttons=[];
+  ctx.clearRect(0,0,CW,CH);
+  if(game.screen==='title'){ drawTitle(); return; }
+  if(game.screen==='dayend'){ drawDayEnd(); return; }
+  if(game.screen==='gameover'){ drawGameOver(); return; }
+
+  drawBackdrop();
+  drawHUD();
+  drawFloor();
+  drawWalls();
+  drawCounters();
+  drawStations();
+  drawParked();
+  drawFacingHint();
+  if(game.screen==='playing') drawCustomers();
+  drawPlayer();
+  drawFloats();
+  if(game.screen==='playing'){ drawRail(); drawOrderPopup(); }
+  else drawLayoutOverlay();
+  drawHintBar();
+  drawToast();
+  drawPauseOverlay();
+}
+
+/* ---------- loop ---------- */
+var last=performance.now();
+function frame(now){
+  var dt=Math.min((now-last)/1000,0.05);
+  last=now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

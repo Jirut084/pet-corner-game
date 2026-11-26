@@ -10,7 +10,7 @@ using UnityEngine.UI;
 ///   ช่วงจัดร้าน    — กด Enter เปิดร้าน (ไม่มีหน้าจอ มีแค่ป้ายบอกใน HUD)
 ///   ท้ายวัน       — เลือกรางวัล 1 ใบ แล้วต่อด้วยร้านค้าท้ายวัน
 ///   จบเกม        — สรุปผล + ปุ่มเล่นใหม่ / ออกเกม
-///   ระหว่างเล่น    — Esc เปิดเมนูหยุดเกม (เล่นต่อ / กลับเมนูหลัก / ออกเกม)
+///   ระหว่างเล่น    — Esc เปิดเมนูหยุดเกม (เล่นต่อ / ตั้งค่าเสียง / กลับเมนูหลัก / ออกเกม)
 ///
 /// เมนูหยุดเกมตั้ง Time.timeScale = 0 ซึ่งหยุดแค่การเคลื่อนที่ ส่วน Update กับ Input ยังทำงานอยู่
 /// ระบบที่รับปุ่ม (เดิน/โต้ตอบ/ยกสถานี/ซื้อของ) จึงเช็ค GameManager.IsPaused เองอีกชั้น
@@ -59,6 +59,10 @@ public class GameFlowDebugControls : MonoBehaviour
     // หน้าหยุดเกม / จบเกม
     private GameObject pauseRoot;
     private TextMeshProUGUI pauseInfo;
+    private UiKit.VolumeSliderRow pauseMusicSlider;
+    private UiKit.VolumeSliderRow pauseSfxSlider;
+    private bool lastPausedState = false;
+
     private GameObject runOverRoot;
     private TextMeshProUGUI runOverTitle;
     private TextMeshProUGUI runOverSummary;
@@ -249,19 +253,34 @@ public class GameFlowDebugControls : MonoBehaviour
 
     private void BuildPauseMenu()
     {
-        RectTransform panel = MakePanel("Pause", 440f, 340f, out pauseRoot);
+        float panelWidth = 460f;
+        float panelHeight = 440f;
+        RectTransform panel = MakePanel("Pause", panelWidth, panelHeight, out pauseRoot);
 
         TextMeshProUGUI title = UiKit.MakeText("Title", panel, 28f, UiKit.Ink, TextAlignmentOptions.Top);
         title.fontStyle = FontStyles.Bold;
         title.text = "หยุดเกมชั่วคราว";
-        Fill(title.rectTransform, 30f, 36f);
+        Fill(title.rectTransform, 26f, 36f);
 
         pauseInfo = UiKit.MakeText("Info", panel, 19f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        Fill(pauseInfo.rectTransform, 72f, 24f);
+        Fill(pauseInfo.rectTransform, 66f, 24f);
 
-        AddStackedButton(panel, 0, $"เล่นต่อ  ({pauseKey})", () => GameManager.Instance?.SetPaused(false), primary: true);
-        AddStackedButton(panel, 1, "กลับเมนูหลัก (เลิกรันนี้)", () => GameManager.Instance?.ReturnToMainMenu());
-        AddStackedButton(panel, 2, "ออกจากเกม", QuitGame);
+        // แถบปรับระดับเสียงดนตรีและเสียงเอฟเฟกต์
+        float sliderWidth = 390f;
+        float sliderLeft = (panelWidth - sliderWidth) * 0.5f;
+
+        pauseMusicSlider = UiKit.MakeSliderRow("MusicSlider", panel, "เสียงเพลง",
+            AudioManager.GetMusicVolumeGlobal(), (v) => AudioManager.SetMusicVolumeGlobal(v), sliderWidth);
+        UiKit.Place(pauseMusicSlider.holder, new Vector2(sliderLeft, -106f), new Vector2(sliderWidth, 36f));
+
+        pauseSfxSlider = UiKit.MakeSliderRow("SfxSlider", panel, "เสียงเอฟเฟกต์",
+            AudioManager.GetSfxVolumeGlobal(), (v) => AudioManager.SetSfxVolumeGlobal(v), sliderWidth);
+        UiKit.Place(pauseSfxSlider.holder, new Vector2(sliderLeft, -148f), new Vector2(sliderWidth, 36f));
+
+        // ปุ่มเล่นต่อ, กลับเมนูหลัก, ออกจากเกม
+        AddStackedButton(panel, 0, $"เล่นต่อ  ({UiKit.KeyLabel(pauseKey)})", () => GameManager.Instance?.SetPaused(false), primary: true, startY: 202f);
+        AddStackedButton(panel, 1, "กลับเมนูหลัก (เลิกรันนี้)", () => GameManager.Instance?.ReturnToMainMenu(), primary: false, startY: 202f);
+        AddStackedButton(panel, 2, "ออกจากเกม", QuitGame, primary: false, startY: 202f);
     }
 
     private void BuildRunOverScreen()
@@ -290,7 +309,7 @@ public class GameFlowDebugControls : MonoBehaviour
         again.onClick.AddListener(() => GameManager.Instance?.ReturnToMainMenu());
 
         Button quit = UiKit.MakeButton("Quit", panel, 20f, out TextMeshProUGUI quitLabel);
-        quitLabel.text = $"ออกจากเกม  ({pauseKey})";
+        quitLabel.text = $"ออกจากเกม  ({UiKit.KeyLabel(pauseKey)})";
         UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((720f - 520f) * 0.5f + 280f, -440f), new Vector2(240f, 56f));
         quit.onClick.AddListener(QuitGame);
     }
@@ -315,13 +334,13 @@ public class GameFlowDebugControls : MonoBehaviour
         return panel;
     }
 
-    private void AddStackedButton(RectTransform panel, int index, string text, UnityEngine.Events.UnityAction action, bool primary = false)
+    private void AddStackedButton(RectTransform panel, int index, string text, UnityEngine.Events.UnityAction action, bool primary = false, float startY = 116f)
     {
         Button button = UiKit.MakeButton($"Button {index}", panel, 19f, out TextMeshProUGUI label, primary: primary);
         label.text = text;
 
         UiKit.Place(button.GetComponent<RectTransform>(),
-            new Vector2((panel.sizeDelta.x - 300f) * 0.5f, -(116f + index * 60f)), new Vector2(300f, 50f));
+            new Vector2((panel.sizeDelta.x - 300f) * 0.5f, -(startY + index * 56f)), new Vector2(300f, 48f));
 
         button.onClick.AddListener(action);
     }
@@ -351,6 +370,13 @@ public class GameFlowDebugControls : MonoBehaviour
         Show(waitingRoot, waiting);
         Show(dim, rewards || shopOpen || paused || runOver || waiting);
 
+        // ซิงค์ตำแหน่งแถบเลื่อนเสียงตอนเปิด Pause Menu
+        if (paused && !lastPausedState)
+        {
+            SyncPauseSliders();
+        }
+        lastPausedState = paused;
+
         if (rewards) RefreshRewards(game, offer);
         if (shopOpen) RefreshShop(game, shop);
         if (paused) pauseInfo.text = $"วันที่ {game.Day} / {game.TotalDays}   ·   เงิน {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}";
@@ -358,6 +384,23 @@ public class GameFlowDebugControls : MonoBehaviour
         if (waiting) waitingText.text = rewardSystem == null
             ? "จบวันแล้ว — แต่ไม่มี DayEndRewardSystem ในฉาก"
             : "จบวันแล้ว — กำลังสรุปผล";
+    }
+
+    private void SyncPauseSliders()
+    {
+        if (pauseMusicSlider != null)
+        {
+            float m = AudioManager.GetMusicVolumeGlobal();
+            pauseMusicSlider.slider.SetValueWithoutNotify(m);
+            pauseMusicSlider.valueText.text = $"{Mathf.RoundToInt(m * 100f)}%";
+        }
+
+        if (pauseSfxSlider != null)
+        {
+            float s = AudioManager.GetSfxVolumeGlobal();
+            pauseSfxSlider.slider.SetValueWithoutNotify(s);
+            pauseSfxSlider.valueText.text = $"{Mathf.RoundToInt(s * 100f)}%";
+        }
     }
 
     private void RefreshRewards(GameManager game, IReadOnlyList<RewardOption> offer)
@@ -408,7 +451,7 @@ public class GameFlowDebugControls : MonoBehaviour
             ? $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน (หักค่าเช่าแล้ว {game.LastDayCost})"
             : $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน";
         shopMoney.text = shop.Money.ToString();
-        shopContinueLabel.text = $"ไปวันถัดไป  ({shop.ContinueKey})";
+        shopContinueLabel.text = $"ไปวันถัดไป  ({UiKit.KeyLabel(shop.ContinueKey)})";
 
         var offers = shop.CurrentOffers;
 

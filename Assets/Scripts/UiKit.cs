@@ -199,6 +199,28 @@ public static class UiKit
         return rect;
     }
 
+    // ---------- ชื่อปุ่มที่โชว์ผู้เล่น ----------
+    /// <summary>
+    /// ชื่อปุ่มแบบที่ผู้เล่นคุ้นเคย ใช้แทน KeyCode.ToString() ที่ได้คำแบบ Return / Escape
+    /// ซึ่งไม่ตรงกับตัวหนังสือบนคีย์บอร์ดและคำแนะนำบนจอ (Enter / Esc)
+    /// </summary>
+    public static string KeyLabel(KeyCode key)
+    {
+        switch (key)
+        {
+            case KeyCode.Return:
+            case KeyCode.KeypadEnter: return "Enter";
+            case KeyCode.Escape: return "Esc";
+            case KeyCode.Space: return "Space";
+            case KeyCode.Backspace: return "Backspace";
+            case KeyCode.LeftShift:
+            case KeyCode.RightShift: return "Shift";
+            default:
+                if (key >= KeyCode.Alpha0 && key <= KeyCode.Alpha9) return ((int)(key - KeyCode.Alpha0)).ToString();
+                return key.ToString();
+        }
+    }
+
     // ---------- ภาพที่วาดไว้ใน Assets/Resources/UI ----------
     private static readonly Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
 
@@ -302,6 +324,57 @@ public static class UiKit
         }
     }
 
+    private static AudioClip clickClip;
+    private static AudioSource uiAudioSource;
+
+    /// <summary>เล่นเสียงคลิก UI ผ่าน AudioManager หรือเล่นตรงถ้ายังไม่มี AudioManager ในฉาก</summary>
+    public static void PlayClickSound()
+    {
+        // ตรวจสอบ AudioListener ในฉากเสมอ ถ้าไม่มีให้ติดบน Main Camera หรือสร้างใหม่ทันที
+        EnsureAudioListener();
+
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayClick();
+            return;
+        }
+
+        if (clickClip == null) clickClip = Resources.Load<AudioClip>("UI/ui_click");
+        if (clickClip == null) return;
+
+        if (uiAudioSource == null)
+        {
+            GameObject go = new GameObject("UiAudioSource", typeof(AudioSource));
+            Object.DontDestroyOnLoad(go);
+            uiAudioSource = go.GetComponent<AudioSource>();
+            uiAudioSource.playOnAwake = false;
+            uiAudioSource.spatialBlend = 0f; // 2D เต็มรูปแบบ ได้ยินชัดเจน ไม่ขึ้นกับระยะกล้อง
+        }
+
+        float sfxVol = AudioManager.GetSfxVolumeGlobal();
+        if (sfxVol > 0.001f)
+        {
+            uiAudioSource.PlayOneShot(clickClip, sfxVol);
+        }
+    }
+
+    /// <summary>ตรวจสอบให้แน่ใจว่าในฉากมี AudioListener รับฟังเสียง</summary>
+    public static void EnsureAudioListener()
+    {
+        if (Object.FindAnyObjectByType<AudioListener>() != null) return;
+
+        Camera cam = Camera.main != null ? Camera.main : Object.FindAnyObjectByType<Camera>();
+        if (cam != null)
+        {
+            cam.gameObject.AddComponent<AudioListener>();
+        }
+        else
+        {
+            GameObject listenerObj = new GameObject("AudioListener", typeof(AudioListener));
+            Object.DontDestroyOnLoad(listenerObj);
+        }
+    }
+
     /// <summary>
     /// ปุ่มหน้าตาเดียวกับการ์ด — ชี้แล้วสว่างขึ้น กดแล้วเข้มลง กดไม่ได้แล้วจาง
     /// มีตัวเลือก primary สำหรับปุ่มเด่น (เช่น เริ่มเกม, ไปวันถัดไป, เล่นใหม่)
@@ -330,6 +403,8 @@ public static class UiKit
             colorMultiplier = 1f,
             fadeDuration = 0.08f
         };
+
+        button.onClick.AddListener(PlayClickSound);
 
         return button;
     }
@@ -368,6 +443,8 @@ public static class UiKit
             fadeDuration = 0.08f
         };
 
+        button.onClick.AddListener(PlayClickSound);
+
         // Header: บนสุด
         TextMeshProUGUI header = MakeText("Header", holder, 22f, Ink, TextAlignmentOptions.Top);
         header.fontStyle = FontStyles.Bold;
@@ -402,6 +479,103 @@ public static class UiKit
             header = header,
             body = body,
             footer = footer
+        };
+    }
+
+    /// <summary>
+    /// แถวตัวเลือกปรับค่าระดับเสียง (หรือค่า 0–1 ใดๆ) ประกอบด้วย ชื่อหมวด, แถบเลื่อน (Slider), และตัวเลข %
+    /// </summary>
+    public class VolumeSliderRow
+    {
+        public RectTransform holder;
+        public TextMeshProUGUI label;
+        public Slider slider;
+        public TextMeshProUGUI valueText;
+    }
+
+    public static VolumeSliderRow MakeSliderRow(string name, Transform parent, string labelText, float initialValue, System.Action<float> onValueChanged, float width = 380f)
+    {
+        RectTransform holder = MakeRect(name, parent);
+        holder.sizeDelta = new Vector2(width, 36f);
+
+        // ข้อความชื่อหมวดทางซ้าย
+        float labelWidth = 130f;
+        float valueWidth = 54f;
+        float sliderWidth = width - labelWidth - valueWidth - 16f;
+
+        TextMeshProUGUI label = MakeText("Label", holder, 18f, Ink, TextAlignmentOptions.Left);
+        label.text = labelText;
+        Place(label.rectTransform, new Vector2(0f, -4f), new Vector2(labelWidth, 28f));
+
+        // ข้อความตัวเลข % ทางขวาสุด
+        TextMeshProUGUI valText = MakeText("Value", holder, 18f, InkSoft, TextAlignmentOptions.Right);
+        valText.text = $"{Mathf.RoundToInt(initialValue * 100f)}%";
+        Place(valText.rectTransform, new Vector2(width - valueWidth, -4f), new Vector2(valueWidth, 28f));
+
+        // ตัว Slider ตรงกลาง
+        GameObject sliderGo = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
+        sliderGo.transform.SetParent(holder, false);
+        Slider slider = sliderGo.GetComponent<Slider>();
+        Place(slider.GetComponent<RectTransform>(), new Vector2(labelWidth + 8f, -10f), new Vector2(sliderWidth, 16f));
+
+        // รางพื้นหลัง (Track)
+        GameObject bgGo = new GameObject("Background", typeof(RectTransform), typeof(Image));
+        bgGo.transform.SetParent(sliderGo.transform, false);
+        Image bgImage = bgGo.GetComponent<Image>();
+        bgImage.sprite = Rounded;
+        bgImage.type = Image.Type.Sliced;
+        bgImage.color = Track;
+        Stretch(bgImage.rectTransform);
+
+        // พื้นที่เติมสี (Fill Area)
+        GameObject fillArea = new GameObject("Fill Area", typeof(RectTransform));
+        fillArea.transform.SetParent(sliderGo.transform, false);
+        RectTransform fillAreaRect = fillArea.GetComponent<RectTransform>();
+        Stretch(fillAreaRect);
+        fillAreaRect.offsetMin = new Vector2(0f, 0f);
+        fillAreaRect.offsetMax = new Vector2(0f, 0f);
+
+        GameObject fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+        fill.transform.SetParent(fillArea.transform, false);
+        Image fillImage = fill.GetComponent<Image>();
+        fillImage.sprite = Rounded;
+        fillImage.type = Image.Type.Sliced;
+        fillImage.color = PrimaryBtn;
+        fillImage.rectTransform.sizeDelta = Vector2.zero;
+
+        // ปุ่มเลื่อน (Handle)
+        GameObject handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+        handleArea.transform.SetParent(sliderGo.transform, false);
+        RectTransform handleAreaRect = handleArea.GetComponent<RectTransform>();
+        Stretch(handleAreaRect);
+
+        GameObject handle = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+        handle.transform.SetParent(handleArea.transform, false);
+        Image handleImage = handle.GetComponent<Image>();
+        handleImage.sprite = Circle;
+        handleImage.color = Card;
+        handleImage.rectTransform.sizeDelta = new Vector2(20f, 20f);
+
+        slider.fillRect = fillImage.rectTransform;
+        slider.handleRect = handleImage.rectTransform;
+        slider.targetGraphic = handleImage;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = 0f;
+        slider.maxValue = 1f;
+        slider.value = initialValue;
+
+        slider.onValueChanged.AddListener((val) =>
+        {
+            valText.text = $"{Mathf.RoundToInt(val * 100f)}%";
+            onValueChanged?.Invoke(val);
+        });
+
+        return new VolumeSliderRow
+        {
+            holder = holder,
+            label = label,
+            slider = slider,
+            valueText = valText
         };
     }
 

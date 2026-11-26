@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plate Rush</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  :root{
+    --paper:#efe6d3;
+    --panel:#fffaf1;
+    --ink:#241d14;
+    --text:#241d14;
+    --text-soft:#6b5f4a;
+    --line: rgba(36,29,20,0.14);
+    --flame:#e05a2b;
+    --flame-deep:#a83e1c;
+    --gold:#a5771f;
+    --basil:#3f6d47;
+    --steel:#cabfa6;
+    --shadow: 0 18px 40px -20px rgba(36,29,20,0.45);
+    --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Work Sans', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'Space Mono', 'Courier New', monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#161009;
+      --panel:#241a10;
+      --ink:#f1e7d3;
+      --text:#f1e7d3;
+      --text-soft:#bfae8d;
+      --line: rgba(241,231,211,0.14);
+      --flame:#ff8a4c;
+      --flame-deep:#ff9c66;
+      --gold:#e3b458;
+      --basil:#84c08b;
+      --steel:#43392a;
+      --shadow: 0 18px 40px -20px rgba(0,0,0,0.65);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#161009;
+    --panel:#241a10;
+    --ink:#f1e7d3;
+    --text:#f1e7d3;
+    --text-soft:#bfae8d;
+    --line: rgba(241,231,211,0.14);
+    --flame:#ff8a4c;
+    --flame-deep:#ff9c66;
+    --gold:#e3b458;
+    --basil:#84c08b;
+    --steel:#43392a;
+    --shadow: 0 18px 40px -20px rgba(0,0,0,0.65);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--text);
+    font-family:var(--font-body);
+    min-height:100vh;
+  }
+  .page{max-width:1180px;margin:0 auto;padding:52px 24px 64px;}
+  header{max-width:760px;}
+  .eyebrow{
+    font-family:var(--font-mono);
+    text-transform:uppercase;
+    letter-spacing:.16em;
+    font-size:12px;
+    color:var(--flame-deep);
+    margin:0 0 10px;
+  }
+  h1.title{
+    font-family:var(--font-display);
+    font-weight:800;
+    font-size:clamp(2.4rem,6vw,4.4rem);
+    line-height:0.98;
+    text-wrap:balance;
+    margin:0 0 14px;
+    letter-spacing:-0.01em;
+  }
+  h1.title span{color:var(--flame);}
+  header p.sub{
+    font-size:16px;
+    line-height:1.55;
+    color:var(--text-soft);
+    max-width:56ch;
+    margin:0;
+  }
+  .stage{
+    display:flex;
+    gap:28px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+    justify-content:center;
+    margin-top:38px;
+  }
+  .canvas-frame{
+    position:relative;
+    flex:1 1 620px;
+    max-width:960px;
+    background:linear-gradient(160deg,var(--steel),var(--panel));
+    border-radius:22px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    border:1px solid var(--line);
+  }
+  .canvas-frame .bolt{
+    position:absolute;
+    width:10px;height:10px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff8, transparent 60%), var(--text-soft);
+    opacity:.55;
+  }
+  .canvas-frame .bolt.tl{top:10px;left:10px;}
+  .canvas-frame .bolt.tr{top:10px;right:10px;}
+  .canvas-frame .bolt.bl{bottom:10px;left:10px;}
+  .canvas-frame .bolt.br{bottom:10px;right:10px;}
+  canvas{
+    display:block;
+    width:100%;
+    height:auto;
+    aspect-ratio: 960 / 640;
+    border-radius:12px;
+    background:#12100c;
+    cursor:pointer;
+  }
+  canvas:focus-visible{ outline:3px solid var(--flame); outline-offset:3px; }
+  .ticket-rail{
+    flex:0 1 300px;
+    min-width:260px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .ticket-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px 18px;
+    box-shadow:var(--shadow);
+  }
+  .ticket-card h2{
+    font-family:var(--font-mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--flame-deep);
+    margin:0 0 12px;
+    border-bottom:1px dashed var(--line);
+    padding-bottom:8px;
+  }
+  dl.controls{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:8px 12px;
+    margin:0;
+    align-items:center;
+  }
+  dl.controls dt{
+    font-family:var(--font-mono);
+    font-size:12px;
+    background:var(--steel);
+    color:var(--ink);
+    padding:3px 7px;
+    border-radius:5px;
+    white-space:nowrap;
+    justify-self:start;
+  }
+  dl.controls dd{
+    margin:0;
+    font-size:13.5px;
+    color:var(--text-soft);
+  }
+  .menu-item{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    font-size:13.5px;
+    margin-bottom:10px;
+    line-height:1.4;
+  }
+  .menu-item:last-child{margin-bottom:0;}
+  .menu-item .ic{font-size:20px;line-height:1;}
+  .menu-item b{display:block;color:var(--text);font-size:14px;}
+  .menu-item span.need{color:var(--text-soft);}
+  .menu-item span.lock{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    color:var(--flame-deep);
+    text-transform:uppercase;
+    letter-spacing:.06em;
+  }
+  .tip{font-size:13.5px;color:var(--text-soft);line-height:1.55;margin:0;}
+  footer{
+    margin-top:44px;
+    text-align:center;
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--text-soft);
+    max-width:640px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <p class="eyebrow">A Kitchen-Rush Arcade Game &middot; Browser Only</p>
+    <h1 class="title">PLATE <span>RUSH</span></h1>
+    <p class="sub">Chop, cook, plate, and serve before the tickets pile up. Clear a shift, spend your tips on upgrades, and come back for a harder night &mdash; inspired by kitchen-management games like Overcooked and PlateUp!.</p>
+  </header>
+
+  <main class="stage">
+    <div class="canvas-frame">
+      <div class="bolt tl"></div><div class="bolt tr"></div><div class="bolt bl"></div><div class="bolt br"></div>
+      <canvas id="game" width="960" height="640" tabindex="0" aria-label="Plate Rush game canvas"></canvas>
+    </div>
+    <aside class="ticket-rail">
+      <div class="ticket-card">
+        <h2>Controls</h2>
+        <dl class="controls">
+          <dt>WASD / Arrows</dt><dd>Move around the kitchen</dd>
+          <dt>Space / E</dt><dd>Interact &middot; hold to chop</dd>
+          <dt>Esc / P</dt><dd>Pause</dd>
+        </dl>
+      </div>
+      <div class="ticket-card">
+        <h2>The Menu</h2>
+        <div class="menu-item"><span class="ic">🥗</span><div><b>Garden Salad</b><span class="need">chopped lettuce + chopped tomato</span></div></div>
+        <div class="menu-item"><span class="ic">🍔</span><div><b>Classic Burger</b><span class="need">bun + chopped lettuce + cooked patty</span> &middot; <span class="lock">unlocks day 2</span></div></div>
+        <div class="menu-item"><span class="ic">🍲</span><div><b>Veggie Soup</b><span class="need">cooked veggie mix</span> &middot; <span class="lock">unlocks day 3</span></div></div>
+      </div>
+      <div class="ticket-card">
+        <h2>Kitchen Tip</h2>
+        <p class="tip">Stoves cook on their own once you drop something on &mdash; but they'll burn if you forget them. Chopping boards need you standing there holding the interact key. A wrong plate can't be fixed, only trashed, so build with care.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer>fan-made tribute &middot; no install, no server, just keyboard and nerve</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- constants ---------- */
+var TILE=64, COLS=10, ROWS=7;
+var KX=28, KY=118;
+var CANVAS_W=960, CANVAS_H=640;
+var BASE_CHOP_TIME=1.3, BASE_COOK_TIME=5.0, BASE_BURN_GRACE=4.5;
+
+var INGREDIENTS={
+  lettuce:{name:'Lettuce', icon:'🥬', prep:'chop'},
+  tomato:{name:'Tomato', icon:'🍅', prep:'chop'},
+  bun:{name:'Bun', icon:'🍞', prep:'none'},
+  patty:{name:'Patty', icon:'🥩', cookedIcon:'🍖', prep:'cook'},
+  veggiemix:{name:'Veggie Mix', icon:'🥕', cookedIcon:'🍲', prep:'cook'}
+};
+
+var RECIPES={
+  salad:{name:'Garden Salad', icon:'🥗', value:8, need:['lettuce_chopped','tomato_chopped']},
+  burger:{name:'Classic Burger', icon:'🍔', value:14, need:['bun_raw','lettuce_chopped','patty_cooked']},
+  soup:{name:'Veggie Soup', icon:'🍲', value:12, need:['veggiemix_cooked']}
+};
+Object.keys(RECIPES).forEach(function(k){ RECIPES[k].needSorted = RECIPES[k].need.slice().sort().join(','); });
+
+var UPGRADES=[
+  {id:'legs', name:'Running Shoes', icon:'👟', desc:'+12% move speed', max:5, baseCost:12, growth:1.55},
+  {id:'knife', name:'Sharp Knife', icon:'🔪', desc:'+18% chop speed', max:5, baseCost:12, growth:1.55},
+  {id:'stove', name:'Hot Stove', icon:'🔥', desc:'+18% cook speed', max:5, baseCost:14, growth:1.55},
+  {id:'life', name:'Thick Apron', icon:'🛡️', desc:'+1 starting life', max:3, baseCost:35, growth:1.8},
+  {id:'timer', name:'Golden Timer', icon:'⏳', desc:'+3s on every order', max:5, baseCost:15, growth:1.5},
+  {id:'tips', name:'Big Tipper', icon:'💰', desc:'+10% order payout', max:5, baseCost:16, growth:1.5},
+  {id:'retard', name:'Fireproof Mitts', icon:'🧤', desc:'+25% time before burning', max:4, baseCost:18, growth:1.6}
+];
+
+// NOTE: true corner cells (0,0) (9,0) (0,6) (9,6) are deliberately left
+// as plain wall — both of a corner's neighbors are themselves solid
+// border cells, so a station placed there could never be reached.
+var STATION_DEFS=[
+  {col:1,row:0,type:'crate',item:'lettuce'},
+  {col:2,row:0,type:'crate',item:'tomato'},
+  {col:3,row:0,type:'crate',item:'bun'},
+  {col:4,row:0,type:'crate',item:'patty'},
+  {col:5,row:0,type:'crate',item:'veggiemix'},
+  {col:6,row:0,type:'board'},
+  {col:7,row:0,type:'board'},
+  {col:8,row:0,type:'stove'},
+  {col:1,row:6,type:'trash'},
+  {col:4,row:6,type:'stove'},
+  {col:7,row:6,type:'platestack'},
+  {col:8,row:6,type:'serve'}
+];
+
+var STATION_COLORS={
+  trash:'#4a4640', crate:'#3f6b4a', board:'#8a7350', stove:'#b1462e',
+  platestack:'#6f7f8c', serve:'#b9832a', wall:'#5c534a'
+};
+var STATION_ICON={ trash:'🗑️', board:'🔪', stove:'🍳', platestack:'🍽️', serve:'🛎️' };
+
+/* ---------- canvas / context ---------- */
+var canvas=document.getElementById('game');
+var ctx=canvas.getContext('2d');
+
+/* ---------- station map (every border cell gets an entry; unassigned
+   border cells become plain 'wall' counters so the kitchen renders as a
+   solid ring and nothing is silently unreachable) ---------- */
+var stationMap={};
+STATION_DEFS.forEach(function(s){
+  var st={col:s.col,row:s.row,type:s.type,item:s.item||null,itemData:null};
+  stationMap[s.col+','+s.row]=st;
+});
+for(var __r=0; __r<ROWS; __r++){
+  for(var __c=0; __c<COLS; __c++){
+    if(__r===0 || __r===ROWS-1 || __c===0 || __c===COLS-1){
+      var __k=__c+','+__r;
+      if(!stationMap[__k]) stationMap[__k]={col:__c,row:__r,type:'wall',item:null,itemData:null};
+    }
+  }
+}
+function isSolid(c,r){ return r===0 || r===ROWS-1 || c===0 || c===COLS-1; }
+function stationAt(c,r){ return stationMap[c+','+r]; }
+
+/* ---------- audio ---------- */
+var audioCtx=null;
+function ensureAudio(){ if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function beep(freq,dur,type,vol,delay){
+  if(!audioCtx) return;
+  var t0=audioCtx.currentTime+(delay||0);
+  var osc=audioCtx.createOscillator();
+  var gain=audioCtx.createGain();
+  osc.type=type||'sine';
+  osc.frequency.setValueAtTime(freq,t0);
+  gain.gain.setValueAtTime(0,t0);
+  gain.gain.linearRampToValueAtTime(vol||0.06,t0+0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0+dur+0.02);
+}
+function playSfx(name){
+  if(!audioCtx) return;
+  switch(name){
+    case 'pick': beep(660,0.07,'sine',0.05); break;
+    case 'place': beep(440,0.06,'sine',0.05); break;
+    case 'chopdone': beep(920,0.09,'triangle',0.06); break;
+    case 'plate': beep(520,0.07,'sine',0.05); break;
+    case 'trash': beep(180,0.12,'sawtooth',0.05); break;
+    case 'burnt': beep(140,0.18,'square',0.06); break;
+    case 'success': beep(760,0.09,'sine',0.07); beep(1020,0.14,'sine',0.07,0.09); break;
+    case 'fail': beep(300,0.16,'sawtooth',0.06); break;
+    case 'missed': beep(320,0.14,'sawtooth',0.06); beep(180,0.2,'sawtooth',0.06,0.12); break;
+    case 'buy': beep(600,0.05,'sine',0.05); beep(800,0.08,'sine',0.05,0.06); break;
+    case 'start': beep(500,0.08,'sine',0.06); beep(760,0.12,'sine',0.06,0.09); break;
+  }
+}
+
+/* ---------- game state ---------- */
+var game={
+  screen:'title', // title | playing | shop | gameover | paused
+  day:1,
+  money:0,
+  lives:3,
+  shiftTimeLeft:0,
+  shiftDuration:0,
+  orders:[],
+  nextOrderIn:1.0,
+  orderIdSeq:1,
+  shiftStats:{served:0,missed:0,earned:0},
+  upgradeLevels:{legs:0,knife:0,stove:0,life:0,timer:0,tips:0,retard:0},
+  stats:null,
+  finalDay:1,
+  toast:null,
+  floatTexts:[],
+  paused:false,
+  buttons:[]
+};
+function recalcStats(){
+  var L=game.upgradeLevels;
+  game.stats={
+    moveSpeedMult:1+0.12*L.legs,
+    chopSpeedMult:1+0.18*L.knife,
+    cookSpeedMult:1+0.18*L.stove,
+    maxLives:3+L.life,
+    orderTimeBonus:3*L.timer,
+    tipMult:1+0.10*L.tips,
+    burnGraceMult:1+0.25*L.retard
+  };
+}
+recalcStats();
+
+var player={x:320,y:224,hw:19,hh:19,speed:170,dir:'down',hold:null};
+
+function resetPlayer(){ player.x=320; player.y=224; player.dir='down'; player.hold=null; }
+function clearStations(){
+  STATION_DEFS.forEach(function(s){ stationMap[s.col+','+s.row].itemData=null; });
+}
+
+/* ---------- difficulty curves ---------- */
+function unlockedRecipes(day){
+  if(day<=1) return ['salad'];
+  if(day===2) return ['salad','burger'];
+  return ['salad','burger','soup'];
+}
+function maxTickets(day){ return Math.min(3+Math.floor(day/2),6); }
+function spawnRange(day){
+  var lo=Math.max(4, 10-day*0.6);
+  var hi=Math.max(6.5, 15-day*0.6);
+  return [lo,hi];
+}
+function orderTimeFor(recipeKey,day){
+  var base={salad:24,burger:34,soup:29}[recipeKey];
+  var t=Math.max(base*0.6, base-day*0.8);
+  return t+game.stats.orderTimeBonus;
+}
+function shiftDurationFor(day){ return Math.min(60+day*3,110); }
+
+/* ---------- shift lifecycle ---------- */
+function startShift(){
+  recalcStats();
+  game.lives=game.stats.maxLives;
+  game.shiftDuration=shiftDurationFor(game.day);
+  game.shiftTimeLeft=game.shiftDuration;
+  game.orders=[];
+  game.nextOrderIn=1.1;
+  game.shiftStats={served:0,missed:0,earned:0};
+  clearStations();
+  resetPlayer();
+  game.screen='playing';
+  game.paused=false;
+  playSfx('start');
+}
+function spawnOrder(){
+  var pool=unlockedRecipes(game.day);
+  var key=pool[Math.floor(Math.random()*pool.length)];
+  var maxTime=orderTimeFor(key,game.day);
+  game.orders.push({id:game.orderIdSeq++, recipe:key, timeLeft:maxTime, maxTime:maxTime});
+}
+function endShift(){
+  game.screen='shop';
+}
+function endGame(){
+  game.finalDay=game.day;
+  game.screen='gameover';
+}
+function flashMessage(text){ game.toast={text:text, life:1.6, maxLife:1.6}; }
+function spawnFloat(text,x,y,color){ game.floatTexts.push({text:text,x:x,y:y,life:1.0,color:color||'#e3b458'}); }
+
+/* ---------- upgrades ---------- */
+function costFor(upg){ return Math.round(upg.baseCost*Math.pow(upg.growth, game.upgradeLevels[upg.id])); }
+function buyUpgrade(id){
+  var upg=null;
+  for(var i=0;i<UPGRADES.length;i++){ if(UPGRADES[i].id===id) upg=UPGRADES[i]; }
+  if(!upg) return;
+  var lvl=game.upgradeLevels[id];
+  if(lvl>=upg.max) return;
+  var cost=costFor(upg);
+  if(game.money<cost) return;
+  game.money-=cost;
+  game.upgradeLevels[id]++;
+  recalcStats();
+  playSfx('buy');
+}
+
+/* ---------- input ---------- */
+var keys={};
+var interactPrev=false;
+window.addEventListener('keydown',function(e){
+  ensureAudio();
+  var k=e.key.length===1?e.key.toLowerCase():e.key;
+  if(['w','a','s','d',' ','e','arrowup','arrowdown','arrowleft','arrowright','escape','p','enter'].indexOf(k.toLowerCase?k.toLowerCase():k)>=0 || k===' '){
+    e.preventDefault();
+  }
+  keys[k]=true;
+  if(k==='Enter'){ handlePrimaryAction(); }
+  if(k==='Escape' || k==='p' || k==='P'){
+    if(game.screen==='playing'){ game.paused=!game.paused; }
+  }
+},{passive:false});
+window.addEventListener('keyup',function(e){
+  var k=e.key.length===1?e.key.toLowerCase():e.key;
+  keys[k]=false;
+});
+canvas.addEventListener('click',function(e){
+  ensureAudio();
+  var rect=canvas.getBoundingClientRect();
+  var scaleX=canvas.width/rect.width, scaleY=canvas.height/rect.height;
+  var px=(e.clientX-rect.left)*scaleX, py=(e.clientY-rect.top)*scaleY;
+  for(var i=0;i<game.buttons.length;i++){
+    var b=game.buttons[i];
+    if(px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h){ b.action(); break; }
+  }
+});
+
+function handlePrimaryAction(){
+  if(game.screen==='title'){ game.day=1; game.money=0; game.upgradeLevels={legs:0,knife:0,stove:0,life:0,timer:0,tips:0,retard:0}; recalcStats(); startShift(); playSfx('start'); }
+  else if(game.screen==='shop'){ game.day++; startShift(); }
+  else if(game.screen==='gameover'){ game.screen='title'; }
+}
+
+function isDown(){ return !!(keys[' ']||keys['e']||keys['E']); }
+
+/* ---------- station interaction ---------- */
+function getFacingStation(){
+  var pc=Math.floor(player.x/TILE), pr=Math.floor(player.y/TILE);
+  var off={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[player.dir];
+  return stationAt(pc+off[0], pr+off[1]);
+}
+
+function handleStation(st,justPressed,dt){
+  if(!st) return;
+  switch(st.type){
+    case 'crate': handleCrate(st,justPressed); break;
+    case 'board': handleBoard(st,justPressed); break;
+    case 'stove': handleStoveInteract(st,justPressed); break;
+    case 'platestack':
+      if(justPressed && player.hold===null){ player.hold={kind:'plate',contents:[]}; playSfx('plate'); }
+      break;
+    case 'trash':
+      if(justPressed && player.hold!==null){ player.hold=null; playSfx('trash'); flashMessage('Tossed.'); }
+      break;
+    case 'serve':
+      if(justPressed && player.hold && player.hold.kind==='plate'){ tryServe(); }
+      break;
+  }
+}
+function handleCrate(st,justPressed){
+  if(!justPressed) return;
+  var ing=INGREDIENTS[st.item];
+  if(player.hold===null){
+    player.hold={kind:'item', key:st.item, state:'raw'};
+    playSfx('pick');
+  } else if(player.hold.kind==='plate' && ing.prep==='none'){
+    var key=st.item+'_raw';
+    if(player.hold.contents.indexOf(key)===-1){ player.hold.contents.push(key); playSfx('place'); }
+  }
+}
+function handleBoard(st,justPressed){
+  if(!st.itemData){
+    if(justPressed && player.hold && player.hold.kind==='item' && player.hold.state==='raw' && INGREDIENTS[player.hold.key].prep==='chop'){
+      st.itemData={key:player.hold.key, state:'raw', progress:0};
+      player.hold=null; playSfx('place');
+    }
+    return;
+  }
+  if(st.itemData.state==='raw'){
+    return; // chop progress is advanced with real dt inside updatePlayer()
+  }
+  if(st.itemData.state==='ready' && justPressed){
+    if(player.hold && player.hold.kind==='plate'){
+      var key=st.itemData.key+'_chopped';
+      if(player.hold.contents.indexOf(key)===-1) player.hold.contents.push(key);
+      st.itemData=null; playSfx('place');
+    } else if(player.hold===null){
+      player.hold={kind:'item', key:st.itemData.key, state:'chopped'};
+      st.itemData=null; playSfx('pick');
+    }
+  }
+}
+function handleStoveInteract(st,justPressed){
+  if(!st.itemData){
+    if(justPressed && player.hold && player.hold.kind==='item' && player.hold.state==='raw' && INGREDIENTS[player.hold.key].prep==='cook'){
+      st.itemData={key:player.hold.key, state:'raw', progress:0, burnProgress:0};
+      player.hold=null; playSfx('place');
+    }
+    return;
+  }
+  if(!justPressed) return;
+  if(st.itemData.state==='burnt'){
+    if(player.hold===null){ player.hold={kind:'item', key:st.itemData.key, state:'burnt'}; st.itemData=null; playSfx('burnt'); }
+  } else if(st.itemData.state==='ready'){
+    if(player.hold && player.hold.kind==='plate'){
+      var key=st.itemData.key+'_cooked';
+      if(player.hold.contents.indexOf(key)===-1) player.hold.contents.push(key);
+      st.itemData=null; playSfx('place');
+    } else if(player.hold===null){
+      player.hold={kind:'item', key:st.itemData.key, state:'cooked'};
+      st.itemData=null; playSfx('pick');
+    }
+  }
+}
+function tryServe(){
+  var plate=player.hold;
+  var have=plate.contents.slice().sort().join(',');
+  var matchRecipeKey=null;
+  Object.keys(RECIPES).forEach(function(k){ if(RECIPES[k].needSorted===have) matchRecipeKey=k; });
+  var servePos=stationScreenCenter(9,6);
+  if(matchRecipeKey===null){ playSfx('fail'); flashMessage("That plate doesn't match any dish."); return; }
+  var idx=-1;
+  for(var i=0;i<game.orders.length;i++){ if(game.orders[i].recipe===matchRecipeKey){ idx=i; break; } }
+  if(idx===-1){ playSfx('fail'); flashMessage('No active order needs '+RECIPES[matchRecipeKey].name+'.'); return; }
+  var order=game.orders[idx];
+  var frac=order.timeLeft/order.maxTime;
+  var reward=Math.round(RECIPES[matchRecipeKey].value*(1+0.3*frac)*game.stats.tipMult);
+  game.money+=reward;
+  game.shiftStats.served++;
+  game.shiftStats.earned+=reward;
+  spawnFloat('+$'+reward, servePos.x, servePos.y-10, '#e3b458');
+  game.orders.splice(idx,1);
+  player.hold=null;
+  playSfx('success');
+}
+
+/* ---------- update ---------- */
+function checkCollision(x,y){
+  var pts=[[x-player.hw,y-player.hh],[x+player.hw,y-player.hh],[x-player.hw,y+player.hh],[x+player.hw,y+player.hh]];
+  for(var i=0;i<pts.length;i++){
+    var c=Math.floor(pts[i][0]/TILE), r=Math.floor(pts[i][1]/TILE);
+    if(c<0||r<0||c>=COLS||r>=ROWS) return true;
+    if(isSolid(c,r)) return true;
+  }
+  return false;
+}
+function updatePlayer(dt){
+  var vx=0, vy=0;
+  if(keys['w']||keys['arrowup']||keys['ArrowUp']) vy-=1;
+  if(keys['s']||keys['arrowdown']||keys['ArrowDown']) vy+=1;
+  if(keys['a']||keys['arrowleft']||keys['ArrowLeft']) vx-=1;
+  if(keys['d']||keys['arrowright']||keys['ArrowRight']) vx+=1;
+  if(vx!==0 && vy!==0){ vx*=0.7071; vy*=0.7071; }
+  if(vx>0) player.dir='right'; else if(vx<0) player.dir='left';
+  if(vy>0) player.dir='down'; else if(vy<0) player.dir='up';
+  var spd=player.speed*game.stats.moveSpeedMult*dt;
+  var nx=player.x+vx*spd;
+  if(!checkCollision(nx,player.y)) player.x=nx;
+  var ny=player.y+vy*spd;
+  if(!checkCollision(player.x,ny)) player.y=ny;
+
+  var down=isDown();
+  var justPressed = down && !interactPrev;
+  var st=getFacingStation();
+  handleStation(st, justPressed, dt);
+  // manual chop progress (continuous hold), handled here with real dt
+  if(st && st.type==='board' && st.itemData && st.itemData.state==='raw' && down && player.hold===null){
+    st.itemData.progress += dt*game.stats.chopSpeedMult/BASE_CHOP_TIME;
+    if(st.itemData.progress>=1){ st.itemData.progress=1; st.itemData.state='ready'; playSfx('chopdone'); }
+  }
+  interactPrev=down;
+}
+function updateStoves(dt){
+  STATION_DEFS.forEach(function(s){
+    if(s.type!=='stove') return;
+    var st=stationMap[s.col+','+s.row];
+    var d=st.itemData;
+    if(!d) return;
+    if(d.state==='raw'){
+      d.progress += dt*game.stats.cookSpeedMult/BASE_COOK_TIME;
+      if(d.progress>=1){ d.progress=1; d.state='ready'; d.burnProgress=0; }
+    } else if(d.state==='ready'){
+      d.burnProgress += dt;
+      var limit=BASE_BURN_GRACE*game.stats.burnGraceMult;
+      if(d.burnProgress>=limit){ d.state='burnt'; }
+    }
+  });
+}
+function updateOrders(dt){
+  game.nextOrderIn -= dt;
+  if(game.nextOrderIn<=0 && game.orders.length<maxTickets(game.day)){
+    spawnOrder();
+    var r=spawnRange(game.day);
+    game.nextOrderIn = r[0]+Math.random()*(r[1]-r[0]);
+  }
+  for(var i=game.orders.length-1;i>=0;i--){
+    var o=game.orders[i];
+    o.timeLeft -= dt;
+    if(o.timeLeft<=0){
+      game.orders.splice(i,1);
+      game.lives--;
+      game.shiftStats.missed++;
+      flashMessage('Order missed! -1 life');
+      playSfx('missed');
+      if(game.lives<=0){ endGame(); return; }
+    }
+  }
+}
+function updateToastAndFloats(dt){
+  if(game.toast){ game.toast.life-=dt; if(game.toast.life<=0) game.toast=null; }
+  for(var i=game.floatTexts.length-1;i>=0;i--){
+    var f=game.floatTexts[i];
+    f.y-=28*dt; f.life-=dt;
+    if(f.life<=0) game.floatTexts.splice(i,1);
+  }
+}
+function update(dt){
+  if(game.screen!=='playing') return;
+  if(game.paused){ return; }
+  updatePlayer(dt);
+  updateStoves(dt);
+  updateOrders(dt);
+  updateToastAndFloats(dt);
+  if(game.screen!=='playing') return;
+  game.shiftTimeLeft -= dt;
+  if(game.shiftTimeLeft<=0){ game.shiftTimeLeft=0; endShift(); }
+}
+
+/* ---------- rendering helpers ---------- */
+function stationScreenCenter(c,r){ return {x:KX+c*TILE+TILE/2, y:KY+r*TILE+TILE/2}; }
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function drawButton(x,y,w,h,label,style){
+  style=style||{};
+  var disabled=!!style.disabled;
+  ctx.save();
+  roundRect(x,y,w,h,10);
+  ctx.fillStyle = disabled ? '#4a4640' : (style.color||'#e05a2b');
+  ctx.globalAlpha = disabled ? 0.5 : 1;
+  ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle='#fff9ee';
+  ctx.font='700 17px "Bricolage Grotesque", sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label, x+w/2, y+h/2+1);
+  ctx.restore();
+  if(!disabled) game.buttons.push({x:x,y:y,w:w,h:h,action:style.action||function(){}});
+}
+
+function itemIcon(key,state){
+  var ing=INGREDIENTS[key];
+  if(!ing) return '❓';
+  if(state==='cooked' && ing.cookedIcon) return ing.cookedIcon;
+  if(state==='burnt') return '💀';
+  return ing.icon;
+}
+
+function drawKitchen(){
+  // floor
+  for(var r=1;r<ROWS-1;r++){
+    for(var c=1;c<COLS-1;c++){
+      var x=KX+c*TILE, y=KY+r*TILE;
+      ctx.fillStyle = ((c+r)%2===0) ? '#2c2419' : '#261f16';
+      ctx.fillRect(x,y,TILE,TILE);
+    }
+  }
+  // grid lines subtle
+  ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1;
+  for(var r2=1;r2<ROWS-1;r2++){ ctx.beginPath(); ctx.moveTo(KX+TILE,KY+r2*TILE); ctx.lineTo(KX+(COLS-1)*TILE,KY+r2*TILE); ctx.stroke(); }
+  for(var c2=1;c2<COLS-1;c2++){ ctx.beginPath(); ctx.moveTo(KX+c2*TILE,KY+TILE); ctx.lineTo(KX+c2*TILE,KY+(ROWS-1)*TILE); ctx.stroke(); }
+
+  // stations
+  Object.keys(stationMap).forEach(function(key){
+    var st=stationMap[key];
+    var x=KX+st.col*TILE, y=KY+st.row*TILE;
+    var color = st.type==='crate' ? STATION_COLORS.crate : (STATION_COLORS[st.type]||STATION_COLORS.wall);
+    ctx.fillStyle='#171310';
+    ctx.fillRect(x,y+TILE-10,TILE,10);
+    ctx.fillStyle=color;
+    ctx.fillRect(x+2,y+2,TILE-4,TILE-4-8);
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=2;
+    ctx.strokeRect(x+2,y+2,TILE-4,TILE-4-8);
+
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    if(st.type==='crate'){
+      ctx.font='26px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.fillText(INGREDIENTS[st.item].icon, x+TILE/2, y+TILE/2-10);
+      ctx.font='600 9px "Space Mono",monospace';
+      ctx.fillStyle='#fff9ee';
+      ctx.fillText(INGREDIENTS[st.item].name, x+TILE/2, y+TILE-16);
+    } else if(STATION_ICON[st.type]){
+      ctx.font='24px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.fillText(STATION_ICON[st.type], x+TILE/2, y+TILE/2-10);
+    }
+
+    // item sitting on board/stove
+    if(st.itemData){
+      var d=st.itemData;
+      ctx.font='26px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.fillText(itemIcon(d.key,d.state==='ready'?(st.type==='stove'?'cooked':'chopped'):d.state), x+TILE/2, y+TILE/2-10);
+      // progress bar
+      if(d.state==='raw'){
+        var p = st.type==='board' ? d.progress : d.progress;
+        ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(x+8,y+TILE-22,TILE-16,6);
+        ctx.fillStyle= st.type==='stove' ? '#e0a940' : '#7fb885';
+        ctx.fillRect(x+8,y+TILE-22,(TILE-16)*Math.min(p,1),6);
+      } else if(d.state==='ready' && st.type==='stove'){
+        var limit=BASE_BURN_GRACE*game.stats.burnGraceMult;
+        var bp=Math.min(d.burnProgress/limit,1);
+        ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(x+8,y+TILE-22,TILE-16,6);
+        ctx.fillStyle = bp>0.7 ? '#d1462b' : '#7fb885';
+        ctx.fillRect(x+8,y+TILE-22,(TILE-16)*(1-bp),6);
+      }
+    }
+  });
+
+  // player
+  var px=KX+player.x, py=KY+player.y;
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(px,py+16,16,6,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#e05a2b';
+  roundRect(px-16,py-14,32,32,10); ctx.fill();
+  ctx.fillStyle='#fff9ee';
+  roundRect(px-13,py-24,26,14,6); ctx.fill();
+  // facing indicator
+  ctx.fillStyle='#fff9ee';
+  var off={up:[0,-22],down:[0,22],left:[-22,0],right:[22,0]}[player.dir];
+  ctx.beginPath(); ctx.arc(px+off[0]*0.55,py+off[1]*0.55,3.5,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  if(player.hold){
+    ctx.font='24px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    if(player.hold.kind==='plate'){
+      ctx.fillText('🍽️', px, py-38);
+      if(player.hold.contents.length){
+        ctx.font='13px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+        var s=player.hold.contents.map(function(k){ var parts=k.split('_'); return itemIcon(parts[0], parts[1]==='cooked'?'cooked':parts[1]); }).join('');
+        ctx.fillText(s, px, py-58);
+      }
+    } else {
+      ctx.fillText(itemIcon(player.hold.key, player.hold.state), px, py-38);
+    }
+  }
+
+  // floating texts
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  game.floatTexts.forEach(function(f){
+    ctx.globalAlpha=Math.max(f.life,0);
+    ctx.font='700 15px "Space Mono",monospace';
+    ctx.fillStyle=f.color;
+    ctx.fillText(f.text, f.x, f.y);
+    ctx.globalAlpha=1;
+  });
+}
+
+function drawHUD(){
+  ctx.fillStyle='#1c150e';
+  ctx.fillRect(0,0,CANVAS_W,104);
+  ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(0,104); ctx.lineTo(CANVAS_W,104); ctx.stroke();
+
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.font='700 15px "Space Mono",monospace';
+  ctx.fillStyle='#e3b458';
+  ctx.fillText('DAY '+game.day, 24, 26);
+  ctx.fillStyle='#fff9ee';
+  ctx.fillText('$'+game.money, 24, 52);
+
+  var hearts='';
+  for(var i=0;i<game.stats.maxLives;i++){ hearts += (i<game.lives ? '❤' : '🖤'); }
+  ctx.font='16px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.fillText(hearts, 130, 26);
+
+  // shift timer bar
+  var barX=24, barY=68, barW=360, barH=14;
+  ctx.fillStyle='rgba(255,255,255,0.1)'; roundRect(barX,barY,barW,barH,7); ctx.fill();
+  var frac = game.shiftDuration>0 ? game.shiftTimeLeft/game.shiftDuration : 0;
+  ctx.fillStyle='#e05a2b'; roundRect(barX,barY,barW*Math.max(frac,0),barH,7); ctx.fill();
+  ctx.font='700 11px "Space Mono",monospace'; ctx.fillStyle='#fff9ee'; ctx.textAlign='center';
+  var mm=Math.floor(Math.max(game.shiftTimeLeft,0)/60), ss=Math.floor(Math.max(game.shiftTimeLeft,0)%60);
+  ctx.fillText(mm+':'+(ss<10?'0':'')+ss, barX+barW/2, barY+barH/2+1);
+  ctx.textAlign='left';
+
+  ctx.font='700 13px "Bricolage Grotesque",sans-serif';
+  ctx.fillStyle='#bfae8d';
+  ctx.fillText('PLATE RUSH', 640, 26);
+  ctx.font='11px "Space Mono",monospace';
+  ctx.fillText('served '+game.shiftStats.served+'  ·  missed '+game.shiftStats.missed, 640, 48);
+}
+
+function drawTickets(){
+  var rx=KX+COLS*TILE+18, ry=KY, rw=CANVAS_W-rx-20;
+  ctx.font='700 11px "Space Mono",monospace'; ctx.textAlign='left'; ctx.fillStyle='#bfae8d';
+  ctx.fillText('ORDERS', rx, ry+2);
+  var y=ry+18;
+  game.orders.forEach(function(o){
+    var rec=RECIPES[o.recipe];
+    var h=78;
+    ctx.fillStyle='#f4ede0';
+    roundRect(rx,y,rw,h,8); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1; roundRect(rx,y,rw,h,8); ctx.stroke();
+    ctx.font='24px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    ctx.fillStyle='#241d14'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(rec.icon, rx+10, y+26);
+    ctx.font='700 12px "Bricolage Grotesque",sans-serif';
+    ctx.fillText(rec.name, rx+42, y+18);
+    ctx.font='700 11px "Space Mono",monospace'; ctx.fillStyle='#a5771f';
+    ctx.fillText('$'+rec.value, rx+42, y+36);
+    var frac=Math.max(o.timeLeft/o.maxTime,0);
+    ctx.fillStyle='rgba(0,0,0,0.12)'; ctx.fillRect(rx+10,y+h-16,rw-20,6);
+    ctx.fillStyle = frac<0.25 ? '#c9432b' : (frac<0.5 ? '#c98a2b' : '#4c8a55');
+    ctx.fillRect(rx+10,y+h-16,(rw-20)*frac,6);
+    y+=h+10;
+  });
+  ctx.textAlign='left';
+}
+
+function drawToast(){
+  if(!game.toast) return;
+  var a=Math.min(game.toast.life/0.4,1);
+  ctx.save();
+  ctx.globalAlpha=a;
+  ctx.font='700 15px "Bricolage Grotesque",sans-serif';
+  ctx.textAlign='center';
+  var w=ctx.measureText(game.toast.text).width+28;
+  var cx=KX+(COLS*TILE)/2, cy=KY+(ROWS*TILE)-26;
+  ctx.fillStyle='rgba(20,15,10,0.85)';
+  roundRect(cx-w/2,cy-16,w,32,8); ctx.fill();
+  ctx.fillStyle='#fff9ee';
+  ctx.textBaseline='middle';
+  ctx.fillText(game.toast.text, cx, cy+1);
+  ctx.restore();
+  ctx.textAlign='left';
+}
+
+function drawPauseOverlay(){
+  if(!game.paused) return;
+  ctx.fillStyle='rgba(10,8,5,0.6)';
+  ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='800 40px "Bricolage Grotesque",sans-serif';
+  ctx.fillStyle='#fff9ee';
+  ctx.fillText('PAUSED', CANVAS_W/2, CANVAS_H/2-10);
+  ctx.font='13px "Space Mono",monospace';
+  ctx.fillStyle='#bfae8d';
+  ctx.fillText('press Esc or P to resume', CANVAS_W/2, CANVAS_H/2+26);
+  ctx.textAlign='left';
+}
+
+function drawBackdrop(){
+  ctx.fillStyle='#12100c';
+  ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+}
+
+function drawTitleScreen(){
+  drawBackdrop();
+  ctx.save();
+  var grad=ctx.createRadialGradient(CANVAS_W/2,220,60,CANVAS_W/2,220,520);
+  grad.addColorStop(0,'#2c2015'); grad.addColorStop(1,'#12100c');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  ctx.restore();
+
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='800 64px "Bricolage Grotesque",sans-serif';
+  ctx.fillStyle='#fff9ee';
+  ctx.fillText('PLATE RUSH', CANVAS_W/2, 180);
+  ctx.font='700 15px "Space Mono",monospace';
+  ctx.fillStyle='#e3b458';
+  ctx.fillText('a kitchen-rush arcade game', CANVAS_W/2, 224);
+
+  ctx.font='40px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.fillText('🥗  🍔  🍲', CANVAS_W/2, 300);
+
+  ctx.font='13px "Space Mono",monospace';
+  ctx.fillStyle='#bfae8d';
+  ctx.fillText('WASD / Arrows to move  ·  Space / E to interact & chop  ·  Esc to pause', CANVAS_W/2, 356);
+
+  game.buttons=[];
+  drawButton(CANVAS_W/2-110,400,220,56,'START SHIFT',{color:'#e05a2b',action:function(){ handlePrimaryAction(); }});
+  ctx.font='11px "Space Mono",monospace'; ctx.fillStyle='#7a6c53';
+  ctx.fillText('or press Enter', CANVAS_W/2, 472);
+  ctx.textAlign='left';
+}
+
+function drawShopScreen(){
+  drawBackdrop();
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.font='800 34px "Bricolage Grotesque",sans-serif';
+  ctx.fillStyle='#fff9ee';
+  ctx.fillText('DAY '+game.day+' COMPLETE', CANVAS_W/2, 56);
+  ctx.font='13px "Space Mono",monospace'; ctx.fillStyle='#bfae8d';
+  ctx.fillText('served '+game.shiftStats.served+'  ·  missed '+game.shiftStats.missed+'  ·  earned $'+game.shiftStats.earned+'  ·  total $'+game.money, CANVAS_W/2, 80);
+
+  game.buttons=[];
+  var cols=2, cardW=440, cardH=64, gap=14;
+  var startX=CANVAS_W/2-(cardW*cols+gap)/2, startY=110;
+  UPGRADES.forEach(function(u,i){
+    var col=i%cols, row=Math.floor(i/cols);
+    var x=startX+col*(cardW+gap), y=startY+row*(cardH+gap);
+    var lvl=game.upgradeLevels[u.id];
+    var maxed=lvl>=u.max;
+    var cost=costFor(u);
+    var afford=game.money>=cost;
+    ctx.fillStyle='#221b12';
+    roundRect(x,y,cardW,cardH,10); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; roundRect(x,y,cardW,cardH,10); ctx.stroke();
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.font='26px "Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    ctx.fillText(u.icon, x+14, y+cardH/2);
+    ctx.font='700 14px "Bricolage Grotesque",sans-serif'; ctx.fillStyle='#fff9ee';
+    ctx.fillText(u.name+'  ('+lvl+'/'+u.max+')', x+52, y+22);
+    ctx.font='12px "Work Sans",sans-serif'; ctx.fillStyle='#bfae8d';
+    ctx.fillText(u.desc, x+52, y+42);
+    var bx=x+cardW-108, bw=96, bh=cardH-20, by=y+10;
+    drawButton(bx,by,bw,bh, maxed?'MAXED':('$'+cost), {color: maxed?'#4a4640':'#4c8a55', disabled: maxed || !afford, action:function(){ buyUpgrade(u.id); }});
+  });
+
+  var by2=startY+Math.ceil(UPGRADES.length/cols)*(cardH+gap)+14;
+  drawButton(CANVAS_W/2-120,by2,240,52,'START DAY '+(game.day+1),{color:'#e05a2b',action:function(){ game.day++; startShift(); }});
+  ctx.textAlign='left';
+}
+
+function drawGameOverScreen(){
+  drawBackdrop();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='800 46px "Bricolage Grotesque",sans-serif';
+  ctx.fillStyle='#e05a2b';
+  ctx.fillText('SHIFT OVER', CANVAS_W/2, 200);
+  ctx.font='15px "Space Mono",monospace'; ctx.fillStyle='#fff9ee';
+  ctx.fillText('You made it to day '+game.finalDay+' with $'+game.money+' earned.', CANVAS_W/2, 246);
+  ctx.font='13px "Work Sans",sans-serif'; ctx.fillStyle='#bfae8d';
+  ctx.fillText('The tickets got the better of the kitchen tonight.', CANVAS_W/2, 272);
+
+  game.buttons=[];
+  drawButton(CANVAS_W/2-110,330,220,56,'PLAY AGAIN',{color:'#e05a2b',action:function(){ handlePrimaryAction(); }});
+  ctx.font='11px "Space Mono",monospace'; ctx.fillStyle='#7a6c53';
+  ctx.fillText('or press Enter', CANVAS_W/2, 404);
+  ctx.textAlign='left';
+}
+
+function render(){
+  ctx.clearRect(0,0,CANVAS_W,CANVAS_H);
+  if(game.screen==='title'){ drawTitleScreen(); return; }
+  if(game.screen==='shop'){ drawShopScreen(); return; }
+  if(game.screen==='gameover'){ drawGameOverScreen(); return; }
+  // playing
+  drawBackdrop();
+  drawHUD();
+  drawKitchen();
+  drawTickets();
+  drawToast();
+  drawPauseOverlay();
+}
+
+/* ---------- main loop ---------- */
+var last=performance.now();
+function frame(now){
+  var dt=Math.min((now-last)/1000,0.05);
+  last=now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
