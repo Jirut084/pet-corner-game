@@ -75,8 +75,8 @@ public class Pet : MonoBehaviour, ICarryable
     /// <summary>ชื่อบุคลิกไว้โชว์บนป้าย (null = ปกติ ไม่ต้องโชว์)</summary>
     public string TraitLabel => trait switch
     {
-        PetTrait.Clingy => "ติดคน",
-        PetTrait.Skittish => "ขี้ตกใจ",
+        PetTrait.Clingy => Loc.T("ติดคน", "Clingy"),
+        PetTrait.Skittish => Loc.T("ขี้ตกใจ", "Skittish"),
         _ => null
     };
 
@@ -316,7 +316,7 @@ public class Pet : MonoBehaviour, ICarryable
         {
             CollectedTip += species.comboTip;
             RunStats.NoteCombo();
-            GameLog.Push($"คอมโบ! {DisplayName} ทำต่อเนื่องตามลำดับ → ทิป +{species.comboTip}", LogTone.Good);
+            GameLog.Push(Loc.T($"คอมโบ! {DisplayName} ทำต่อเนื่องตามลำดับ → ทิป +{species.comboTip}", $"Combo! {DisplayName} got its steps in order → tip +{species.comboTip}"), LogTone.Good);
         }
 
         OnStepCompleted?.Invoke(this);
@@ -419,12 +419,12 @@ public class Pet : MonoBehaviour, ICarryable
     /// <summary>ข้อความสรุปความคืบหน้าไว้แสดงใน log</summary>
     public string GetProgressText()
     {
-        if (species == null) return "(ไม่มีข้อมูลสัตว์)";
+        if (species == null) return Loc.T("(ไม่มีข้อมูลสัตว์)", "(no pet data)");
 
-        if (IsComplete) return $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] พร้อมส่งคืน";
+        if (IsComplete) return Loc.T($"{species.speciesName} [{StepsCompleted}/{TotalSteps}] พร้อมส่งคืน", $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] ready to return");
 
         List<string> labels = RemainingSteps().ConvertAll(CareStepStyle.LabelOf);
-        return $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] ยังต้อง: {string.Join(", ", labels)}";
+        return Loc.T($"{species.speciesName} [{StepsCompleted}/{TotalSteps}] ยังต้อง: {string.Join(", ", labels)}", $"{species.speciesName} [{StepsCompleted}/{TotalSteps}] still needs: {string.Join(", ", labels)}");
     }
 
     public void OnPickedUp(PlayerCarrier carrier)

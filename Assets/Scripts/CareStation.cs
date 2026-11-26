@@ -228,13 +228,13 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         {
             if (carrier.IsCarrying)
             {
-                GameLog.Push($"มือไม่ว่าง — วางของที่ถืออยู่ก่อนถึงจะอุ้ม {OccupyingPet.DisplayName} จาก{Label}ได้", LogTone.Warn);
+                GameLog.Push(Loc.T($"มือไม่ว่าง — วางของที่ถืออยู่ก่อนถึงจะอุ้ม {OccupyingPet.DisplayName} จาก{Label}ได้", $"Hands full — put down what you're holding before picking up {OccupyingPet.DisplayName} from {Label}"), LogTone.Warn);
                 return;
             }
 
             if (mode == ServiceMode.DropOff && State == StationState.Working)
             {
-                GameLog.Push($"{Label}กำลังดูแล {OccupyingPet.DisplayName} อยู่ ({progress:P0}) รออีกนิด", LogTone.Warn);
+                GameLog.Push(Loc.T($"{Label}กำลังดูแล {OccupyingPet.DisplayName} อยู่ ({progress:P0}) รออีกนิด", $"{Label} is caring for {OccupyingPet.DisplayName} ({progress:P0}) — hang on"), LogTone.Warn);
                 return;
             }
 
@@ -255,14 +255,14 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         // สถานีว่าง → พยายามวางสัตว์ที่ถืออยู่ลง
         if (!carrier.IsCarrying)
         {
-            GameLog.Push($"{Label}ว่างอยู่ — อุ้มสัตว์มาวางได้");
+            GameLog.Push(Loc.T($"{Label}ว่างอยู่ — อุ้มสัตว์มาวางได้", $"{Label} is free — bring a pet here"));
             return;
         }
 
         Pet held = carrier.GetHeld<Pet>();
         if (held == null)
         {
-            GameLog.Push("ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง วางที่สถานีไม่ได้", LogTone.Warn);
+            GameLog.Push(Loc.T("ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง วางที่สถานีไม่ได้", "That's not a pet, so it can't go on the station"), LogTone.Warn);
             return;
         }
 
@@ -287,7 +287,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         progress = 0f;
         State = StationState.Working;
         StartStationSound();
-        GameLog.Push($"วาง {held.DisplayName} ไว้ที่ {Label} (~{processSeconds / InteractSpeed:F1} วิ) ไปทำอย่างอื่นก่อนได้");
+        GameLog.Push(Loc.T($"วาง {held.DisplayName} ไว้ที่ {Label} (~{processSeconds / InteractSpeed:F1} วิ) ไปทำอย่างอื่นก่อนได้", $"Placed {held.DisplayName} at {Label} (~{processSeconds / InteractSpeed:F1}s) — go do something else meanwhile"));
     }
 
     /// <summary>สถานี DropOff ทำงานเสร็จ — เช็คขั้นตอนหรือจ่ายทิป</summary>
@@ -302,14 +302,14 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         {
             OnStepApplied(pet);
             AudioManager.Instance?.PlayTaskDone();
-            GameLog.Push($"{Label} เสร็จแล้ว → {pet.GetProgressText()}", LogTone.Good);
+            GameLog.Push(Loc.T($"{Label} เสร็จแล้ว → {pet.GetProgressText()}", $"{Label} done → {pet.GetProgressText()}"), LogTone.Good);
             return;
         }
 
         if (pet.TryCollectTip(step, tipAmount))
         {
             AudioManager.Instance?.PlayTaskDone();
-            GameLog.Push($"บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})", LogTone.Good);
+            GameLog.Push(Loc.T($"บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})", $"Extra service for {pet.DisplayName} → tip +{tipAmount} (total {pet.CollectedTip})"), LogTone.Good);
         }
     }
 
@@ -342,7 +342,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
         currentHoldFailed = true;
         OnHoldOvertime();
         StopStationLoop();
-        GameLog.Push($"{Label}: ค้างนานเกิน — ปล่อยปุ่มแล้วลองใหม่ (ปล่อยตอนเข็มอยู่ในช่วงสีเขียว)", LogTone.Warn);
+        GameLog.Push(Loc.T($"{Label}: ค้างนานเกิน — ปล่อยปุ่มแล้วลองใหม่ (ปล่อยตอนเข็มอยู่ในช่วงสีเขียว)", $"{Label}: held too long — let go and try again (release while the needle is in the green)"), LogTone.Warn);
     }
 
     public void OnHoldRelease(GameObject interactor, float heldSeconds)
@@ -359,7 +359,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         if (heldSeconds < EffectiveMinHold)
         {
-            GameLog.Push($"{Label}: ปล่อยเร็วไป — กดปุ่มค้างไว้จนเข็มเข้าช่วงสีเขียวแล้วค่อยปล่อย", LogTone.Warn);
+            GameLog.Push(Loc.T($"{Label}: ปล่อยเร็วไป — กดปุ่มค้างไว้จนเข็มเข้าช่วงสีเขียวแล้วค่อยปล่อย", $"{Label}: released too early — hold until the needle reaches the green, then let go"), LogTone.Warn);
             return;
         }
 
@@ -375,7 +375,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         if (holdHasTarget && !currentHoldFailed)
         {
-            GameLog.Push($"{Label}: เดินออกห่างระหว่างกดค้าง — ยกเลิก ลองใหม่ได้เลย", LogTone.Warn);
+            GameLog.Push(Loc.T($"{Label}: เดินออกห่างระหว่างกดค้าง — ยกเลิก ลองใหม่ได้เลย", $"{Label}: you walked away while holding — cancelled, try again"), LogTone.Warn);
         }
 
         holdHasTarget = false;
@@ -393,7 +393,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
     // ---------- ส่วนกลาง ----------
 
-    private string Label => mode == ServiceMode.Holding ? "โต๊ะพัก" : CareStepStyle.LabelOf(step);
+    private string Label => mode == ServiceMode.Holding ? Loc.T("โต๊ะพัก", "Holding table") : CareStepStyle.LabelOf(step);
 
     /// <summary>ชื่อสถานีภาษาไทย ใช้แสดงบนหน้าต่างซูม</summary>
     public string DisplayLabel => Label;
@@ -405,14 +405,14 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         if (carrier == null || !carrier.IsCarrying)
         {
-            reason = $"ต้องอุ้มสัตว์มาที่{Label}ถึงจะใช้ได้";
+            reason = Loc.T($"ต้องอุ้มสัตว์มาที่{Label}ถึงจะใช้ได้", $"Bring a pet to {Label} to use it");
             return ServeResult.None;
         }
 
         pet = carrier.GetHeld<Pet>();
         if (pet == null)
         {
-            reason = "ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง";
+            reason = Loc.T("ของที่ถืออยู่ไม่ใช่สัตว์เลี้ยง", "You're not holding a pet");
             return ServeResult.None;
         }
 
@@ -432,13 +432,13 @@ public class CareStation : MonoBehaviour, IHoldInteractable
             if (tipAmount > 0 && !pet.HasTippedAt(step)) return ServeResult.GiveTip;
 
             reason = tipAmount > 0
-                ? $"{pet.DisplayName} รับบริการเสริมที่{Label}ไปแล้ว — พาไปส่งคืนได้เลย"
-                : $"{pet.DisplayName} ดูแลครบแล้ว — พาไปส่งคืนได้เลย";
+                ? Loc.T($"{pet.DisplayName} รับบริการเสริมที่{Label}ไปแล้ว — พาไปส่งคืนได้เลย", $"{pet.DisplayName} already got the extra service at {Label} — take it back to the owner")
+                : Loc.T($"{pet.DisplayName} ดูแลครบแล้ว — พาไปส่งคืนได้เลย", $"{pet.DisplayName} is fully cared for — take it back to the owner");
             return ServeResult.None;
         }
 
         string remaining = string.Join(", ", pet.RemainingSteps().ConvertAll(CareStepStyle.LabelOf));
-        reason = $"{pet.DisplayName} ไม่ได้ต้องการ{Label} (ยังต้อง: {remaining})";
+        reason = Loc.T($"{pet.DisplayName} ไม่ได้ต้องการ{Label} (ยังต้อง: {remaining})", $"{pet.DisplayName} doesn't need {Label} (still needs: {remaining})");
         return ServeResult.None;
     }
 
@@ -455,7 +455,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
                 if (pet.TryCollectTip(step, tipAmount))
                 {
                     AudioManager.Instance?.PlayTaskDone();
-                    GameLog.Push($"บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})", LogTone.Good);
+                    GameLog.Push(Loc.T($"บริการเสริมให้ {pet.DisplayName} → ทิป +{tipAmount} (รวม {pet.CollectedTip})", $"Extra service for {pet.DisplayName} → tip +{tipAmount} (total {pet.CollectedTip})"), LogTone.Good);
                 }
                 break;
 
@@ -475,7 +475,7 @@ public class CareStation : MonoBehaviour, IHoldInteractable
 
         OnStepApplied(pet);
         AudioManager.Instance?.PlayTaskDone();
-        GameLog.Push($"{Label} สำเร็จ → {pet.GetProgressText()}", LogTone.Good);
+        GameLog.Push(Loc.T($"{Label} สำเร็จ → {pet.GetProgressText()}", $"{Label} success → {pet.GetProgressText()}"), LogTone.Good);
     }
 
     private void PlaceOnStation(Pet pet)

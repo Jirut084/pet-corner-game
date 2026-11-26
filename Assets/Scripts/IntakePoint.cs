@@ -98,15 +98,15 @@ public class IntakePoint : MonoBehaviour, IInteractable
         {
             if (game.Phase != GamePhase.Service)
             {
-                GameLog.Push("ยังไม่ได้เปิดร้าน รับออเดอร์ไม่ได้", LogTone.Warn);
+                GameLog.Push(Loc.T("ยังไม่ได้เปิดร้าน รับออเดอร์ไม่ได้", "The shop isn't open yet — can't take orders"), LogTone.Warn);
             }
             else if (game.ActiveOrderCount >= game.ConcurrentOrderLimit)
             {
-                GameLog.Push($"ดูแลพร้อมกันได้แค่ {game.ConcurrentOrderLimit} ตัว ส่งคืนสักตัวก่อน", LogTone.Warn);
+                GameLog.Push(Loc.T($"ดูแลพร้อมกันได้แค่ {game.ConcurrentOrderLimit} ตัว ส่งคืนสักตัวก่อน", $"You can only care for {game.ConcurrentOrderLimit} pets at once — return one first"), LogTone.Warn);
             }
             else
             {
-                GameLog.Push("รับออเดอร์ครบโควตาของวันนี้แล้ว", LogTone.Warn);
+                GameLog.Push(Loc.T("รับออเดอร์ครบโควตาของวันนี้แล้ว", "Today's order quota is full"), LogTone.Warn);
             }
 
             return;
@@ -122,7 +122,7 @@ public class IntakePoint : MonoBehaviour, IInteractable
         Customer customer = customers.CustomerAtCounter();
         if (customer == null)
         {
-            GameLog.Push("ยังไม่มีลูกค้าที่เคาน์เตอร์", LogTone.Warn);
+            GameLog.Push(Loc.T("ยังไม่มีลูกค้าที่เคาน์เตอร์", "No customer at the counter yet"), LogTone.Warn);
             return;
         }
 
@@ -140,8 +140,8 @@ public class IntakePoint : MonoBehaviour, IInteractable
         if (useRoom && (room == null || !room.HasSpace))
         {
             GameLog.Push(room == null
-                ? "มือไม่ว่าง วางของที่ถืออยู่ก่อน (โต๊ะพักรับได้)"
-                : $"ห้องรอเต็มแล้ว ({room.Count}/{room.Capacity}) — พาสัตว์ไปดูแลก่อน", LogTone.Warn);
+                ? Loc.T("มือไม่ว่าง วางของที่ถืออยู่ก่อน (โต๊ะพักรับได้)", "Hands full — put down what you're holding first (a holding table works)")
+                : Loc.T($"ห้องรอเต็มแล้ว ({room.Count}/{room.Capacity}) — พาสัตว์ไปดูแลก่อน", $"The waiting room is full ({room.Count}/{room.Capacity}) — care for a pet first"), LogTone.Warn);
             return;
         }
 
@@ -172,7 +172,7 @@ public class IntakePoint : MonoBehaviour, IInteractable
         // ไม่งั้นลูกค้าจะยืนค้างที่เคาน์เตอร์บังคนถัดไปตลอดวัน
         if (!customers.AssignSeat(customer, pet))
         {
-            GameLog.Push("ไม่มีจุดรอว่าง รับออเดอร์ไม่ได้", LogTone.Warn);
+            GameLog.Push(Loc.T("ไม่มีจุดรอว่าง รับออเดอร์ไม่ได้", "No free waiting spot — can't take the order"), LogTone.Warn);
             Destroy(petObj);
             return;
         }
@@ -194,17 +194,17 @@ public class IntakePoint : MonoBehaviour, IInteractable
         if (demand != null)
         {
             customer.RequestGood(demand);
-            GameLog.Push($"ลูกค้าสั่ง {demand.label} เพิ่ม (+{demand.bonusPay} ถ้าส่งทัน)");
+            GameLog.Push(Loc.T($"ลูกค้าสั่ง {demand.label} เพิ่ม (+{demand.bonusPay} ถ้าส่งทัน)", $"The customer also wants {demand.label} (+{demand.bonusPay} if delivered in time)"));
         }
 
         // ขั้นตอนเรียงตามลำดับคอมโบ ทำตามนี้ต่อเนื่องกันได้ทิปเพิ่ม
-        string where = useRoom ? " — รออยู่ในห้องรอ" : string.Empty;
+        string where = useRoom ? Loc.T(" — รออยู่ในห้องรอ", " — in the waiting room") : string.Empty;
         string trait = pet.TraitLabel != null ? $" [{pet.TraitLabel}]" : string.Empty;
         List<string> steps = new List<string>();
         foreach (CareStep step in pet.OrderedSteps) steps.Add(CareStepStyle.LabelOf(step));
 
-        GameLog.Push($"รับออเดอร์ {pet.DisplayName}{trait}{where} — ต้องทำ: {string.Join(" → ", steps)} " +
-                     $"(อดทน {customer.RequestedSpecies.patienceSeconds:F0} วิ)", LogTone.Good);
+        GameLog.Push(Loc.T($"รับออเดอร์ {pet.DisplayName}{trait}{where} — ต้องทำ: {string.Join(" → ", steps)} ", $"Took order: {pet.DisplayName}{trait}{where} — steps: {string.Join(" → ", steps)} ") +
+                     Loc.T($"(อดทน {customer.RequestedSpecies.patienceSeconds:F0} วิ)", $"(patience {customer.RequestedSpecies.patienceSeconds:F0}s)"), LogTone.Good);
     }
 
     // เส้นสีเหลืองจากเคาน์เตอร์ไปจุดยืนลูกค้า ใช้เช็คตำแหน่งตอนย้าย IntakePoint ใน Scene view

@@ -184,7 +184,7 @@ public class GameFlowDebugControls : MonoBehaviour
         Fill(rewardTitle.rectTransform, 32f, 40f);
 
         TextMeshProUGUI subtitle = UiKit.MakeText("Subtitle", panel, 19f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        subtitle.text = "เลือกได้ 1 ใบ — ใบที่แรงกว่ามักมีราคาที่ต้องจ่าย";
+        subtitle.text = Loc.T("เลือกได้ 1 ใบ — ใบที่แรงกว่ามักมีราคาที่ต้องจ่าย", "Pick 1 card — the stronger ones usually come with a cost");
         Fill(subtitle.rectTransform, 76f, 24f);
 
         float left = (panelWidth - (3 * cardWidth + 2 * 18f)) * 0.5f;
@@ -216,7 +216,7 @@ public class GameFlowDebugControls : MonoBehaviour
         Fill(shopTitle.rectTransform, 30f, 38f);
 
         TextMeshProUGUI subtitle = UiKit.MakeText("Subtitle", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        subtitle.text = "ใช้เงินจากลูกค้าซื้อบัฟ / สถานีเพิ่ม / สัตว์ชนิดใหม่ — ชิ้นละครั้งต่อวัน";
+        subtitle.text = Loc.T("ใช้เงินจากลูกค้าซื้อบัฟ / สถานีเพิ่ม / สัตว์ชนิดใหม่ — ชิ้นละครั้งต่อวัน", "Spend customer money on buffs / extra stations / new pets — each once per day");
         Fill(subtitle.rectTransform, 70f, 24f);
 
         // ป้ายเงินมุมขวาบนของแผง
@@ -259,7 +259,7 @@ public class GameFlowDebugControls : MonoBehaviour
 
         TextMeshProUGUI title = UiKit.MakeText("Title", panel, 28f, UiKit.Ink, TextAlignmentOptions.Top);
         title.fontStyle = FontStyles.Bold;
-        title.text = "หยุดเกมชั่วคราว";
+        title.text = Loc.T("หยุดเกมชั่วคราว", "Paused");
         Fill(title.rectTransform, 26f, 36f);
 
         pauseInfo = UiKit.MakeText("Info", panel, 19f, UiKit.InkSoft, TextAlignmentOptions.Top);
@@ -269,18 +269,18 @@ public class GameFlowDebugControls : MonoBehaviour
         float sliderWidth = 390f;
         float sliderLeft = (panelWidth - sliderWidth) * 0.5f;
 
-        pauseMusicSlider = UiKit.MakeSliderRow("MusicSlider", panel, "เสียงเพลง",
+        pauseMusicSlider = UiKit.MakeSliderRow("MusicSlider", panel, Loc.T("เสียงเพลง", "Music"),
             AudioManager.GetMusicVolumeGlobal(), (v) => AudioManager.SetMusicVolumeGlobal(v), sliderWidth);
         UiKit.Place(pauseMusicSlider.holder, new Vector2(sliderLeft, -106f), new Vector2(sliderWidth, 36f));
 
-        pauseSfxSlider = UiKit.MakeSliderRow("SfxSlider", panel, "เสียงเอฟเฟกต์",
+        pauseSfxSlider = UiKit.MakeSliderRow("SfxSlider", panel, Loc.T("เสียงเอฟเฟกต์", "Sound effects"),
             AudioManager.GetSfxVolumeGlobal(), (v) => AudioManager.SetSfxVolumeGlobal(v), sliderWidth);
         UiKit.Place(pauseSfxSlider.holder, new Vector2(sliderLeft, -148f), new Vector2(sliderWidth, 36f));
 
         // ปุ่มเล่นต่อ, กลับเมนูหลัก, ออกจากเกม
-        AddStackedButton(panel, 0, $"เล่นต่อ  ({UiKit.KeyLabel(pauseKey)})", () => GameManager.Instance?.SetPaused(false), primary: true, startY: 202f);
-        AddStackedButton(panel, 1, "กลับเมนูหลัก (เลิกรันนี้)", () => GameManager.Instance?.ReturnToMainMenu(), primary: false, startY: 202f);
-        AddStackedButton(panel, 2, "ออกจากเกม", QuitGame, primary: false, startY: 202f);
+        AddStackedButton(panel, 0, Loc.T($"เล่นต่อ  ({UiKit.KeyLabel(pauseKey)})", $"Resume  ({UiKit.KeyLabel(pauseKey)})"), () => GameManager.Instance?.SetPaused(false), primary: true, startY: 202f);
+        AddStackedButton(panel, 1, Loc.T("กลับเมนูหลัก (เลิกรันนี้)", "Main menu (abandon this run)"), () => GameManager.Instance?.ReturnToMainMenu(), primary: false, startY: 202f);
+        AddStackedButton(panel, 2, Loc.T("ออกจากเกม", "Quit game"), QuitGame, primary: false, startY: 202f);
     }
 
     private void BuildRunOverScreen()
@@ -304,12 +304,12 @@ public class GameFlowDebugControls : MonoBehaviour
         Fill(runOverCause.rectTransform, 372f, 44f);
 
         Button again = UiKit.MakeButton("Again", panel, 20f, out TextMeshProUGUI againLabel, primary: true);
-        againLabel.text = "เล่นใหม่";
+        againLabel.text = Loc.T("เล่นใหม่", "Play again");
         UiKit.Place(again.GetComponent<RectTransform>(), new Vector2((720f - 520f) * 0.5f, -440f), new Vector2(240f, 56f));
         again.onClick.AddListener(() => GameManager.Instance?.ReturnToMainMenu());
 
         Button quit = UiKit.MakeButton("Quit", panel, 20f, out TextMeshProUGUI quitLabel);
-        quitLabel.text = $"ออกจากเกม  ({UiKit.KeyLabel(pauseKey)})";
+        quitLabel.text = Loc.T($"ออกจากเกม  ({UiKit.KeyLabel(pauseKey)})", $"Quit game  ({UiKit.KeyLabel(pauseKey)})");
         UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((720f - 520f) * 0.5f + 280f, -440f), new Vector2(240f, 56f));
         quit.onClick.AddListener(QuitGame);
     }
@@ -379,11 +379,11 @@ public class GameFlowDebugControls : MonoBehaviour
 
         if (rewards) RefreshRewards(game, offer);
         if (shopOpen) RefreshShop(game, shop);
-        if (paused) pauseInfo.text = $"วันที่ {game.Day} / {game.TotalDays}   ·   เงิน {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}";
+        if (paused) pauseInfo.text = Loc.T($"วันที่ {game.Day} / {game.TotalDays}   ·   เงิน {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}", $"Day {game.Day} / {game.TotalDays}   ·   Money {ReturnZone.TotalWallet}   ·   Reputation {game.Reputation}");
         if (runOver) RefreshRunOver(game);
         if (waiting) waitingText.text = rewardSystem == null
-            ? "จบวันแล้ว — แต่ไม่มี DayEndRewardSystem ในฉาก"
-            : "จบวันแล้ว — กำลังสรุปผล";
+            ? Loc.T("จบวันแล้ว — แต่ไม่มี DayEndRewardSystem ในฉาก", "Day over — but there's no DayEndRewardSystem in the scene")
+            : Loc.T("จบวันแล้ว — กำลังสรุปผล", "Day over — tallying results");
     }
 
     private void SyncPauseSliders()
@@ -405,7 +405,7 @@ public class GameFlowDebugControls : MonoBehaviour
 
     private void RefreshRewards(GameManager game, IReadOnlyList<RewardOption> offer)
     {
-        rewardTitle.text = $"จบวันที่ {game.Day} — เลือกรางวัล";
+        rewardTitle.text = Loc.T($"จบวันที่ {game.Day} — เลือกรางวัล", $"End of day {game.Day} — pick a reward");
 
         for (int i = 0; i < rewardCards.Count; i++)
         {
@@ -448,10 +448,10 @@ public class GameFlowDebugControls : MonoBehaviour
     private void RefreshShop(GameManager game, DayEndShop shop)
     {
         shopTitle.text = game.LastDayCost > 0
-            ? $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน (หักค่าเช่าแล้ว {game.LastDayCost})"
-            : $"จบวันที่ {game.Day} — ร้านค้าท้ายวัน";
+            ? Loc.T($"จบวันที่ {game.Day} — ร้านค้าท้ายวัน (หักค่าเช่าแล้ว {game.LastDayCost})", $"End of day {game.Day} — shop (rent paid: {game.LastDayCost})")
+            : Loc.T($"จบวันที่ {game.Day} — ร้านค้าท้ายวัน", $"End of day {game.Day} — shop");
         shopMoney.text = shop.Money.ToString();
-        shopContinueLabel.text = $"ไปวันถัดไป  ({UiKit.KeyLabel(shop.ContinueKey)})";
+        shopContinueLabel.text = Loc.T($"ไปวันถัดไป  ({UiKit.KeyLabel(shop.ContinueKey)})", $"Next day  ({UiKit.KeyLabel(shop.ContinueKey)})");
 
         var offers = shop.CurrentOffers;
 
@@ -463,10 +463,10 @@ public class GameFlowDebugControls : MonoBehaviour
 
             DayEndShop.Offer item = offers[i];
 
-            string status = item.sold ? "ซื้อแล้ว"
-                : shop.LockedReason(item) != null ? $"ราคา {item.price} — ชื่อเสียงไม่พอ"
-                : shop.Money >= item.price ? $"ราคา {item.price}"
-                : $"ราคา {item.price} — เงินไม่พอ";
+            string status = item.sold ? Loc.T("ซื้อแล้ว", "Bought")
+                : shop.LockedReason(item) != null ? Loc.T($"ราคา {item.price} — ชื่อเสียงไม่พอ", $"Price {item.price} — not enough reputation")
+                : shop.Money >= item.price ? Loc.T($"ราคา {item.price}", $"Price {item.price}")
+                : Loc.T($"ราคา {item.price} — เงินไม่พอ", $"Price {item.price} — not enough money");
 
             shopCards[i].header.text = shop.GetTitle(item);
             shopCards[i].body.text = shop.GetDetail(item);
@@ -482,34 +482,34 @@ public class GameFlowDebugControls : MonoBehaviour
     {
         bool won = game.LastRunWon;
 
-        runOverTitle.text = won ? "ร้านอยู่รอด!" : "ร้านเจ๊ง";
+        runOverTitle.text = won ? Loc.T("ร้านอยู่รอด!", "The shop survived!") : Loc.T("ร้านเจ๊ง", "The shop went bust");
         runOverTitle.color = won ? UiKit.Good : UiKit.Danger;
 
         runOverSummary.text = won
-            ? $"อยู่ครบ {game.TotalDays} วันตามเป้า"
-            : $"ร้องเรียนครบ {game.MaxComplaints} ครั้งในวันที่ {game.Day}";
+            ? Loc.T($"อยู่ครบ {game.TotalDays} วันตามเป้า", $"Made it through all {game.TotalDays} days")
+            : Loc.T($"ร้องเรียนครบ {game.MaxComplaints} ครั้งในวันที่ {game.Day}", $"Reached {game.MaxComplaints} complaints on day {game.Day}");
 
         string goods = RunStats.GoodsDelivered > 0
-            ? $"   ·   สินค้า {RunStats.GoodsDelivered} ชิ้น (+{RunStats.GoodsEarned})"
+            ? Loc.T($"   ·   สินค้า {RunStats.GoodsDelivered} ชิ้น (+{RunStats.GoodsEarned})", $"   ·   Goods {RunStats.GoodsDelivered} (+{RunStats.GoodsEarned})")
             : string.Empty;
 
         string escapes = RunStats.Escapes > 0
-            ? $"สัตว์หนี {RunStats.Escapes} ครั้ง · จับคืนได้ {RunStats.Catches}\n"
+            ? Loc.T($"สัตว์หนี {RunStats.Escapes} ครั้ง · จับคืนได้ {RunStats.Catches}\n", $"Pets escaped {RunStats.Escapes} times · caught {RunStats.Catches}\n")
             : string.Empty;
 
         runOverStats.text =
-            $"ไปถึงวันที่ {game.Day} / {game.TotalDays}\n" +
-            $"ส่งคืนสำเร็จ {RunStats.OrdersReturned} ตัว (ครบทุกขั้นตอน {RunStats.OrdersComplete}){goods}\n" +
-            $"รายได้รวม {RunStats.TotalEarned}  (ค่าบริการ {RunStats.FeesEarned} · ทิป {RunStats.TipsEarned} · คอมโบ {RunStats.Combos} ครั้ง)\n" +
-            $"ค่าเช่ารวม −{RunStats.CostsPaid}   ·   เงินที่เหลือ {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}\n" +
+            Loc.T($"ไปถึงวันที่ {game.Day} / {game.TotalDays}\n", $"Reached day {game.Day} / {game.TotalDays}\n") +
+            Loc.T($"ส่งคืนสำเร็จ {RunStats.OrdersReturned} ตัว (ครบทุกขั้นตอน {RunStats.OrdersComplete}){goods}\n", $"Returned {RunStats.OrdersReturned} pets ({RunStats.OrdersComplete} fully cared for){goods}\n") +
+            Loc.T($"รายได้รวม {RunStats.TotalEarned}  (ค่าบริการ {RunStats.FeesEarned} · ทิป {RunStats.TipsEarned} · คอมโบ {RunStats.Combos} ครั้ง)\n", $"Total income {RunStats.TotalEarned}  (fees {RunStats.FeesEarned} · tips {RunStats.TipsEarned} · {RunStats.Combos} combos)\n") +
+            Loc.T($"ค่าเช่ารวม −{RunStats.CostsPaid}   ·   เงินที่เหลือ {ReturnZone.TotalWallet}   ·   ชื่อเสียง {game.Reputation}\n", $"Total rent −{RunStats.CostsPaid}   ·   Money left {ReturnZone.TotalWallet}   ·   Reputation {game.Reputation}\n") +
             escapes +
-            $"ร้องเรียน {game.Complaints} / {game.MaxComplaints}";
+            Loc.T($"ร้องเรียน {game.Complaints} / {game.MaxComplaints}", $"Complaints {game.Complaints} / {game.MaxComplaints}");
 
         bool hasCause = !won && !string.IsNullOrEmpty(RunStats.LastComplaint);
         runOverCause.gameObject.SetActive(hasCause);
         if (hasCause)
         {
-            runOverCause.text = $"ฟางเส้นสุดท้าย: {RunStats.LastComplaint}";
+            runOverCause.text = Loc.T($"ฟางเส้นสุดท้าย: {RunStats.LastComplaint}", $"Last straw: {RunStats.LastComplaint}");
         }
     }
 
@@ -521,8 +521,8 @@ public class GameFlowDebugControls : MonoBehaviour
         return option.kind switch
         {
             RewardKind.Perk => $"{option.perk} +{option.amount:P0}",
-            RewardKind.UnlockStation => $"ปลดล็อกสถานี\n{(option.stationPrefab != null ? option.stationPrefab.name : "?")}",
-            RewardKind.UnlockSpecies => $"ปลดล็อกสัตว์\n{(option.species != null ? option.species.speciesName : "?")}",
+            RewardKind.UnlockStation => Loc.T($"ปลดล็อกสถานี\n{(option.stationPrefab != null ? option.stationPrefab.name : "?")}", $"Unlock station\n{(option.stationPrefab != null ? option.stationPrefab.name : "?")}"),
+            RewardKind.UnlockSpecies => Loc.T($"ปลดล็อกสัตว์\n{(option.species != null ? option.species.speciesName : "?")}", $"Unlock pet\n{(option.species != null ? option.species.speciesName : "?")}"),
             _ => "-"
         };
     }

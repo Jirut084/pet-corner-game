@@ -166,7 +166,7 @@ public class Customer : MonoBehaviour
         SetTarget(counterPosition);
         State = CustomerState.WalkingToCounter;
 
-        GameLog.Push($"ลูกค้า {species.speciesName} เดินเข้าร้านแล้ว กำลังไปที่เคาน์เตอร์");
+        GameLog.Push(Loc.T($"ลูกค้า {species.speciesName} เดินเข้าร้านแล้ว กำลังไปที่เคาน์เตอร์", $"A {species.speciesName} customer walked in and is heading to the counter"));
     }
 
     /// <summary>
@@ -187,7 +187,7 @@ public class Customer : MonoBehaviour
 
         StartCounterPatience(owner.OutsidePatienceSeconds);
 
-        GameLog.Push($"แถวในร้านเต็ม! ลูกค้า {species.speciesName} ต่อคิวรอนอกร้าน", LogTone.Warn);
+        GameLog.Push(Loc.T($"แถวในร้านเต็ม! ลูกค้า {species.speciesName} ต่อคิวรอนอกร้าน", $"The line is full! A {species.speciesName} customer is queuing outside"), LogTone.Warn);
     }
 
     /// <summary>ย้ายไปช่องที่ระบุในคิวนอกร้าน — คนหน้าเข้าร้านไปเมื่อไหร่ทุกคนขยับขึ้นมาเอง</summary>
@@ -204,7 +204,7 @@ public class Customer : MonoBehaviour
         counterPatienceRunning = false;
         State = CustomerState.WalkingToCounter;
         idleFacing = null;
-        GameLog.Push($"ลูกค้า {RequestedSpecies.speciesName} เข้าร้านมาต่อแถวแล้ว");
+        GameLog.Push(Loc.T($"ลูกค้า {RequestedSpecies.speciesName} เข้าร้านมาต่อแถวแล้ว", $"A {RequestedSpecies.speciesName} customer joined the line"));
     }
 
     private void Update()
@@ -235,7 +235,7 @@ public class Customer : MonoBehaviour
                     // บอกเฉพาะหัวแถว คนที่ยืนต่อท้ายยังกดรับไม่ได้ ไม่ต้องรก log
                     if (QueueIndex <= 0)
                     {
-                        GameLog.Push($"ลูกค้า {RequestedSpecies.speciesName} รออยู่ที่เคาน์เตอร์ — กด E เพื่อรับออเดอร์", LogTone.Warn);
+                        GameLog.Push(Loc.T($"ลูกค้า {RequestedSpecies.speciesName} รออยู่ที่เคาน์เตอร์ — กด E เพื่อรับออเดอร์", $"A {RequestedSpecies.speciesName} customer is waiting at the counter — press E to take the order"), LogTone.Warn);
                     }
                 }
                 break;
@@ -320,7 +320,7 @@ public class Customer : MonoBehaviour
 
         idleFacing = null;
         State = CustomerState.AwaitingPickup;
-        GameLog.Push($"เจ้าของ {pet.DisplayName} มารอรับที่จุดส่งคืนแล้ว — ส่งคืนภายใน {pet.PatienceRemaining:F0} วิ", LogTone.Warn);
+        GameLog.Push(Loc.T($"เจ้าของ {pet.DisplayName} มารอรับที่จุดส่งคืนแล้ว — ส่งคืนภายใน {pet.PatienceRemaining:F0} วิ", $"{pet.DisplayName}'s owner is at the pickup point — return it within {pet.PatienceRemaining:F0}s"), LogTone.Warn);
     }
 
     /// <summary>CustomerManager เรียกทุกเฟรม — ย้ายไปช่องที่ระบุในแถวรอรับ แล้วหันหน้าเข้าหาจุดส่งคืน</summary>
@@ -393,14 +393,14 @@ public class Customer : MonoBehaviour
         string speciesName = RequestedSpecies != null ? RequestedSpecies.speciesName : name;
         bool outside = IsOutside;
         GameLog.Push(outside
-            ? $"ลูกค้า {speciesName} รอคิวนอกร้านนานเกินไป เดินกลับไปแล้ว!"
-            : $"ลูกค้า {speciesName} รอสั่งนานเกินไป เดินออกจากร้าน!", LogTone.Bad);
+            ? Loc.T($"ลูกค้า {speciesName} รอคิวนอกร้านนานเกินไป เดินกลับไปแล้ว!", $"The {speciesName} customer waited outside too long and went home!")
+            : Loc.T($"ลูกค้า {speciesName} รอสั่งนานเกินไป เดินออกจากร้าน!", $"The {speciesName} customer waited too long to order and left!"), LogTone.Bad);
 
         if (manager == null || manager.ComplainOnCounterTimeout)
         {
             GameManager.Instance?.AddComplaint(outside
-                ? $"ลูกค้า {speciesName} รอคิวนอกร้านนานเกินไป"
-                : $"ลูกค้า {speciesName} รอหน้าเคาน์เตอร์นานเกินไป");
+                ? Loc.T($"ลูกค้า {speciesName} รอคิวนอกร้านนานเกินไป", $"{speciesName} customer waited outside too long")
+                : Loc.T($"ลูกค้า {speciesName} รอหน้าเคาน์เตอร์นานเกินไป", $"{speciesName} customer waited at the counter too long"));
         }
 
         LeaveShop();
@@ -416,10 +416,10 @@ public class Customer : MonoBehaviour
 
         // หมดเวลาตอนรอรับ = ดูแลเสร็จแล้วแต่ส่งคืนไม่ทัน แยกข้อความให้คนเทสรู้ว่าแพ้ตรงจุดไหน
         string reason = pet.IsAwaitingPickup
-            ? $"เจ้าของรอรับ {pet.DisplayName} นานเกินไป"
-            : $"{pet.DisplayName} รอนานเกินไป";
+            ? Loc.T($"เจ้าของรอรับ {pet.DisplayName} นานเกินไป", $"The owner waited too long to collect {pet.DisplayName}")
+            : Loc.T($"{pet.DisplayName} รอนานเกินไป", $"{pet.DisplayName} waited too long");
 
-        GameLog.Push($"{reason} เจ้าของเดินออกจากร้าน!", LogTone.Bad);
+        GameLog.Push(Loc.T($"{reason} เจ้าของเดินออกจากร้าน!", $"{reason} — the owner left!"), LogTone.Bad);
         GameManager.Instance?.FailOrder(pet, reason);
 
         AssignedPet = null;

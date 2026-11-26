@@ -57,7 +57,7 @@ public class ReturnZone : MonoBehaviour, IInteractable
         PlayerCarrier carrier = interactor.GetComponent<PlayerCarrier>();
         if (carrier == null || !carrier.IsCarrying)
         {
-            GameLog.Push("ไม่มีอะไรในมือ ส่งคืนไม่ได้", LogTone.Warn);
+            GameLog.Push(Loc.T("ไม่มีอะไรในมือ ส่งคืนไม่ได้", "Nothing in your hands to return"), LogTone.Warn);
             return;
         }
 
@@ -73,7 +73,7 @@ public class ReturnZone : MonoBehaviour, IInteractable
         Pet pet = carrier.GetHeld<Pet>();
         if (pet == null)
         {
-            GameLog.Push($"{carrier.HeldObject.name} ไม่ใช่สัตว์เลี้ยง ส่งคืนไม่ได้", LogTone.Warn);
+            GameLog.Push(Loc.T($"{carrier.HeldObject.name} ไม่ใช่สัตว์เลี้ยง ส่งคืนไม่ได้", $"{carrier.HeldObject.name} isn't a pet, so it can't be returned"), LogTone.Warn);
             return;
         }
 
@@ -115,15 +115,15 @@ public class ReturnZone : MonoBehaviour, IInteractable
         // บอกเจ้าของว่าสัตว์กลับมาแล้ว จะได้ลุกจากจุดรอแล้วเดินออกจากร้าน
         CustomerManager.Instance?.NotifyOrderDelivered(pet);
 
-        string status = pet.IsComplete ? "ครบทุกขั้นตอน" : $"ไม่ครบ ({pet.StepsCompleted}/{pet.TotalSteps})";
-        string tipText = pet.CollectedTip > 0 ? $" + ทิป {pet.CollectedTip}" : string.Empty;
-        GameLog.Push($"ส่งคืน {species.speciesName} ({status}) → ได้ {earned}{tipText} | เงินรวม {TotalWallet}",
+        string status = pet.IsComplete ? Loc.T("ครบทุกขั้นตอน", "all steps done") : Loc.T($"ไม่ครบ ({pet.StepsCompleted}/{pet.TotalSteps})", $"incomplete ({pet.StepsCompleted}/{pet.TotalSteps})");
+        string tipText = pet.CollectedTip > 0 ? Loc.T($" + ทิป {pet.CollectedTip}", $" + tip {pet.CollectedTip}") : string.Empty;
+        GameLog.Push(Loc.T($"ส่งคืน {species.speciesName} ({status}) → ได้ {earned}{tipText} | เงินรวม {TotalWallet}", $"Returned {species.speciesName} ({status}) → earned {earned}{tipText} | total money {TotalWallet}"),
             pet.IsComplete ? LogTone.Good : LogTone.Warn);
 
         // ส่งคืนทั้งที่ทำขั้นตอนไม่ครบ = ร้องเรียน 1 ครั้ง (ไม่ block การส่งคืน) ครบ = ชื่อเสียง +1
         if (!pet.IsComplete)
         {
-            GameManager.Instance?.AddComplaint($"{species.speciesName} ดูแลไม่ครบขั้นตอน");
+            GameManager.Instance?.AddComplaint(Loc.T($"{species.speciesName} ดูแลไม่ครบขั้นตอน", $"{species.speciesName} wasn't fully cared for"));
         }
         else
         {
@@ -149,7 +149,7 @@ public class ReturnZone : MonoBehaviour, IInteractable
 
         if (customer == null)
         {
-            GameLog.Push($"ไม่มีลูกค้าที่รอ {good.Item.label} อยู่แล้ว — เอาไปเก็บคืนที่ตู้สินค้า", LogTone.Warn);
+            GameLog.Push(Loc.T($"ไม่มีลูกค้าที่รอ {good.Item.label} อยู่แล้ว — เอาไปเก็บคืนที่ตู้สินค้า", $"No customer is waiting for {good.Item.label} anymore — put it back on the shelf"), LogTone.Warn);
             return;
         }
 
@@ -163,7 +163,7 @@ public class ReturnZone : MonoBehaviour, IInteractable
         GameManager.Instance?.AddReputation(1);
         AudioManager.Instance?.PlayGetMoney();
 
-        GameLog.Push($"ส่ง {good.Item.label} ให้ลูกค้า → ได้เพิ่ม {good.Item.bonusPay} | เงินรวม {TotalWallet}", LogTone.Good);
+        GameLog.Push(Loc.T($"ส่ง {good.Item.label} ให้ลูกค้า → ได้เพิ่ม {good.Item.bonusPay} | เงินรวม {TotalWallet}", $"Delivered {good.Item.label} → +{good.Item.bonusPay} | total money {TotalWallet}"), LogTone.Good);
     }
 
     /// <summary>ทางเข้า-ออกของเงินทางเดียวของเกม — ระบบอื่นเพิ่ม/หักเงินผ่านตรงนี้เท่านั้น (ค่าติดลบ = หัก)</summary>

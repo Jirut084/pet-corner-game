@@ -61,8 +61,12 @@ public partial class MainMenu : MonoBehaviour
         BuildMultiplayerScreens(); // MainMenu.Multiplayer.cs — หน้าปุ่มควบคุม + หน้า LAN
 
         ShowStarterSelect(false);
-        ShowSettings(false);
+        ShowSettings(reopenSettings);
+        reopenSettings = false;
     }
+
+    /// <summary>เพิ่งกดเปลี่ยนภาษา — หลังโหลดเมนูใหม่ให้กลับมาที่หน้าตั้งค่า</summary>
+    private static bool reopenSettings;
 
     private void Update()
     {
@@ -175,72 +179,83 @@ public partial class MainMenu : MonoBehaviour
         MakeTitle(panel, 26f, 104f, 54);
 
         TextMeshProUGUI subtitle = UiKit.MakeText("Subtitle", panel, 21f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
+        subtitle.text = Loc.T("บ้านของคุณ · บ้านหลังที่สองของพวกเขา", "Your home · their home away from home");
         GameFlowDebugControls.Fill(subtitle.rectTransform, 136f, 28f);
 
         TextMeshProUGUI tagline = UiKit.MakeText("Tagline", panel, 19f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        tagline.text = "What home means to you — เปิดบ้านรับฝากสัตว์ให้รอดครบทุกวัน";
+        tagline.text = Loc.T("What home means to you — เปิดบ้านรับฝากสัตว์ให้รอดครบทุกวัน", "What home means to you — run a pet boarding house and make it through every day");
         GameFlowDebugControls.Fill(tagline.rectTransform, 168f, 26f);
 
         // ปุ่มเริ่มเกม
         Button start = UiKit.MakeButton("Start", panel, 21f, out TextMeshProUGUI startLabel, primary: true);
-        startLabel.text = $"เริ่มเกม  ({UiKit.KeyLabel(startKey)})";
+        startLabel.text = Loc.T($"เริ่มเกม  ({UiKit.KeyLabel(startKey)})", $"Start  ({UiKit.KeyLabel(startKey)})");
         UiKit.Place(start.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -214f), new Vector2(320f, 52f));
         start.onClick.AddListener(() => ShowStarterSelect(true));
 
         // ปุ่มตั้งค่าเสียง
         Button settingsBtn = UiKit.MakeButton("Settings", panel, 19f, out TextMeshProUGUI settingsLabel);
-        settingsLabel.text = "ตั้งค่าเสียง";
+        settingsLabel.text = Loc.T("ตั้งค่า", "Settings");
         UiKit.Place(settingsBtn.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -274f), new Vector2(320f, 48f));
         settingsBtn.onClick.AddListener(() => ShowSettings(true));
 
         // ปุ่มเล่นหลายคน — ตั้งจำนวนผู้เล่น/อุปกรณ์/ปุ่ม (MainMenu.Multiplayer.cs)
         Button controlsBtn = UiKit.MakeButton("Controls", panel, 19f, out TextMeshProUGUI controlsLabel);
-        controlsLabel.text = "เล่นหลายคน · ปุ่มควบคุม";
+        controlsLabel.text = Loc.T("เล่นหลายคน · ปุ่มควบคุม", "Multiplayer · Controls");
         UiKit.Place(controlsBtn.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -328f), new Vector2(320f, 48f));
         controlsBtn.onClick.AddListener(() => ShowControls(true));
 
         Button lanBtn = UiKit.MakeButton("LAN", panel, 19f, out TextMeshProUGUI lanLabel);
-        lanLabel.text = "เล่นผ่าน LAN";
+        lanLabel.text = Loc.T("เล่นผ่าน LAN", "LAN play");
         UiKit.Place(lanBtn.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -382f), new Vector2(320f, 48f));
         lanBtn.onClick.AddListener(() => ShowLan(true));
 
         // ปุ่มออกจากเกม
         Button quit = UiKit.MakeButton("Quit", panel, 19f, out TextMeshProUGUI quitLabel);
-        quitLabel.text = $"ออกจากเกม  ({UiKit.KeyLabel(backKey)})";
+        quitLabel.text = Loc.T($"ออกจากเกม  ({UiKit.KeyLabel(backKey)})", $"Quit  ({UiKit.KeyLabel(backKey)})");
         UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -436f), new Vector2(320f, 48f));
         quit.onClick.AddListener(GameFlowDebugControls.QuitGame);
 
         TextMeshProUGUI hint = UiKit.MakeText("Hint", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        hint.text = "WASD เดิน   ·   E ทำทุกอย่าง   ·   Enter เปิดร้าน   ·   Esc เมนู";
+        hint.text = Loc.T("WASD เดิน   ·   E ทำทุกอย่าง   ·   Enter เปิดร้าน   ·   Esc เมนู", "WASD move   ·   E does everything   ·   Enter open shop   ·   Esc menu");
         GameFlowDebugControls.Fill(hint.rectTransform, 512f, 26f);
     }
 
     private void BuildSettingsScreen()
     {
         float panelWidth = 460f;
-        float panelHeight = 290f;
+        float panelHeight = 350f;
         RectTransform panel = MakePanel("Settings Screen", panelWidth, panelHeight, out settingsRoot);
 
         TextMeshProUGUI title = UiKit.MakeText("Title", panel, 28f, UiKit.Ink, TextAlignmentOptions.Top);
         title.fontStyle = FontStyles.Bold;
-        title.text = "ตั้งค่าระดับเสียง";
+        title.text = Loc.T("ตั้งค่า", "Settings");
         GameFlowDebugControls.Fill(title.rectTransform, 26f, 36f);
 
         float sliderWidth = 390f;
         float sliderLeft = (panelWidth - sliderWidth) * 0.5f;
 
-        settingsMusicSlider = UiKit.MakeSliderRow("MusicSlider", panel, "เสียงเพลง",
+        settingsMusicSlider = UiKit.MakeSliderRow("MusicSlider", panel, Loc.T("เสียงเพลง", "Music"),
             AudioManager.GetMusicVolumeGlobal(), (v) => AudioManager.SetMusicVolumeGlobal(v), sliderWidth);
         UiKit.Place(settingsMusicSlider.holder, new Vector2(sliderLeft, -84f), new Vector2(sliderWidth, 36f));
 
-        settingsSfxSlider = UiKit.MakeSliderRow("SfxSlider", panel, "เสียงเอฟเฟกต์",
+        settingsSfxSlider = UiKit.MakeSliderRow("SfxSlider", panel, Loc.T("เสียงเอฟเฟกต์", "Sound effects"),
             AudioManager.GetSfxVolumeGlobal(), (v) => AudioManager.SetSfxVolumeGlobal(v), sliderWidth);
         UiKit.Place(settingsSfxSlider.holder, new Vector2(sliderLeft, -132f), new Vector2(sliderWidth, 36f));
 
+        // สลับภาษา — ข้อความทุกหน้าสร้างตอน Awake จึงโหลดฉากเมนูใหม่ แล้วเปิดหน้าตั้งค่าค้างไว้ให้
+        Button language = UiKit.MakeButton("Language", panel, 19f, out TextMeshProUGUI languageLabel);
+        languageLabel.text = Loc.T("ภาษา: ไทย  →  English", "Language: English  →  ไทย");
+        UiKit.Place(language.GetComponent<RectTransform>(), new Vector2(sliderLeft, -188f), new Vector2(sliderWidth, 48f));
+        language.onClick.AddListener(() =>
+        {
+            Loc.Set(Loc.IsThai ? GameLanguage.English : GameLanguage.Thai);
+            reopenSettings = true;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        });
+
         Button back = UiKit.MakeButton("Back", panel, 19f, out TextMeshProUGUI backLabel, primary: true);
-        backLabel.text = $"ย้อนกลับ  ({UiKit.KeyLabel(backKey)})";
-        UiKit.Place(back.GetComponent<RectTransform>(), new Vector2((panelWidth - 220f) * 0.5f, -198f), new Vector2(220f, 48f));
+        backLabel.text = Loc.T($"ย้อนกลับ  ({UiKit.KeyLabel(backKey)})", $"Back  ({UiKit.KeyLabel(backKey)})");
+        UiKit.Place(back.GetComponent<RectTransform>(), new Vector2((panelWidth - 220f) * 0.5f, -262f), new Vector2(220f, 48f));
         back.onClick.AddListener(() => ShowSettings(false));
     }
 
@@ -258,11 +273,11 @@ public partial class MainMenu : MonoBehaviour
         MakeTitle(panel, 26f, 64f, 44);
 
         TextMeshProUGUI subtitle = UiKit.MakeText("Subtitle", panel, 20f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        subtitle.text = "บ้านของคุณ · บ้านหลังที่สองของพวกเขา";
+        subtitle.text = Loc.T("บ้านของคุณ · บ้านหลังที่สองของพวกเขา", "Your home · their home away from home");
         GameFlowDebugControls.Fill(subtitle.rectTransform, 96f, 26f);
 
         TextMeshProUGUI brief = UiKit.MakeText("Brief", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        brief.text = "เลือกสัตว์ที่จะเปิดรับ — สถานีเริ่มต้นมาจากสิ่งที่สัตว์ตัวนั้นต้องการ";
+        brief.text = Loc.T("เลือกสัตว์ที่จะเปิดรับ — สถานีเริ่มต้นมาจากสิ่งที่สัตว์ตัวนั้นต้องการ", "Pick the pet you'll take in — your starting stations come from what it needs");
         GameFlowDebugControls.Fill(brief.rectTransform, 124f, 26f);
 
         float cardsLeft = (panelWidth - cardsWidth) * 0.5f;
@@ -281,18 +296,18 @@ public partial class MainMenu : MonoBehaviour
             card.header.fontSize = 24f;
 
             string needs = string.Join(" · ", System.Array.ConvertAll(species.requiredSteps, CareStepStyle.LabelOf));
-            card.body.text = $"{needs}\n\nอดทน {species.patienceSeconds:F0} วิ\nค่าบริการ {species.baseFee} + {species.feePerStep}/ขั้น";
+            card.body.text = Loc.T($"{needs}\n\nอดทน {species.patienceSeconds:F0} วิ\nค่าบริการ {species.baseFee} + {species.feePerStep}/ขั้น", $"{needs}\n\nPatience {species.patienceSeconds:F0}s\nFee {species.baseFee} + {species.feePerStep}/step");
 
             card.footer.text = $"({i + 1})";
             card.footer.fontSize = 19f;
         }
 
         TextMeshProUGUI hint = UiKit.MakeText("Hint", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        hint.text = "WASD เดิน   ·   E ทำทุกอย่าง (ยก / วาง / ดูแล)   ·   Enter เปิดร้าน";
+        hint.text = Loc.T("WASD เดิน   ·   E ทำทุกอย่าง (ยก / วาง / ดูแล)   ·   Enter เปิดร้าน", "WASD move   ·   E does everything (pick up / place / care)   ·   Enter open shop");
         GameFlowDebugControls.Fill(hint.rectTransform, 160f + cardHeight + 20f, 24f);
 
         Button back = UiKit.MakeButton("Back", panel, 19f, out TextMeshProUGUI backLabel);
-        backLabel.text = "ย้อนกลับ";
+        backLabel.text = Loc.T("ย้อนกลับ", "Back");
         UiKit.Place(back.GetComponent<RectTransform>(),
             new Vector2((panelWidth - 220f) * 0.5f, -(160f + cardHeight + 54f)), new Vector2(220f, 48f));
         back.onClick.AddListener(() => ShowStarterSelect(false));

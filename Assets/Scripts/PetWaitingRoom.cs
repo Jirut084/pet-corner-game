@@ -95,13 +95,13 @@ public class PetWaitingRoom : MonoBehaviour, IInteractable
 
         if (waiting.Count == 0)
         {
-            GameLog.Push("ห้องรอว่างอยู่ ไม่มีสัตว์ให้อุ้ม", LogTone.Warn);
+            GameLog.Push(Loc.T("ห้องรอว่างอยู่ ไม่มีสัตว์ให้อุ้ม", "The waiting room is empty"), LogTone.Warn);
             return;
         }
 
         if (carrier.IsCarrying)
         {
-            GameLog.Push("มือไม่ว่าง วางของที่ถืออยู่ก่อนถึงจะอุ้มสัตว์จากห้องรอได้", LogTone.Warn);
+            GameLog.Push(Loc.T("มือไม่ว่าง วางของที่ถืออยู่ก่อนถึงจะอุ้มสัตว์จากห้องรอได้", "Hands full — put down what you're holding before taking a pet from the waiting room"), LogTone.Warn);
             return;
         }
 
@@ -113,7 +113,7 @@ public class PetWaitingRoom : MonoBehaviour, IInteractable
         if (!carrier.Carry(nearest.gameObject)) return;
 
         waiting.Remove(nearest);
-        GameLog.Push($"อุ้ม {nearest.DisplayName} ออกจากห้องรอ — เหลือรออีก {waiting.Count} ตัว");
+        GameLog.Push(Loc.T($"อุ้ม {nearest.DisplayName} ออกจากห้องรอ — เหลือรออีก {waiting.Count} ตัว", $"Took {nearest.DisplayName} from the waiting room — {waiting.Count} still waiting"));
     }
 
     private Pet NearestTo(Vector3 position)

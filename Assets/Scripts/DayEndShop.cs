@@ -161,6 +161,10 @@ public class DayEndShop : MonoBehaviour
         }
 
         Instance = this;
+
+        // ชื่อบัฟบันทึกเป็นภาษาไทยไว้ในฉาก แปลครั้งเดียวตอนโหลด
+        foreach (ShopItem item in catalog) item.label = Loc.Data(item.label);
+
         buffLevels = new int[catalog.Count];
     }
 
@@ -239,14 +243,14 @@ public class DayEndShop : MonoBehaviour
         RollOffers();
         if (offers.Count == 0)
         {
-            GameLog.Push("ร้านค้าท้ายวัน: ไม่มีสินค้าเหลือให้ซื้อแล้ว");
+            GameLog.Push(Loc.T("ร้านค้าท้ายวัน: ไม่มีสินค้าเหลือให้ซื้อแล้ว", "End-of-day shop: nothing left to buy"));
             return false;
         }
 
         IsOpen = true;
         openedFrame = Time.frameCount;
 
-        GameLog.Push($"ร้านค้าท้ายวันเปิดแล้ว — มีเงิน {Money} (กด 1–{offers.Count} ซื้อ, {UiKit.KeyLabel(continueKey)} ไปวันถัดไป)", LogTone.Good);
+        GameLog.Push(Loc.T($"ร้านค้าท้ายวันเปิดแล้ว — มีเงิน {Money} (กด 1–{offers.Count} ซื้อ, {UiKit.KeyLabel(continueKey)} ไปวันถัดไป)", $"The end-of-day shop is open — you have {Money} (press 1–{offers.Count} to buy, {UiKit.KeyLabel(continueKey)} for the next day)"), LogTone.Good);
         OnShopOpened?.Invoke();
         return true;
     }
@@ -261,20 +265,20 @@ public class DayEndShop : MonoBehaviour
 
         if (offer.sold)
         {
-            GameLog.Push($"{title} ซื้อไปแล้ววันนี้", LogTone.Warn);
+            GameLog.Push(Loc.T($"{title} ซื้อไปแล้ววันนี้", $"{title} already bought today"), LogTone.Warn);
             return false;
         }
 
         string locked = LockedReason(offer);
         if (locked != null)
         {
-            GameLog.Push($"ยังซื้อ {title} ไม่ได้ — {locked}", LogTone.Warn);
+            GameLog.Push(Loc.T($"ยังซื้อ {title} ไม่ได้ — {locked}", $"Can't buy {title} yet — {locked}"), LogTone.Warn);
             return false;
         }
 
         if (Money < offer.price)
         {
-            GameLog.Push($"เงินไม่พอซื้อ {title} — ต้องใช้ {offer.price} มีอยู่ {Money}", LogTone.Warn);
+            GameLog.Push(Loc.T($"เงินไม่พอซื้อ {title} — ต้องใช้ {offer.price} มีอยู่ {Money}", $"Not enough money for {title} — need {offer.price}, have {Money}"), LogTone.Warn);
             return false;
         }
 
@@ -312,7 +316,7 @@ public class DayEndShop : MonoBehaviour
         ReturnZone.TrySpend(offer.price);
         offer.sold = true;
 
-        GameLog.Push($"ซื้อ {title} ({result}) -{offer.price} | เหลือเงิน {Money}", LogTone.Good);
+        GameLog.Push(Loc.T($"ซื้อ {title} ({result}) -{offer.price} | เหลือเงิน {Money}", $"Bought {title} ({result}) -{offer.price} | money left {Money}"), LogTone.Good);
         OnItemPurchased?.Invoke(offer);
         return true;
     }
@@ -345,7 +349,7 @@ public class DayEndShop : MonoBehaviour
 
         int need = offer.species.reputationToUnlock;
         int have = GameManager.Instance != null ? GameManager.Instance.Reputation : 0;
-        return need > 0 && have < need ? $"ต้องมีชื่อเสียง {need} (มี {have})" : null;
+        return need > 0 && have < need ? Loc.T($"ต้องมีชื่อเสียง {need} (มี {have})", $"Needs reputation {need} (have {have})") : null;
     }
 
     /// <summary>ชื่อบนการ์ด</summary>
@@ -360,11 +364,11 @@ public class DayEndShop : MonoBehaviour
 
             case OfferKind.ExtraStation:
                 return IsHoldingTable(offer.stationPrefab)
-                    ? "โต๊ะพัก +1"
-                    : $"สถานี{StationLabel(offer.stationPrefab)} +1";
+                    ? Loc.T("โต๊ะพัก +1", "Holding table +1")
+                    : Loc.T($"สถานี{StationLabel(offer.stationPrefab)} +1", $"{StationLabel(offer.stationPrefab)} station +1");
 
             case OfferKind.NewSpecies:
-                return $"ลูกค้าใหม่: {offer.species.speciesName}";
+                return Loc.T($"ลูกค้าใหม่: {offer.species.speciesName}", $"New customer: {offer.species.speciesName}");
 
             default:
                 return string.Empty;
@@ -382,22 +386,22 @@ public class DayEndShop : MonoBehaviour
             {
                 ShopItem item = catalog[offer.buffIndex];
                 int level = BuffLevelOf(offer.buffIndex);
-                string levelText = item.maxLevel > 0 ? $"ระดับ {level}/{item.maxLevel}" : $"ระดับ {level}";
+                string levelText = item.maxLevel > 0 ? Loc.T($"ระดับ {level}/{item.maxLevel}", $"Level {level}/{item.maxLevel}") : Loc.T($"ระดับ {level}", $"Level {level}");
                 return $"{DescribeEffect(item)}\n{levelText}";
             }
 
             case OfferKind.ExtraStation:
-                return $"ดูแลได้หลายตัวพร้อมกันขึ้น\nมีอยู่ {CountInShop(offer.stationPrefab)}/{maxCopiesPerStation} ชิ้น";
+                return Loc.T($"ดูแลได้หลายตัวพร้อมกันขึ้น\nมีอยู่ {CountInShop(offer.stationPrefab)}/{maxCopiesPerStation} ชิ้น", $"Care for more pets at once\nOwned {CountInShop(offer.stationPrefab)}/{maxCopiesPerStation}");
 
             case OfferKind.NewSpecies:
             {
                 List<CareStep> missing = MissingSteps(offer.species);
                 string needs = string.Join(" + ", Array.ConvertAll(offer.species.requiredSteps, CareStepStyle.LabelOf));
                 string bonus = missing.Count > 0
-                    ? $"ได้สถานีใหม่: {string.Join(", ", missing.ConvertAll(CareStepStyle.LabelOf))}"
-                    : "มีสถานีครบแล้ว";
+                    ? Loc.T($"ได้สถานีใหม่: {string.Join(", ", missing.ConvertAll(CareStepStyle.LabelOf))}", $"New stations: {string.Join(", ", missing.ConvertAll(CareStepStyle.LabelOf))}")
+                    : Loc.T("มีสถานีครบแล้ว", "You already have every station");
                 string locked = LockedReason(offer);
-                return locked != null ? $"ต้องการ: {needs}\n{bonus}\n{locked}" : $"ต้องการ: {needs}\n{bonus}";
+                return locked != null ? Loc.T($"ต้องการ: {needs}\n{bonus}\n{locked}", $"Needs: {needs}\n{bonus}\n{locked}") : Loc.T($"ต้องการ: {needs}\n{bonus}", $"Needs: {needs}\n{bonus}");
             }
 
             default:
@@ -411,11 +415,11 @@ public class DayEndShop : MonoBehaviour
 
         return item.perk switch
         {
-            PerkType.MoveSpeed => $"เดินเร็วขึ้น +{item.amount:P0}",
-            PerkType.InteractSpeed => $"สถานีทำงานเร็วขึ้น +{item.amount:P0}",
-            PerkType.PatienceDrain => $"มิเตอร์ความอดทนลดช้าลง {item.amount:P0}",
-            PerkType.ServiceFee => $"ค่าบริการ +{item.amount:P0}",
-            PerkType.CatchRadius => $"ไล่จับสัตว์ง่ายขึ้น +{item.amount:P0} (ยังไม่มีผล)",
+            PerkType.MoveSpeed => Loc.T($"เดินเร็วขึ้น +{item.amount:P0}", $"Walk faster +{item.amount:P0}"),
+            PerkType.InteractSpeed => Loc.T($"สถานีทำงานเร็วขึ้น +{item.amount:P0}", $"Stations work faster +{item.amount:P0}"),
+            PerkType.PatienceDrain => Loc.T($"มิเตอร์ความอดทนลดช้าลง {item.amount:P0}", $"Patience drains {item.amount:P0} slower"),
+            PerkType.ServiceFee => Loc.T($"ค่าบริการ +{item.amount:P0}", $"Service fee +{item.amount:P0}"),
+            PerkType.CatchRadius => Loc.T($"ไล่จับสัตว์ง่ายขึ้น +{item.amount:P0} (ยังไม่มีผล)", $"Catch pets more easily +{item.amount:P0} (no effect yet)"),
             _ => item.perk.ToString()
         };
     }
@@ -445,14 +449,14 @@ public class DayEndShop : MonoBehaviour
         // วางลงโซนวางอัตโนมัติทันที ผู้เล่นยกย้ายได้ในช่วงจัดร้านของวันถัดไป
         if (level.AutoPlaceStation(offer.stationPrefab, offer.stationPrefab.name) == null)
         {
-            GameLog.Push("ร้านเต็ม ไม่มีช่องว่างให้วางสถานีเพิ่ม — ยังไม่เสียเงิน", LogTone.Warn);
+            GameLog.Push(Loc.T("ร้านเต็ม ไม่มีช่องว่างให้วางสถานีเพิ่ม — ยังไม่เสียเงิน", "The shop is full, no free tile for another station — you weren't charged"), LogTone.Warn);
             return null;
         }
 
         extraStationsBought.TryGetValue(offer.stationPrefab, out int bought);
         extraStationsBought[offer.stationPrefab] = bought + 1;
 
-        return $"มีอยู่ {CountInShop(offer.stationPrefab)} ชิ้น";
+        return Loc.T($"มีอยู่ {CountInShop(offer.stationPrefab)} ชิ้น", $"Owned {CountInShop(offer.stationPrefab)}");
     }
 
     private string GrantSpecies(Offer offer, PlayerProgress progress)
@@ -464,8 +468,8 @@ public class DayEndShop : MonoBehaviour
         progress.UnlockSpecies(offer.species);
 
         return missing.Count > 0
-            ? $"ได้สถานีใหม่: {string.Join(", ", missing.ConvertAll(CareStepStyle.LabelOf))}"
-            : "ลูกค้าชนิดนี้เริ่มมาวันถัดไป";
+            ? Loc.T($"ได้สถานีใหม่: {string.Join(", ", missing.ConvertAll(CareStepStyle.LabelOf))}", $"New stations: {string.Join(", ", missing.ConvertAll(CareStepStyle.LabelOf))}")
+            : Loc.T("ลูกค้าชนิดนี้เริ่มมาวันถัดไป", "This customer type starts coming tomorrow");
     }
 
     // ---------- สุ่มสินค้า ----------
@@ -638,7 +642,7 @@ public class DayEndShop : MonoBehaviour
         CareStation station = prefab != null ? prefab.GetComponent<CareStation>() : null;
         if (station == null) return prefab != null ? prefab.name : "?";
 
-        return station.Mode == CareStation.ServiceMode.Holding ? "โต๊ะพัก" : CareStepStyle.LabelOf(station.Step);
+        return station.Mode == CareStation.ServiceMode.Holding ? Loc.T("โต๊ะพัก", "Holding table") : CareStepStyle.LabelOf(station.Step);
     }
 
     private int BuffLevelOf(int buffIndex)

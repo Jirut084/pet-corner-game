@@ -339,7 +339,7 @@ public class GameHudOverlay : MonoBehaviour
 
     private void UpdateTopCards(GameManager game)
     {
-        dayText.text = $"วันที่ {game.Day}";
+        dayText.text = Loc.T($"วันที่ {game.Day}", $"Day {game.Day}");
         moneyText.text = ReturnZone.TotalWallet.ToString();
 
         bool service = game.Phase == GamePhase.Service;
@@ -347,8 +347,8 @@ public class GameHudOverlay : MonoBehaviour
         float progress = game.OrdersTarget > 0 ? Mathf.Clamp01((float)game.OrdersCompleted / game.OrdersTarget) : 0f;
         orderFill.sizeDelta = new Vector2(224f * progress, 0f);
         orderText.text = service
-            ? $"ออเดอร์ {game.OrdersCompleted}/{game.OrdersTarget}   ·   ดูแลอยู่ {game.ActiveOrderCount}/{game.ConcurrentOrderLimit}"
-            : $"วันนี้ {game.OrdersTarget} ออเดอร์   ·   ชื่อเสียง {game.Reputation}";
+            ? Loc.T($"ออเดอร์ {game.OrdersCompleted}/{game.OrdersTarget}   ·   ดูแลอยู่ {game.ActiveOrderCount}/{game.ConcurrentOrderLimit}", $"Orders {game.OrdersCompleted}/{game.OrdersTarget}   ·   Caring for {game.ActiveOrderCount}/{game.ConcurrentOrderLimit}")
+            : Loc.T($"วันนี้ {game.OrdersTarget} ออเดอร์   ·   ชื่อเสียง {game.Reputation}", $"{game.OrdersTarget} orders today   ·   Reputation {game.Reputation}");
 
         float pressure = CustomerManager.PatiencePressure;
         bool underPressure = service && pressure > 1.05f;
@@ -359,11 +359,11 @@ public class GameHudOverlay : MonoBehaviour
         if (showLine)
         {
             string crowd = underPressure
-                ? (game.IsLateDay ? $"ใจร้อน ×{pressure:0.0}" : $"แน่นร้าน ×{pressure:0.0}")
+                ? (game.IsLateDay ? Loc.T($"ใจร้อน ×{pressure:0.0}", $"Impatient ×{pressure:0.0}") : Loc.T($"แน่นร้าน ×{pressure:0.0}", $"Crowded ×{pressure:0.0}"))
                 : null;
 
             pressureText.text = eventLabel != null && crowd != null ? $"{eventLabel} · {crowd}"
-                : eventLabel ?? (game.IsLateDay ? $"ท้ายวัน · ลูกค้าใจร้อน ×{pressure:0.0}" : $"ลูกค้าแน่นร้าน ×{pressure:0.0}");
+                : eventLabel ?? (game.IsLateDay ? Loc.T($"ท้ายวัน · ลูกค้าใจร้อน ×{pressure:0.0}", $"Late in the day · customers impatient ×{pressure:0.0}") : Loc.T($"ลูกค้าแน่นร้าน ×{pressure:0.0}", $"Crowded shop ×{pressure:0.0}"));
             pressureText.color = pressure >= 2f ? Danger : Warn;
         }
 
@@ -375,7 +375,7 @@ public class GameHudOverlay : MonoBehaviour
 
         bool setup = game.Phase == GamePhase.Setup;
         if (hintCard.activeSelf != setup) hintCard.SetActive(setup);
-        if (setup) hintText.text = "จัดร้าน — E ยก/วางสถานี   ·   Enter เปิดร้าน";
+        if (setup) hintText.text = Loc.T("จัดร้าน — E ยก/วางสถานี   ·   Enter เปิดร้าน", "Setup — E pick up/place stations   ·   Enter open shop");
     }
 
     private void UpdateEventLog()
@@ -439,16 +439,16 @@ public class GameHudOverlay : MonoBehaviour
             float fill = Mathf.Clamp01(orderGauge ? customer.PatienceNormalized : customer.CounterPatienceNormalized);
             string label = orderGauge
                 ? (customer.AssignedPet == null ? string.Empty
-                    : customer.IsAwaitingPickup ? $"รอรับ {customer.AssignedPet.DisplayName}"
+                    : customer.IsAwaitingPickup ? Loc.T($"รอรับ {customer.AssignedPet.DisplayName}", $"Waiting for {customer.AssignedPet.DisplayName}")
                     : customer.AssignedPet.DisplayName)
-                : customer.IsOutside ? "รอนอกร้าน" : "รอสั่ง";
+                : customer.IsOutside ? Loc.T("รอนอกร้าน", "Waiting outside") : Loc.T("รอสั่ง", "Waiting to order");
 
             ShowRing(point, fill, label, orderGauge, customer.Mood);
 
             if (customer.WantsGood)
             {
                 chipBuffer.Clear();
-                chipBuffer.Add(($"อยากได้ {customer.WantedGood.label}  +{customer.WantedGood.bonusPay}", Money, null, false));
+                chipBuffer.Add((Loc.T($"อยากได้ {customer.WantedGood.label}  +{customer.WantedGood.bonusPay}", $"Wants {customer.WantedGood.label}  +{customer.WantedGood.bonusPay}"), Money, null, false));
                 ShowChipRow(point + new Vector2(0f, -ringSize * 0.55f), chipBuffer);
             }
         }
@@ -472,14 +472,14 @@ public class GameHudOverlay : MonoBehaviour
             PetEscape escape = pet.GetComponent<PetEscape>();
             if (escape != null && escape.IsEscaping)
             {
-                chipBuffer.Add((escape.IsCornered ? "กด E จับ" : "หนีแล้ว!", Danger, null, false));
+                chipBuffer.Add((escape.IsCornered ? Loc.T("กด E จับ", "Press E to catch") : Loc.T("หนีแล้ว!", "Escaped!"), Danger, null, false));
             }
 
             if (pet.TraitLabel != null) chipBuffer.Add((pet.TraitLabel, Ink, null, false));
 
             if (pet.IsComplete)
             {
-                string tip = pet.CollectedTip > 0 ? $"ส่งคืนได้  +{pet.CollectedTip}" : "ส่งคืนได้";
+                string tip = pet.CollectedTip > 0 ? Loc.T($"ส่งคืนได้  +{pet.CollectedTip}", $"Ready to return  +{pet.CollectedTip}") : Loc.T("ส่งคืนได้", "Ready to return");
                 chipBuffer.Add((tip, Good, null, false));
             }
             else
@@ -566,7 +566,7 @@ public class GameHudOverlay : MonoBehaviour
             holdBar.rect.gameObject.SetActive(false);
 
             chipBuffer.Clear();
-            chipBuffer.Add(($"กด {playerInteraction.InteractLabel} ค้าง · {stationLabel}", CareStepStyle.ColorOf(station.Step), UiKit.StepIcon(station.Step), false));
+            chipBuffer.Add((Loc.T($"กด {playerInteraction.InteractLabel} ค้าง · {stationLabel}", $"Hold {playerInteraction.InteractLabel} · {stationLabel}"), CareStepStyle.ColorOf(station.Step), UiKit.StepIcon(station.Step), false));
             ShowChipRow(point, chipBuffer);
             return;
         }
@@ -592,8 +592,8 @@ public class GameHudOverlay : MonoBehaviour
         holdBar.progressImage.color = stateColor;
         holdBar.needle.anchoredPosition = new Vector2(holdBarWidth * fill, 0f);
 
-        string caption = failed ? "ค้างนานไป — ปล่อยแล้วเริ่มใหม่"
-            : inWindow ? "ปล่อยเลย!"
+        string caption = failed ? Loc.T("ค้างนานไป — ปล่อยแล้วเริ่มใหม่", "Held too long — let go and start over")
+            : inWindow ? Loc.T("ปล่อยเลย!", "Release now!")
             : stationLabel;
 
         chipBuffer.Clear();

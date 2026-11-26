@@ -23,11 +23,11 @@ public static class CareStepStyle
     {
         switch (step)
         {
-            case CareStep.Feed: return "อาหาร";
-            case CareStep.Bath: return "อาบน้ำ";
-            case CareStep.Groom: return "แต่งขน";
-            case CareStep.Play: return "เล่น";
-            case CareStep.Rest: return "พักผ่อน";
+            case CareStep.Feed: return Loc.T("อาหาร", "Feed");
+            case CareStep.Bath: return Loc.T("อาบน้ำ", "Bath");
+            case CareStep.Groom: return Loc.T("แต่งขน", "Groom");
+            case CareStep.Play: return Loc.T("เล่น", "Play");
+            case CareStep.Rest: return Loc.T("พักผ่อน", "Rest");
             default: return step.ToString();
         }
     }

@@ -44,7 +44,7 @@ public class PetCornerNetworkManager : NetworkManager
         PetCornerNetworkManager manager = Ensure();
         if (manager == null || NetworkServer.active) return;
 
-        Notify("กำลังเปิดห้อง...");
+        Notify(Loc.T("กำลังเปิดห้อง...", "Opening a room..."));
         manager.StartHost();
     }
 
@@ -54,7 +54,7 @@ public class PetCornerNetworkManager : NetworkManager
         if (manager == null || NetworkClient.active) return;
 
         manager.networkAddress = string.IsNullOrWhiteSpace(address) ? "localhost" : address.Trim();
-        Notify($"กำลังเชื่อมต่อ {manager.networkAddress}...");
+        Notify(Loc.T($"กำลังเชื่อมต่อ {manager.networkAddress}...", $"Connecting to {manager.networkAddress}..."));
         manager.StartClient();
     }
 
@@ -97,24 +97,24 @@ public class PetCornerNetworkManager : NetworkManager
     public override void OnStartServer()
     {
         base.OnStartServer();
-        Notify($"เปิดห้องแล้ว พอร์ต {Port}");
+        Notify(Loc.T($"เปิดห้องแล้ว พอร์ต {Port}", $"Room open on port {Port}"));
     }
 
     public override void OnClientConnect()
     {
         base.OnClientConnect();
-        Notify("เชื่อมต่อสำเร็จ");
+        Notify(Loc.T("เชื่อมต่อสำเร็จ", "Connected"));
     }
 
     public override void OnClientDisconnect()
     {
         base.OnClientDisconnect();
-        Notify("หลุดการเชื่อมต่อ");
+        Notify(Loc.T("หลุดการเชื่อมต่อ", "Disconnected"));
     }
 
     public override void OnClientError(TransportError error, string reason)
     {
-        Notify($"เชื่อมต่อไม่ได้: {reason}");
+        Notify(Loc.T($"เชื่อมต่อไม่ได้: {reason}", $"Couldn't connect: {reason}"));
     }
 
     public override void OnServerAddPlayer(NetworkConnectionToClient conn)

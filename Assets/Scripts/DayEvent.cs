@@ -17,7 +17,7 @@ using UnityEngine;
 public class DayEvent
 {
     [Tooltip("ชื่อสั้นๆ โชว์บน HUD มุมซ้ายบน (ไม่เกิน ~10 ตัวอักษร)")]
-    public string label = "วันปกติ";
+    public string label = Loc.T("วันปกติ", "Normal day");
 
     [Tooltip("คำอธิบายผลของเหตุการณ์ โชว์ใน log ตอนเริ่มวัน")]
     public string description = "";
@@ -52,22 +52,22 @@ public class DayEvent
         {
             new DayEvent
             {
-                label = "ฝนตก", description = "ทุกตัวต้องอาบน้ำเพิ่ม (ได้ค่าบริการขั้นตอนเพิ่มด้วย)",
+                label = Loc.T("ฝนตก", "Rainy day"), description = Loc.T("ทุกตัวต้องอาบน้ำเพิ่ม (ได้ค่าบริการขั้นตอนเพิ่มด้วย)", "Every pet needs an extra bath (and pays for the extra step)"),
                 addStep = true, extraStep = CareStep.Bath
             },
             new DayEvent
             {
-                label = "ชั่วโมงเร่งด่วน", description = "ลูกค้ามาถี่ขึ้น 2 เท่า แต่จ่าย +20%",
+                label = Loc.T("ชั่วโมงเร่งด่วน", "Rush hour"), description = Loc.T("ลูกค้ามาถี่ขึ้น 2 เท่า แต่จ่าย +20%", "Customers come twice as often but pay +20%"),
                 spawnGapMultiplier = 0.5f, feeMultiplier = 1.2f
             },
             new DayEvent
             {
-                label = "ลูกค้า VIP", description = "ใจร้อนขึ้น 50% แต่จ่าย +75%",
+                label = Loc.T("ลูกค้า VIP", "VIP customers"), description = Loc.T("ใจร้อนขึ้น 50% แต่จ่าย +75%", "50% less patient but pay +75%"),
                 patienceDrainMultiplier = 1.5f, feeMultiplier = 1.75f
             },
             new DayEvent
             {
-                label = "วันหยุดยาว", description = "ออเดอร์ +2 แต่ลูกค้าใจเย็นขึ้น 25%",
+                label = Loc.T("วันหยุดยาว", "Long holiday"), description = Loc.T("ออเดอร์ +2 แต่ลูกค้าใจเย็นขึ้น 25%", "+2 orders but customers are 25% more patient"),
                 extraOrders = 2, patienceDrainMultiplier = 0.75f
             }
         };

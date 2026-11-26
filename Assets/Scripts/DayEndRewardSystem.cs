@@ -112,26 +112,26 @@ public class DayEndRewardSystem : MonoBehaviour
     {
         return new List<RewardOption>
         {
-            new RewardOption { label = "รองเท้าใหม่\nเดินเร็วขึ้น 20%", kind = RewardKind.Perk, perk = PerkType.MoveSpeed, amount = 0.2f },
-            new RewardOption { label = "มือฉมัง\nใช้สถานีไวขึ้น 20%", kind = RewardKind.Perk, perk = PerkType.InteractSpeed, amount = 0.2f },
-            new RewardOption { label = "มุมนั่งสบาย\nลูกค้าใจเย็นขึ้น 15%", kind = RewardKind.Perk, perk = PerkType.PatienceDrain, amount = 0.15f },
-            new RewardOption { label = "ถุงมือจับสัตว์\nไล่จับง่ายขึ้น 60%", kind = RewardKind.Perk, perk = PerkType.CatchRadius, amount = 0.6f },
+            new RewardOption { label = Loc.T("รองเท้าใหม่\nเดินเร็วขึ้น 20%", "New shoes\nWalk 20% faster"), kind = RewardKind.Perk, perk = PerkType.MoveSpeed, amount = 0.2f },
+            new RewardOption { label = Loc.T("มือฉมัง\nใช้สถานีไวขึ้น 20%", "Skilled hands\nUse stations 20% faster"), kind = RewardKind.Perk, perk = PerkType.InteractSpeed, amount = 0.2f },
+            new RewardOption { label = Loc.T("มุมนั่งสบาย\nลูกค้าใจเย็นขึ้น 15%", "Comfy corner\nCustomers 15% more patient"), kind = RewardKind.Perk, perk = PerkType.PatienceDrain, amount = 0.15f },
+            new RewardOption { label = Loc.T("ถุงมือจับสัตว์\nไล่จับง่ายขึ้น 60%", "Pet-catching gloves\nCatch pets 60% more easily"), kind = RewardKind.Perk, perk = PerkType.CatchRadius, amount = 0.6f },
 
             new RewardOption
             {
-                label = "ป้ายโฆษณา\nค่าบริการ +35%\nแต่ออเดอร์ต่อวัน +1",
+                label = Loc.T("ป้ายโฆษณา\nค่าบริการ +35%\nแต่ออเดอร์ต่อวัน +1", "Billboard\nService fee +35%\nbut +1 order per day"),
                 kind = RewardKind.Perk, perk = PerkType.ServiceFee, amount = 0.35f,
                 extraOrdersPerDay = 1
             },
             new RewardOption
             {
-                label = "เครื่องมือมืออาชีพ\nใช้สถานีไวขึ้น 40%\nแต่ลูกค้าใจร้อนขึ้น 15%",
+                label = Loc.T("เครื่องมือมืออาชีพ\nใช้สถานีไวขึ้น 40%\nแต่ลูกค้าใจร้อนขึ้น 15%", "Pro tools\nUse stations 40% faster\nbut customers 15% less patient"),
                 kind = RewardKind.Perk, perk = PerkType.InteractSpeed, amount = 0.4f,
                 penaltyPerk = PerkType.PatienceDrain, penaltyAmount = 0.15f
             },
             new RewardOption
             {
-                label = "เปิดร้านเช้าขึ้น\nเดินเร็วขึ้น 30%\nแต่ออเดอร์ต่อวัน +1",
+                label = Loc.T("เปิดร้านเช้าขึ้น\nเดินเร็วขึ้น 30%\nแต่ออเดอร์ต่อวัน +1", "Open earlier\nWalk 30% faster\nbut +1 order per day"),
                 kind = RewardKind.Perk, perk = PerkType.MoveSpeed, amount = 0.3f,
                 extraOrdersPerDay = 1
             }
@@ -286,7 +286,7 @@ public class DayEndRewardSystem : MonoBehaviour
         if (option.penaltyAmount > 0f) progress.ApplyBuff(option.penaltyPerk, -option.penaltyAmount);
         if (option.extraOrdersPerDay > 0) progress.AddDailyOrders(option.extraOrdersPerDay);
 
-        GameLog.Push($"ได้รับรางวัล: {DescribeOption(option)}", LogTone.Good);
+        GameLog.Push(Loc.T($"ได้รับรางวัล: {DescribeOption(option)}", $"Reward received: {DescribeOption(option)}"), LogTone.Good);
     }
 
     /// <summary>รางวัลที่ปลดล็อกไปแล้วไม่ต้องเอามาเสนอซ้ำ ส่วนการ์ดบัฟเสนอซ้ำได้เรื่อยๆ</summary>
@@ -315,9 +315,9 @@ public class DayEndRewardSystem : MonoBehaviour
         switch (option.kind)
         {
             case RewardKind.Perk: return $"{option.perk} +{option.amount:P0}";
-            case RewardKind.UnlockStation: return $"ปลดล็อกสถานี {(option.stationPrefab != null ? option.stationPrefab.name : "?")}";
-            case RewardKind.UnlockSpecies: return $"ปลดล็อกสัตว์ {(option.species != null ? option.species.speciesName : "?")}";
-            default: return "(ไม่มีชื่อ)";
+            case RewardKind.UnlockStation: return Loc.T($"ปลดล็อกสถานี {(option.stationPrefab != null ? option.stationPrefab.name : "?")}", $"Unlocked station {(option.stationPrefab != null ? option.stationPrefab.name : "?")}");
+            case RewardKind.UnlockSpecies: return Loc.T($"ปลดล็อกสัตว์ {(option.species != null ? option.species.speciesName : "?")}", $"Unlocked pet {(option.species != null ? option.species.speciesName : "?")}");
+            default: return Loc.T("(ไม่มีชื่อ)", "(unnamed)");
         }
     }
 }

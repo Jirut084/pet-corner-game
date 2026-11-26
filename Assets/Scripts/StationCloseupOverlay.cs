@@ -270,7 +270,7 @@ public class StationCloseupOverlay : MonoBehaviour
 
         if (station.Mode != CareStation.ServiceMode.DropOff)
         {
-            GUI.Label(area, "พักรออยู่", captionStyle);
+            GUI.Label(area, Loc.T("พักรออยู่", "Waiting here"), captionStyle);
             return;
         }
 
@@ -281,7 +281,7 @@ public class StationCloseupOverlay : MonoBehaviour
         DrawBox(new Rect(bar.x, bar.y, bar.width * Mathf.Clamp01(station.Progress), bar.height),
             ready ? new Color(0.40f, 0.72f, 0.45f) : CareStepStyle.ColorOf(station.Step));
 
-        string caption = ready ? "เสร็จแล้ว — มาอุ้มไปได้" : $"กำลังดูแล {Mathf.RoundToInt(station.Progress * 100f)}%";
+        string caption = ready ? Loc.T("เสร็จแล้ว — มาอุ้มไปได้", "Done — come pick it up") : Loc.T($"กำลังดูแล {Mathf.RoundToInt(station.Progress * 100f)}%", $"Caring {Mathf.RoundToInt(station.Progress * 100f)}%");
         GUI.Label(new Rect(area.x, bar.yMax + 1f, area.width, area.height - bar.height), caption, captionStyle);
     }
 

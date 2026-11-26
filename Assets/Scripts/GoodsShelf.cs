@@ -70,6 +70,9 @@ public class GoodsShelf : MonoBehaviour, IInteractable
         }
 
         Instance = this;
+
+        // ชื่อสินค้าบันทึกเป็นภาษาไทยไว้ในฉาก แปลครั้งเดียวตอนโหลด (เปลี่ยนภาษาแล้วฉากถูกโหลดใหม่เสมอ)
+        foreach (GoodsItem item in catalog) item.label = Loc.Data(item.label);
     }
 
     private void OnDestroy()
@@ -103,20 +106,20 @@ public class GoodsShelf : MonoBehaviour, IInteractable
         {
             GameObject held = carrier.Consume();
             if (held != null) Destroy(held);
-            GameLog.Push("เก็บสินค้าคืนเข้าตู้แล้ว");
+            GameLog.Push(Loc.T("เก็บสินค้าคืนเข้าตู้แล้ว", "Put the goods back on the shelf"));
             return;
         }
 
         if (carrier.IsCarrying)
         {
-            GameLog.Push("มือไม่ว่าง วางของที่ถืออยู่ก่อนถึงจะหยิบสินค้าได้", LogTone.Warn);
+            GameLog.Push(Loc.T("มือไม่ว่าง วางของที่ถืออยู่ก่อนถึงจะหยิบสินค้าได้", "Hands full — put down what you're holding before taking goods"), LogTone.Warn);
             return;
         }
 
         Customer customer = CustomerManager.Instance != null ? CustomerManager.Instance.MostUrgentGoodsRequest() : null;
         if (customer == null)
         {
-            GameLog.Push("ยังไม่มีลูกค้าสั่งสินค้า", LogTone.Warn);
+            GameLog.Push(Loc.T("ยังไม่มีลูกค้าสั่งสินค้า", "No customer has ordered any goods yet"), LogTone.Warn);
             return;
         }
 
@@ -127,7 +130,7 @@ public class GoodsShelf : MonoBehaviour, IInteractable
             return;
         }
 
-        GameLog.Push($"หยิบ {customer.WantedGood.label} — เอาไปส่งที่จุดคืน (+{customer.WantedGood.bonusPay})");
+        GameLog.Push(Loc.T($"หยิบ {customer.WantedGood.label} — เอาไปส่งที่จุดคืน (+{customer.WantedGood.bonusPay})", $"Took {customer.WantedGood.label} — deliver it to the return point (+{customer.WantedGood.bonusPay})"));
     }
 
     private GameObject CreateBox(GoodsItem item)

@@ -42,7 +42,7 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
     public bool IsCornered => current == corneredState;
 
     /// <summary>ชื่อสถานะปัจจุบัน ใช้ดีบัก/โชว์ตอนนำเสนอ</summary>
-    public string StateName => current != null ? current.displayName : "-";
+    public string StateName => current != null ? Loc.Data(current.displayName) : "-";
 
     // ---------- blackboard ที่สถานะใช้ร่วมกัน ----------
     public Pet Pet { get; private set; }
@@ -202,7 +202,7 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
         }
 
         RunStats.NoteEscape();
-        GameLog.Push($"{Pet.DisplayName} หนีแล้ว! วิ่งไปไล่จับแล้วกด E", LogTone.Warn);
+        GameLog.Push(Loc.T($"{Pet.DisplayName} หนีแล้ว! วิ่งไปไล่จับแล้วกด E", $"{Pet.DisplayName} escaped! Chase it down and press E"), LogTone.Warn);
     }
 
     /// <summary>กลับสู่สถานะสงบ — ปิด agent และคืนค่า physics เดิม</summary>
@@ -361,7 +361,7 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
 
         if (carrier.IsCarrying)
         {
-            GameLog.Push($"มือไม่ว่าง — วางของที่ถืออยู่ก่อนถึงจะจับ {Pet.DisplayName} ได้", LogTone.Warn);
+            GameLog.Push(Loc.T($"มือไม่ว่าง — วางของที่ถืออยู่ก่อนถึงจะจับ {Pet.DisplayName} ได้", $"Hands full — put down what you're holding before catching {Pet.DisplayName}"), LogTone.Warn);
             return;
         }
 
@@ -374,7 +374,7 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
         if (carrier.Carry(gameObject))
         {
             RunStats.NoteCatch();
-            GameLog.Push($"จับ {Pet.DisplayName} กลับมาได้แล้ว", LogTone.Good);
+            GameLog.Push(Loc.T($"จับ {Pet.DisplayName} กลับมาได้แล้ว", $"Caught {Pet.DisplayName}"), LogTone.Good);
         }
     }
 

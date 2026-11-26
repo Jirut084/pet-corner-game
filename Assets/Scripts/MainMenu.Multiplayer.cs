@@ -12,10 +12,18 @@ using UnityEngine.UI;
 /// </summary>
 public partial class MainMenu
 {
-    private static readonly Dictionary<string, string> EntryLabels = new Dictionary<string, string>
+    private static string EntryLabel(string entry)
     {
-        { "Up", "ขึ้น" }, { "Down", "ลง" }, { "Left", "ซ้าย" }, { "Right", "ขวา" }, { "Interact", "โต้ตอบ" }
-    };
+        switch (entry)
+        {
+            case "Up": return Loc.T("ขึ้น", "Up");
+            case "Down": return Loc.T("ลง", "Down");
+            case "Left": return Loc.T("ซ้าย", "Left");
+            case "Right": return Loc.T("ขวา", "Right");
+            case "Interact": return Loc.T("โต้ตอบ", "Interact");
+            default: return entry;
+        }
+    }
 
     private const float ControlsWidth = 1240f;
     private const float ControlsHeight = 640f;
@@ -111,11 +119,11 @@ public partial class MainMenu
 
         TextMeshProUGUI title = UiKit.MakeText("Title", panel, 28f, UiKit.Ink, TextAlignmentOptions.Top);
         title.fontStyle = FontStyles.Bold;
-        title.text = "เล่นหลายคน · ปุ่มควบคุม";
+        title.text = Loc.T("เล่นหลายคน · ปุ่มควบคุม", "Multiplayer · Controls");
         GameFlowDebugControls.Fill(title.rectTransform, 22f, 36f);
 
         TextMeshProUGUI hint = UiKit.MakeText("Hint", panel, 17f, UiKit.InkSoft, TextAlignmentOptions.Top);
-        hint.text = "เปิดผู้เล่นได้สูงสุด 4 คน ใช้คีย์บอร์ดร่วมกันหรือจอยคนละตัวก็ได้ · คลิกปุ่มแล้วกดปุ่มใหม่ (Esc ยกเลิก)";
+        hint.text = Loc.T("เปิดผู้เล่นได้สูงสุด 4 คน ใช้คีย์บอร์ดร่วมกันหรือจอยคนละตัวก็ได้ · คลิกปุ่มแล้วกดปุ่มใหม่ (Esc ยกเลิก)", "Up to 4 players — share the keyboard or use a gamepad each · click a binding, then press the new key (Esc cancels)");
         GameFlowDebugControls.Fill(hint.rectTransform, 62f, 24f);
 
         controlsContent = UiKit.MakeRect("Columns", panel);
@@ -124,7 +132,7 @@ public partial class MainMenu
         controlsContent.anchoredPosition = Vector2.zero;
 
         Button back = UiKit.MakeButton("Back", panel, 19f, out TextMeshProUGUI backLabel, primary: true);
-        backLabel.text = $"เสร็จแล้ว  ({UiKit.KeyLabel(backKey)})";
+        backLabel.text = Loc.T($"เสร็จแล้ว  ({UiKit.KeyLabel(backKey)})", $"Done  ({UiKit.KeyLabel(backKey)})");
         UiKit.Place(back.GetComponent<RectTransform>(), new Vector2((ControlsWidth - 240f) * 0.5f, -(ControlsHeight - 70f)), new Vector2(240f, 50f));
         back.onClick.AddListener(() => ShowControls(false));
     }
@@ -157,7 +165,7 @@ public partial class MainMenu
 
         TextMeshProUGUI header = UiKit.MakeText("Header", column, 22f, UiKit.Ink, TextAlignmentOptions.Top);
         header.fontStyle = FontStyles.Bold;
-        header.text = $"ผู้เล่น {slot + 1}";
+        header.text = Loc.T($"ผู้เล่น {slot + 1}", $"Player {slot + 1}");
         UiKit.Place(header.rectTransform, new Vector2(0f, -18f), new Vector2(ColumnWidth, 30f));
 
         ControlDevice device = PlayerControls.GetDevice(slot);
@@ -175,7 +183,7 @@ public partial class MainMenu
         {
             TextMeshProUGUI off = UiKit.MakeText("Off", column, 17f, UiKit.InkSoft, TextAlignmentOptions.Top);
             off.textWrappingMode = TextWrappingModes.Normal;
-            off.text = "ไม่เข้าร่วม\nคลิกปุ่มด้านบนเพื่อเลือกคีย์บอร์ดหรือจอย";
+            off.text = Loc.T("ไม่เข้าร่วม\nคลิกปุ่มด้านบนเพื่อเลือกคีย์บอร์ดหรือจอย", "Not playing\nClick the button above to pick a keyboard or gamepad");
             UiKit.Place(off.rectTransform, new Vector2(16f, -130f), new Vector2(ColumnWidth - 32f, 80f));
             return;
         }
@@ -184,7 +192,7 @@ public partial class MainMenu
         if (device == ControlDevice.Gamepad)
         {
             TextMeshProUGUI move = UiKit.MakeText("Move", column, 16f, UiKit.InkSoft, TextAlignmentOptions.Left);
-            move.text = "เดิน: ก้านซ้าย / D-Pad";
+            move.text = Loc.T("เดิน: ก้านซ้าย / D-Pad", "Move: left stick / D-pad");
             UiKit.Place(move.rectTransform, new Vector2(20f, y), new Vector2(ColumnWidth - 40f, 40f));
             y -= 48f;
         }
@@ -196,7 +204,7 @@ public partial class MainMenu
         }
 
         Button reset = UiKit.MakeButton("Reset", column, 16f, out TextMeshProUGUI resetLabel);
-        resetLabel.text = "คืนค่าเริ่มต้น";
+        resetLabel.text = Loc.T("คืนค่าเริ่มต้น", "Reset to defaults");
         UiKit.Place(reset.GetComponent<RectTransform>(), new Vector2(16f, -(ColumnHeight - 60f)), new Vector2(ColumnWidth - 32f, 42f));
         reset.onClick.AddListener(() =>
         {
@@ -208,14 +216,14 @@ public partial class MainMenu
     private void BuildBindingRow(RectTransform column, int slot, string entry, float y)
     {
         TextMeshProUGUI label = UiKit.MakeText($"{entry} Label", column, 18f, UiKit.Ink, TextAlignmentOptions.Left);
-        label.text = EntryLabels.TryGetValue(entry, out string thai) ? thai : entry;
+        label.text = EntryLabel(entry);
         UiKit.Place(label.rectTransform, new Vector2(20f, y), new Vector2(100f, 42f));
 
         string key = $"{slot}:{entry}";
         bool waiting = rebindingKey == key;
 
         Button bind = UiKit.MakeButton($"{entry} Binding", column, 18f, out TextMeshProUGUI bindLabel, primary: waiting);
-        bindLabel.text = waiting ? "กดปุ่ม..." : PlayerControls.BindingLabel(slot, entry);
+        bindLabel.text = waiting ? Loc.T("กดปุ่ม...", "Press a key...") : PlayerControls.BindingLabel(slot, entry);
         UiKit.Place(bind.GetComponent<RectTransform>(), new Vector2(ColumnWidth - 156f, y), new Vector2(140f, 42f));
         bind.onClick.AddListener(() =>
         {
@@ -234,12 +242,12 @@ public partial class MainMenu
         switch (PlayerControls.GetDevice(slot))
         {
             case ControlDevice.Keyboard:
-                return "คีย์บอร์ด";
+                return Loc.T("คีย์บอร์ด", "Keyboard");
             case ControlDevice.Gamepad:
                 int pad = PlayerControls.GetGamepadIndex(slot);
-                return PlayerControls.IsAvailable(slot) ? $"จอย {pad + 1}" : $"จอย {pad + 1} (ไม่ได้เสียบ)";
+                return PlayerControls.IsAvailable(slot) ? Loc.T($"จอย {pad + 1}", $"Gamepad {pad + 1}") : Loc.T($"จอย {pad + 1} (ไม่ได้เสียบ)", $"Gamepad {pad + 1} (not connected)");
             default:
-                return "ไม่เล่น";
+                return Loc.T("ไม่เล่น", "Not playing");
         }
     }
 
@@ -278,21 +286,21 @@ public partial class MainMenu
 
         TextMeshProUGUI title = UiKit.MakeText("Title", panel, 28f, UiKit.Ink, TextAlignmentOptions.Top);
         title.fontStyle = FontStyles.Bold;
-        title.text = "เล่นผ่าน LAN";
+        title.text = Loc.T("เล่นผ่าน LAN", "LAN play");
         GameFlowDebugControls.Fill(title.rectTransform, 22f, 36f);
 
         List<string> ips = PetCornerNetworkManager.LocalAddresses();
         TextMeshProUGUI mine = UiKit.MakeText("My IP", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
         mine.text = ips.Count > 0
-            ? $"IP เครื่องนี้: {string.Join(" / ", ips)}   ·   พอร์ต 7777"
-            : "ไม่พบเครือข่าย LAN — ทดสอบในเครื่องเดียวด้วย localhost ได้";
+            ? Loc.T($"IP เครื่องนี้: {string.Join(" / ", ips)}   ·   พอร์ต 7777", $"This machine's IP: {string.Join(" / ", ips)}   ·   port 7777")
+            : Loc.T("ไม่พบเครือข่าย LAN — ทดสอบในเครื่องเดียวด้วย localhost ได้", "No LAN found — you can still test on one machine with localhost");
         GameFlowDebugControls.Fill(mine.rectTransform, 66f, 26f);
 
         float buttonWidth = 380f;
         float x = (width - buttonWidth) * 0.5f;
 
         Button host = UiKit.MakeButton("Host", panel, 20f, out TextMeshProUGUI hostLabel, primary: true);
-        hostLabel.text = "เปิดห้อง (Host)";
+        hostLabel.text = Loc.T("เปิดห้อง (Host)", "Host a game");
         UiKit.Place(host.GetComponent<RectTransform>(), new Vector2(x, -110f), new Vector2(buttonWidth, 52f));
         host.onClick.AddListener(() =>
         {
@@ -304,7 +312,7 @@ public partial class MainMenu
         UiKit.Place((RectTransform)addressField.transform, new Vector2(x, -190f), new Vector2(buttonWidth, 48f));
 
         Button join = UiKit.MakeButton("Join", panel, 20f, out TextMeshProUGUI joinLabel);
-        joinLabel.text = "เข้าร่วม (Join)";
+        joinLabel.text = Loc.T("เข้าร่วม (Join)", "Join a game");
         UiKit.Place(join.GetComponent<RectTransform>(), new Vector2(x, -248f), new Vector2(buttonWidth, 52f));
         join.onClick.AddListener(() =>
         {
@@ -318,11 +326,11 @@ public partial class MainMenu
 
         TextMeshProUGUI note = UiKit.MakeText("Note", panel, 15f, UiKit.InkSoft, TextAlignmentOptions.Top);
         note.textWrappingMode = TextWrappingModes.Normal;
-        note.text = "1 คนต่อ 1 เครื่อง ใช้ปุ่มของผู้เล่น 1 · ทุกเครื่องเห็นกันเดิน แต่ระบบร้าน (ลูกค้า สัตว์ เงิน) ยังรันแยกแต่ละเครื่อง";
+        note.text = Loc.T("1 คนต่อ 1 เครื่อง ใช้ปุ่มของผู้เล่น 1 · ทุกเครื่องเห็นกันเดิน แต่ระบบร้าน (ลูกค้า สัตว์ เงิน) ยังรันแยกแต่ละเครื่อง", "One player per machine, using Player 1's controls · everyone sees each other move, but the shop (customers, pets, money) still runs separately on each machine");
         UiKit.Place(note.rectTransform, new Vector2(40f, -354f), new Vector2(width - 80f, 50f));
 
         Button back = UiKit.MakeButton("Back", panel, 19f, out TextMeshProUGUI backLabel);
-        backLabel.text = $"ย้อนกลับ  ({UiKit.KeyLabel(backKey)})";
+        backLabel.text = Loc.T($"ย้อนกลับ  ({UiKit.KeyLabel(backKey)})", $"Back  ({UiKit.KeyLabel(backKey)})");
         UiKit.Place(back.GetComponent<RectTransform>(), new Vector2((width - 220f) * 0.5f, -(height - 74f)), new Vector2(220f, 48f));
         back.onClick.AddListener(() =>
         {
@@ -351,7 +359,7 @@ public partial class MainMenu
         UiKit.Stretch(text.rectTransform);
 
         TextMeshProUGUI placeholder = UiKit.MakeText("Placeholder", area, 18f, UiKit.InkSoft, TextAlignmentOptions.Left);
-        placeholder.text = "IP ของ host เช่น 192.168.1.10";
+        placeholder.text = Loc.T("IP ของ host เช่น 192.168.1.10", "Host's IP, e.g. 192.168.1.10");
         UiKit.Stretch(placeholder.rectTransform);
 
         TMP_InputField field = holder.gameObject.AddComponent<TMP_InputField>();

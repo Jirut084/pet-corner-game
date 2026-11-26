@@ -286,12 +286,12 @@ public class GameManager : MonoBehaviour
         OnOrderProgressChanged?.Invoke(OrdersCompleted, OrdersTarget);
         SetPhase(GamePhase.Setup);
 
-        string fromReputation = ReputationOrders != 0 ? $" — ชื่อเสียง {ReputationOrders:+0;-0} ออเดอร์" : string.Empty;
-        GameLog.Push($"เริ่มวันที่ {Day}/{totalDays} — จัดร้านให้เรียบร้อยแล้วกดเปิดร้าน (ออเดอร์วันนี้ {OrdersTarget}{fromReputation})");
+        string fromReputation = ReputationOrders != 0 ? Loc.T($" — ชื่อเสียง {ReputationOrders:+0;-0} ออเดอร์", $" — reputation {ReputationOrders:+0;-0} orders") : string.Empty;
+        GameLog.Push(Loc.T($"เริ่มวันที่ {Day}/{totalDays} — จัดร้านให้เรียบร้อยแล้วกดเปิดร้าน (ออเดอร์วันนี้ {OrdersTarget}{fromReputation})", $"Day {Day}/{totalDays} begins — set up the shop, then open it (orders today: {OrdersTarget}{fromReputation})"));
 
         if (CurrentEvent != null)
         {
-            GameLog.Push($"เหตุการณ์วันนี้: {CurrentEvent.label} — {CurrentEvent.description}", LogTone.Warn);
+            GameLog.Push(Loc.T($"เหตุการณ์วันนี้: {CurrentEvent.label} — {CurrentEvent.description}", $"Today's event: {CurrentEvent.label} — {CurrentEvent.description}"), LogTone.Warn);
         }
     }
 
@@ -320,7 +320,7 @@ public class GameManager : MonoBehaviour
             return station != null ? station.DisplayLabel : o.name;
         });
 
-        GameLog.Push($"เปิดร้านไม่ได้ — เดินไปไม่ถึง: {string.Join(", ", names)} ย้ายของที่ล้อมอยู่ออกก่อน", LogTone.Bad);
+        GameLog.Push(Loc.T($"เปิดร้านไม่ได้ — เดินไปไม่ถึง: {string.Join(", ", names)} ย้ายของที่ล้อมอยู่ออกก่อน", $"Can't open — can't reach: {string.Join(", ", names)}. Move whatever is blocking them first"), LogTone.Bad);
         return false;
     }
 
@@ -355,7 +355,7 @@ public class GameManager : MonoBehaviour
         SetPhase(GamePhase.Service);
         OnDayStarted?.Invoke(Day);
 
-        GameLog.Push($"เปิดร้านวันที่ {Day} — ต้องทำให้ครบ {OrdersTarget} ออเดอร์ ลูกค้ากำลังจะเข้ามา", LogTone.Good);
+        GameLog.Push(Loc.T($"เปิดร้านวันที่ {Day} — ต้องทำให้ครบ {OrdersTarget} ออเดอร์ ลูกค้ากำลังจะเข้ามา", $"Day {Day} is open — complete {OrdersTarget} orders, customers are on their way"), LogTone.Good);
     }
 
     /// <summary>IntakePoint เรียกตอนปล่อยออเดอร์ใหม่ออกไป</summary>
@@ -378,7 +378,7 @@ public class GameManager : MonoBehaviour
         OrdersCompleted++;
         OnOrderProgressChanged?.Invoke(OrdersCompleted, OrdersTarget);
 
-        GameLog.Push($"ออเดอร์ {OrdersCompleted}/{OrdersTarget} ของวันที่ {Day}", LogTone.Good);
+        GameLog.Push(Loc.T($"ออเดอร์ {OrdersCompleted}/{OrdersTarget} ของวันที่ {Day}", $"Orders {OrdersCompleted}/{OrdersTarget} for day {Day}"), LogTone.Good);
 
         if (OrdersCompleted >= OrdersTarget)
         {
@@ -420,7 +420,7 @@ public class GameManager : MonoBehaviour
         OnComplaintsChanged?.Invoke(Complaints, maxComplaints);
         RunStats.NoteComplaint(reason); // ครั้งสุดท้าย = สาเหตุที่แพ้ เอาไปโชว์หน้าสรุป
 
-        GameLog.Push($"ร้องเรียน! ({reason}) สะสม {Complaints}/{maxComplaints}", LogTone.Bad);
+        GameLog.Push(Loc.T($"ร้องเรียน! ({reason}) สะสม {Complaints}/{maxComplaints}", $"Complaint! ({reason}) total {Complaints}/{maxComplaints}"), LogTone.Bad);
 
         if (Complaints >= maxComplaints)
         {
@@ -446,7 +446,7 @@ public class GameManager : MonoBehaviour
         if (Phase == GamePhase.RunOver) return;
 
         SetPhase(GamePhase.DayEnd);
-        GameLog.Push($"จบวันที่ {Day} — เลือกรางวัลได้", LogTone.Good);
+        GameLog.Push(Loc.T($"จบวันที่ {Day} — เลือกรางวัลได้", $"Day {Day} over — pick a reward"), LogTone.Good);
 
         OnDayEnded?.Invoke(Day);
     }
@@ -465,10 +465,10 @@ public class GameManager : MonoBehaviour
         RunStats.NoteCostsPaid(paid);
         LastDayCost = paid;
 
-        GameLog.Push($"จ่ายค่าเช่า {rentFirstDay + rentIncreasePerDay * (Day - 1)} + ค่าดูแลสถานี {stations} ชิ้น = {bill} | เหลือ {ReturnZone.TotalWallet}",
+        GameLog.Push(Loc.T($"จ่ายค่าเช่า {rentFirstDay + rentIncreasePerDay * (Day - 1)} + ค่าดูแลสถานี {stations} ชิ้น = {bill} | เหลือ {ReturnZone.TotalWallet}", $"Paid rent {rentFirstDay + rentIncreasePerDay * (Day - 1)} + upkeep for {stations} stations = {bill} | left {ReturnZone.TotalWallet}"),
             paid < bill ? LogTone.Bad : LogTone.Warn);
 
-        if (paid < bill) AddComplaint($"ค้างค่าเช่า {bill - paid}");
+        if (paid < bill) AddComplaint(Loc.T($"ค้างค่าเช่า {bill - paid}", $"Unpaid rent {bill - paid}"));
     }
 
     private void EndRun(bool won)
@@ -478,8 +478,8 @@ public class GameManager : MonoBehaviour
         OnRunEnded?.Invoke(won);
 
         GameLog.Push(won
-            ? $"ชนะ! อยู่ครบ {totalDays} วัน"
-            : $"แพ้ — ร้องเรียนครบ {maxComplaints} ครั้งในวันที่ {Day}",
+            ? Loc.T($"ชนะ! อยู่ครบ {totalDays} วัน", $"You win! Survived all {totalDays} days")
+            : Loc.T($"แพ้ — ร้องเรียนครบ {maxComplaints} ครั้งในวันที่ {Day}", $"Game over — {maxComplaints} complaints on day {Day}"),
             won ? LogTone.Good : LogTone.Bad);
     }
 
