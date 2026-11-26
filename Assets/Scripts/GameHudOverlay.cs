@@ -497,22 +497,60 @@ public class GameHudOverlay : MonoBehaviour
     }
 
     /// <summary>
+    /// เลือกผู้เล่นที่จะโชว์ป้าย/หลอดกดค้าง แล้วเก็บไว้ใน playerInteraction / playerCarrier
+    /// คืนสถานีที่ควรโชว์ (null = ไม่มีใครหันหาสถานีกดค้างที่ใช้ได้)
+    /// </summary>
+    private CareStation PickHoldPromptPlayer()
+    {
+        CareStation facing = null;
+        InteractionManager facingPlayer = null;
+
+        foreach (PlayerController player in PlayerController.All)
+        {
+            // ผู้เล่นออนไลน์ของเครื่องอื่นปิด PlayerController ไว้ จึงไม่ถูกนับ
+            if (player == null || !player.isActiveAndEnabled) continue;
+
+            InteractionManager interaction = player.GetComponent<InteractionManager>();
+            if (interaction == null) continue;
+
+            CareStation station = interaction.CurrentTarget as CareStation;
+            PlayerCarrier carrier = player.GetComponent<PlayerCarrier>();
+            if (station == null || !station.UseHold || !station.CanServeByHold(carrier)) continue;
+
+            if (ReferenceEquals(interaction.ActiveHoldTarget, station))
+            {
+                playerInteraction = interaction;
+                playerCarrier = carrier;
+                return station;
+            }
+
+            if (facing == null)
+            {
+                facing = station;
+                facingPlayer = interaction;
+            }
+        }
+
+        if (facing != null)
+        {
+            playerInteraction = facingPlayer;
+            playerCarrier = facingPlayer.GetComponent<PlayerCarrier>();
+        }
+
+        return facing;
+    }
+
+    /// <summary>
     /// ป้ายกับหลอดสำหรับสถานีโหมดกดค้าง — โชว์เฉพาะตอนหันไปหาสถานีนั้นและกดแล้วมีผลจริง
     /// </summary>
     private void UpdateHoldPrompt()
     {
         if (worldCamera == null) return;
 
-        if (playerInteraction == null)
-        {
-            playerInteraction = FindAnyObjectByType<InteractionManager>();
-            if (playerInteraction == null) return;
-
-            playerCarrier = playerInteraction.GetComponent<PlayerCarrier>();
-        }
-
-        CareStation station = playerInteraction.CurrentTarget as CareStation;
-        bool show = station != null && station.UseHold && station.CanServeByHold(playerCarrier);
+        // ponytail: หลอดกดค้างมีชุดเดียว เล่นหลายคนจะโชว์ของคนที่กำลังกดค้างก่อน ไม่งั้นคนแรกที่หันหาสถานีกดค้าง
+        // ถ้าต้องโชว์พร้อมกันหลายคน ค่อยแยก holdBar เป็นรายผู้เล่น
+        CareStation station = PickHoldPromptPlayer();
+        bool show = station != null;
 
         if (!show || !TryGetScreenPoint(playerInteraction.transform.position + holdBarWorldOffset, out Vector2 point))
         {
@@ -528,7 +566,7 @@ public class GameHudOverlay : MonoBehaviour
             holdBar.rect.gameObject.SetActive(false);
 
             chipBuffer.Clear();
-            chipBuffer.Add(($"กด {playerInteraction.InteractKey} ค้าง · {stationLabel}", CareStepStyle.ColorOf(station.Step), UiKit.StepIcon(station.Step), false));
+            chipBuffer.Add(($"กด {playerInteraction.InteractLabel} ค้าง · {stationLabel}", CareStepStyle.ColorOf(station.Step), UiKit.StepIcon(station.Step), false));
             ShowChipRow(point, chipBuffer);
             return;
         }

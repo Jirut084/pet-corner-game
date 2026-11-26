@@ -26,11 +26,40 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Camera used to compute camera-relative movement in ThirdPerson mode. Defaults to Camera.main if left empty.")]
     [SerializeField] private Transform cameraTransform;
 
+    [Header("Multiplayer")]
+    [Tooltip("ผู้เล่นคนที่เท่าไหร่ (0 = ผู้เล่น 1) — ใช้เลือกชุดปุ่มใน PlayerControls ผู้เล่นที่เกิดเพิ่มถูกตั้งค่าให้เองตอนเริ่มฉาก")]
+    [SerializeField] private int playerSlot = 0;
+
     private CharacterController controller;
     private Vector3 verticalVelocity;
 
+    // เสียงฝีเท้ามีตัวเดียว เล่นเมื่อมีผู้เล่นอย่างน้อย 1 คนกำลังเดิน (ไม่งั้นแต่ละคนจะสั่งเปิด/ปิดแย่งกัน)
+    private static int movingCount;
+    private bool isMoving;
+
+    /// <summary>ผู้เล่นทุกคนที่อยู่ในฉาก (ทั้ง local หลายคน และผู้เล่นออนไลน์)</summary>
+    public static readonly System.Collections.Generic.List<PlayerController> All = new System.Collections.Generic.List<PlayerController>();
+
+    public int PlayerSlot
+    {
+        get => playerSlot;
+        set => playerSlot = Mathf.Clamp(value, 0, PlayerControls.MaxPlayers - 1);
+    }
+
     // Exposed so other systems (e.g. InteractionManager) can query facing direction.
     public Vector3 LastMoveDirection { get; private set; } = Vector3.forward;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        All.Clear();
+        movingCount = 0;
+    }
+
+    private void OnEnable()
+    {
+        if (!All.Contains(this)) All.Add(this);
+    }
 
     private void Awake()
     {
@@ -51,12 +80,22 @@ public class PlayerController : MonoBehaviour
     private void OnDisable()
     {
         // กันเสียงฝีเท้าค้างเวลาตัวละครถูกปิดกะทันหัน (จบวัน / เปิดเมนู)
-        AudioManager.Instance?.SetWalking(false);
+        SetMoving(false);
+        All.Remove(this);
+    }
+
+    private void SetMoving(bool moving)
+    {
+        if (moving == isMoving) return;
+
+        isMoving = moving;
+        movingCount = Mathf.Max(0, movingCount + (moving ? 1 : -1));
+        AudioManager.Instance?.SetWalking(movingCount > 0);
     }
 
     private void HandleMovement()
     {
-        Vector2 stick = GameInput.Move; // WASD / ลูกศร / จอย
+        Vector2 stick = PlayerControls.Move(playerSlot); // ปุ่มของผู้เล่นคนนี้ (ตั้งได้ในเมนู ปุ่มควบคุม)
         Vector3 input = new Vector3(stick.x, 0f, stick.y);
 
         // หยุดเกมอยู่ = ไม่รับปุ่มเดิน (timeScale 0 หยุดแค่ระยะทาง ปุ่มยังถูกอ่านตามปกติ)
@@ -65,11 +104,10 @@ public class PlayerController : MonoBehaviour
             input = Vector3.zero;
         }
 
-        // ส่งสถานะ "กำลังเดินอยู่ไหม" ให้ AudioManager ทุกเฟรม (มันเช็คซ้ำให้เอง ไม่เล่นทับ)
-        bool isMoving = input.sqrMagnitude > 0.0001f;
-        AudioManager.Instance?.SetWalking(isMoving);
+        bool moving = input.sqrMagnitude > 0.0001f;
+        SetMoving(moving);
 
-        if (!isMoving)
+        if (!moving)
         {
             return; // No input, skip movement/rotation this frame.
         }

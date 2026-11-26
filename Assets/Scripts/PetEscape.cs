@@ -303,12 +303,24 @@ public class PetEscape : MonoBehaviour, IHoldInteractable
             Mathf.Clamp(position.z, Mathf.Min(min.z, max.z), Mathf.Max(min.z, max.z)));
     }
 
+    /// <summary>ผู้เล่นที่อยู่ใกล้ที่สุด — เล่นหลายคน สัตว์จะหนีคนที่เข้ามาใกล้สุดและหยุดให้คนนั้นจับ</summary>
     private Transform Player()
     {
-        if (player != null) return player;
+        player = null;
+        float best = float.MaxValue;
 
-        PlayerCarrier carrier = FindAnyObjectByType<PlayerCarrier>();
-        player = carrier != null ? carrier.transform : null;
+        foreach (PlayerController candidate in PlayerController.All)
+        {
+            if (candidate == null) continue;
+
+            float dist = (candidate.transform.position - transform.position).sqrMagnitude;
+            if (dist < best)
+            {
+                best = dist;
+                player = candidate.transform;
+            }
+        }
+
         return player;
     }
 

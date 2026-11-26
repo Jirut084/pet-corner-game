@@ -14,7 +14,7 @@ using UnityEngine;
 /// </summary>
 [CustomEditor(typeof(GridOccupant))]
 [CanEditMultipleObjects]
-public class GridOccupantEditor : Editor
+public class GridOccupantEditor : UnityEditor.Editor
 {
     private static readonly Color OkColor = new Color(0.35f, 0.95f, 0.45f);
     private static readonly Color ErrorColor = new Color(1f, 0.35f, 0.35f);

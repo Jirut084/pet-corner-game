@@ -14,7 +14,7 @@ using UnityEngine.UI;
 ///   หน้าตั้งค่าเสียง — แถบเลื่อนปรับเสียง BGM และ SFX พร้อมบันทึกค่าลง PlayerPrefs
 ///   หน้าเลือกสัตว์ — คลิกการ์ด หรือกด 1..9 · Esc ย้อนกลับ
 /// </summary>
-public class MainMenu : MonoBehaviour
+public partial class MainMenu : MonoBehaviour
 {
     /// <summary>สัตว์ที่เลือกจากเมนู — GameManager ใช้เริ่ม run ตอนฉากร้านโหลดเสร็จ</summary>
     public static PetSpecies ChosenStarter { get; private set; }
@@ -58,6 +58,7 @@ public class MainMenu : MonoBehaviour
         BuildTitleScreen();
         BuildSettingsScreen();
         BuildStarterSelect();
+        BuildMultiplayerScreens(); // MainMenu.Multiplayer.cs — หน้าปุ่มควบคุม + หน้า LAN
 
         ShowStarterSelect(false);
         ShowSettings(false);
@@ -67,6 +68,9 @@ public class MainMenu : MonoBehaviour
     {
         bool selecting = starterRoot.activeSelf;
         bool inSettings = settingsRoot != null && settingsRoot.activeSelf;
+
+        // หน้าปุ่มควบคุม / LAN จัดการปุ่มของตัวเอง (รวมถึงตอนรอกดปุ่มใหม่ที่ Esc = ยกเลิก)
+        if (UpdateMultiplayerScreens(GameInput.Pressed(backKey))) return;
 
         if (GameInput.Pressed(backKey))
         {
@@ -108,6 +112,8 @@ public class MainMenu : MonoBehaviour
 
     private void ShowStarterSelect(bool show)
     {
+        if (!show) hostAfterStarter = false; // ถอยออกจากหน้าเลือกสัตว์ = ยกเลิกการ Host ที่รออยู่
+        HideMultiplayerScreens();
         titleRoot.SetActive(!show);
         starterRoot.SetActive(show);
         if (settingsRoot != null) settingsRoot.SetActive(false);
@@ -115,6 +121,7 @@ public class MainMenu : MonoBehaviour
 
     private void ShowSettings(bool show)
     {
+        HideMultiplayerScreens();
         titleRoot.SetActive(!show);
         if (settingsRoot != null)
         {
@@ -147,13 +154,22 @@ public class MainMenu : MonoBehaviour
 
         ChosenStarter = starter;
         Debug.Log($"[MainMenu] เริ่ม run ด้วย {starter.speciesName}");
+
+        // มาจากปุ่ม Host ในหน้า LAN — Mirror โหลดฉากร้าน (Online Scene) ให้ทุกเครื่องเอง
+        if (hostAfterStarter)
+        {
+            hostAfterStarter = false;
+            PetCornerNetworkManager.Host();
+            return;
+        }
+
         SceneManager.LoadScene(gameScene);
     }
 
     private void BuildTitleScreen()
     {
         float panelWidth = 660f;
-        float panelHeight = 470f;
+        float panelHeight = 590f;
         RectTransform panel = MakePanel("Title Screen", panelWidth, panelHeight, out titleRoot);
 
         MakeTitle(panel, 26f, 104f, 54);
@@ -178,15 +194,26 @@ public class MainMenu : MonoBehaviour
         UiKit.Place(settingsBtn.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -274f), new Vector2(320f, 48f));
         settingsBtn.onClick.AddListener(() => ShowSettings(true));
 
+        // ปุ่มเล่นหลายคน — ตั้งจำนวนผู้เล่น/อุปกรณ์/ปุ่ม (MainMenu.Multiplayer.cs)
+        Button controlsBtn = UiKit.MakeButton("Controls", panel, 19f, out TextMeshProUGUI controlsLabel);
+        controlsLabel.text = "เล่นหลายคน · ปุ่มควบคุม";
+        UiKit.Place(controlsBtn.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -328f), new Vector2(320f, 48f));
+        controlsBtn.onClick.AddListener(() => ShowControls(true));
+
+        Button lanBtn = UiKit.MakeButton("LAN", panel, 19f, out TextMeshProUGUI lanLabel);
+        lanLabel.text = "เล่นผ่าน LAN";
+        UiKit.Place(lanBtn.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -382f), new Vector2(320f, 48f));
+        lanBtn.onClick.AddListener(() => ShowLan(true));
+
         // ปุ่มออกจากเกม
         Button quit = UiKit.MakeButton("Quit", panel, 19f, out TextMeshProUGUI quitLabel);
         quitLabel.text = $"ออกจากเกม  ({UiKit.KeyLabel(backKey)})";
-        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -328f), new Vector2(320f, 48f));
+        UiKit.Place(quit.GetComponent<RectTransform>(), new Vector2((panelWidth - 320f) * 0.5f, -436f), new Vector2(320f, 48f));
         quit.onClick.AddListener(GameFlowDebugControls.QuitGame);
 
         TextMeshProUGUI hint = UiKit.MakeText("Hint", panel, 18f, UiKit.InkSoft, TextAlignmentOptions.Top);
         hint.text = "WASD เดิน   ·   E ทำทุกอย่าง   ·   Enter เปิดร้าน   ·   Esc เมนู";
-        GameFlowDebugControls.Fill(hint.rectTransform, 396f, 26f);
+        GameFlowDebugControls.Fill(hint.rectTransform, 512f, 26f);
     }
 
     private void BuildSettingsScreen()

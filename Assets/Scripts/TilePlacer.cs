@@ -34,6 +34,9 @@ public class TilePlacer : MonoBehaviour
         playerController = GetComponent<PlayerController>();
         carrier = GetComponent<PlayerCarrier>();
 
+        // ผู้เล่นออนไลน์เกิดจาก prefab ซึ่งผูกกริดในฉากไว้ไม่ได้ จึงหาเอง
+        if (grid == null) grid = FindAnyObjectByType<TileGrid>();
+
         // ภาพตัวอย่างตำแหน่งวาง ใส่ให้เองจะได้ไม่ต้องเพิ่ม component ในฉาก
         // อยากปรับสี/ขนาด ให้ Add Component "PlacementPreview" ลงตัวผู้เล่นเองแล้วตั้งใน Inspector
         if (GetComponent<PlacementPreview>() == null)

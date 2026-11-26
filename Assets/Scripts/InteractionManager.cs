@@ -44,7 +44,6 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private InteractionType interactionType = InteractionType.Raycast;
 
     [Header("Common Settings")]
-    [SerializeField] private KeyCode interactKey = KeyCode.E;
     [SerializeField] private float interactRange = 3f;
     [SerializeField] private LayerMask interactableLayers = ~0; // Default: all layers
 
@@ -73,8 +72,10 @@ public class InteractionManager : MonoBehaviour
     /// <summary>สิ่งที่กำลังกดค้างอยู่ (null ถ้าไม่ได้กดค้าง) — HUD ใช้วาดหลอดกดค้างให้ถูกสถานี</summary>
     public IHoldInteractable ActiveHoldTarget => activeHoldTarget;
 
-    /// <summary>ปุ่มโต้ตอบ ใช้แสดงบนป้ายบอกวิธีกด</summary>
-    public KeyCode InteractKey => interactKey;
+    /// <summary>ชื่อปุ่มโต้ตอบของผู้เล่นคนนี้ ใช้แสดงบนป้ายบอกวิธีกด (ปุ่มตั้งได้ใน PlayerControls)</summary>
+    public string InteractLabel => PlayerControls.InteractLabel(Slot);
+
+    private int Slot => playerController != null ? playerController.PlayerSlot : 0;
 
     private void Awake()
     {
@@ -114,7 +115,7 @@ public class InteractionManager : MonoBehaviour
             return; // ระหว่างกดค้างอยู่ ไม่รับ input อื่น
         }
 
-        if (!GameInput.Pressed(interactKey)) return;
+        if (!PlayerControls.InteractPressed(Slot)) return;
 
         // ปุ่ม E ปุ่มเดียวทำทุกอย่าง — ช่วงจัดร้านให้ TilePlacer ชิงไปยก/วางอุปกรณ์ก่อน
         // ถ้าไม่ใช่สถานการณ์ของกริด (เปิดร้านแล้ว / ถือสัตว์ / เล็งที่ว่าง) มันจะคืน false ให้มาทำงานปกติ
@@ -130,6 +131,9 @@ public class InteractionManager : MonoBehaviour
         // ถ้าเป้าหมายรองรับการกดค้างและกำลังตั้งเป็นโหมดค้างอยู่ ให้เข้าสู่โหมดค้าง
         if (CurrentTarget is IHoldInteractable holdTarget && holdTarget.UseHold)
         {
+            // สถานีเก็บสถานะกดค้างได้ทีละคน เล่นหลายคนจึงห้ามคนที่สองกดค้างแทรกสถานีเดียวกัน
+            if (IsHeldByOtherPlayer(holdTarget)) return;
+
             activeHoldTarget = holdTarget;
             holdStartTime = Time.time;
             holdTarget.OnHoldStart(gameObject);
@@ -137,6 +141,19 @@ public class InteractionManager : MonoBehaviour
         }
 
         CurrentTarget.Interact(gameObject);
+    }
+
+    private bool IsHeldByOtherPlayer(IHoldInteractable target)
+    {
+        foreach (PlayerController other in PlayerController.All)
+        {
+            if (other == null || other.gameObject == gameObject) continue;
+
+            InteractionManager interaction = other.GetComponent<InteractionManager>();
+            if (interaction != null && ReferenceEquals(interaction.ActiveHoldTarget, target)) return true;
+        }
+
+        return false;
     }
 
     private void UpdateActiveHold()
@@ -152,7 +169,7 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
-        if (GameInput.Held(interactKey))
+        if (PlayerControls.InteractHeld(Slot))
         {
             activeHoldTarget.OnHoldTick(gameObject, held);
             return;
